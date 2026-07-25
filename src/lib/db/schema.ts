@@ -230,6 +230,8 @@ export const message = pgTable(
     error: text("error"),
     aiGenerated: boolean("ai_generated").notNull().default(false),
     waTimestamp: timestamp("wa_timestamp"),
+    /** URL da mídia no gateway (imagem, áudio, vídeo, documento, sticker). */
+    mediaUrl: text("media_url"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (t) => [

@@ -150,6 +150,8 @@ export async function ingestInboundMessage(input: {
    * registra como saliente, sin unread ni turno del agente.
    */
   fromMe?: boolean;
+  /** URL da mídia no gateway (servida ao navegador via /api/media/[id]). */
+  mediaUrl?: string | null;
 }): Promise<void> {
   const db = getDb();
   const { organizationId } = input;
@@ -180,6 +182,7 @@ export async function ingestInboundMessage(input: {
       direction: fromMe ? "out" : "in",
       type: input.type,
       text: input.text,
+      mediaUrl: input.mediaUrl ?? null,
       status: fromMe ? "sent" : "delivered",
       waTimestamp,
     })
@@ -223,6 +226,22 @@ function toDate(timestamp: string): Date {
   return new Date();
 }
 
+const MEDIA_TYPES = new Set(["image", "audio", "video", "document", "sticker"]);
+
+/**
+ * true se a mídia desta mensagem pode ser servida pelo proxy /api/media/[id]:
+ * ou há URL armazenada, ou o provedor não oficial sabe buscá-la por ID
+ * (Evolution/WPPConnect via base64).
+ */
+function hasServableMedia(m: typeof schema.message.$inferSelect): boolean {
+  if (!MEDIA_TYPES.has(m.type)) return false;
+  if (m.mediaUrl) return true;
+  return (
+    m.waMessageId?.startsWith("unof:evolution:") === true ||
+    m.waMessageId?.startsWith("unof:wppconnect:") === true
+  );
+}
+
 export function serializeMessage(m: typeof schema.message.$inferSelect) {
   return {
     id: m.id,
@@ -230,6 +249,8 @@ export function serializeMessage(m: typeof schema.message.$inferSelect) {
     direction: m.direction,
     type: m.type,
     text: m.text,
+    // Sempre a rota do proxy: a URL real do gateway nunca vai ao navegador.
+    mediaUrl: hasServableMedia(m) ? `/api/media/${m.id}` : null,
     status: m.status,
     aiGenerated: m.aiGenerated,
     createdAt: (m.waTimestamp ?? m.createdAt).toISOString(),

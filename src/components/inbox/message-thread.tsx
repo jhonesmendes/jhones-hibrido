@@ -6,6 +6,7 @@ import {
   Check,
   CheckCheck,
   Clock3,
+  FileText,
   Paperclip,
   Sparkles,
 } from "lucide-react";
@@ -39,6 +40,66 @@ function bubbleTime(iso: string): string {
     minute: "2-digit",
     hour12: false,
   });
+}
+
+/** Mídia do canal não oficial, servida pelo proxy autenticado do CRM. */
+function MediaContent({ m }: { m: MessageDto }) {
+  if (!m.mediaUrl) {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-text-3">
+        <Paperclip className="h-3.5 w-3.5" strokeWidth={1.7} />
+        {mediaLabel(m.type)}
+        {m.text ? ` — ${m.text}` : ""}
+      </span>
+    );
+  }
+
+  if (m.type === "image" || m.type === "sticker") {
+    return (
+      <span className="block">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={m.mediaUrl}
+          alt={m.text ?? mediaLabel(m.type)}
+          loading="lazy"
+          className="max-h-72 max-w-full cursor-pointer rounded-md"
+          onClick={() => window.open(m.mediaUrl!, "_blank")}
+        />
+        {m.text && <span className="mt-1 block">{m.text}</span>}
+      </span>
+    );
+  }
+
+  if (m.type === "audio") {
+    return <audio controls preload="none" src={m.mediaUrl} className="max-w-full" />;
+  }
+
+  if (m.type === "video") {
+    return (
+      <span className="block">
+        <video
+          controls
+          preload="metadata"
+          src={m.mediaUrl}
+          className="max-h-72 max-w-full rounded-md"
+        />
+        {m.text && <span className="mt-1 block">{m.text}</span>}
+      </span>
+    );
+  }
+
+  // document e demais tipos
+  return (
+    <a
+      href={m.mediaUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center gap-1.5 underline underline-offset-2"
+    >
+      <FileText className="h-3.5 w-3.5" strokeWidth={1.7} />
+      {m.text || mediaLabel(m.type)}
+    </a>
+  );
 }
 
 export function MessageThread({ messages }: { messages: MessageDto[] }) {
@@ -94,11 +155,7 @@ export function MessageThread({ messages }: { messages: MessageDto[] }) {
                     {m.text}
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1.5 text-text-3">
-                    <Paperclip className="h-3.5 w-3.5" strokeWidth={1.7} />
-                    {mediaLabel(m.type)}
-                    {m.text ? ` — ${m.text}` : ""}
-                  </span>
+                  <MediaContent m={m} />
                 )}
                 <span className="float-right ml-2 mt-1 flex items-center gap-1">
                   {m.aiGenerated && (

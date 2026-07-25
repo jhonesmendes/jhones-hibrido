@@ -159,6 +159,32 @@ export const wppconnectAdapter: UnofficialAdapter = {
     ];
   },
 
+  mediaAuthHeaders(cfg) {
+    return { Authorization: `Bearer ${cfg.apiKey}` };
+  },
+
+  async fetchMediaById(cfg, providerMessageId) {
+    // GET /api/{session}/get-media-by-message/{id} → base64 (formato varia
+    // por versão do wppconnect-server; extração robusta).
+    const res = await gatewayRequest<
+      { base64?: string; mimetype?: string } | string
+    >(
+      `${base(cfg)}/get-media-by-message/${encodeURIComponent(providerMessageId)}`,
+      { headers: headers(cfg), timeoutMs: 30000 }
+    );
+    const b64 =
+      typeof res === "string" ? res : (res?.base64 ?? null);
+    if (!b64) return null;
+    const match = /^data:([^;]+);base64,(.*)$/.exec(b64);
+    return {
+      data: Buffer.from(match ? match[2]! : b64, "base64"),
+      mimeType:
+        (match ? match[1] : null) ??
+        (typeof res === "object" ? (res.mimetype ?? null) : null) ??
+        "application/octet-stream",
+    };
+  },
+
   async configureWebhook() {
     // WPPConnect define el webhook en la config del server
     // (config.json / env WEBHOOK_URL): no hay endpoint por sesión.

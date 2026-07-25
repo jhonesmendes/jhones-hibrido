@@ -22,6 +22,8 @@ export type MessageDto = {
   direction: "in" | "out";
   type: string;
   text: string | null;
+  /** Rota do proxy de mídia (/api/media/[id]) quando há mídia exibível. */
+  mediaUrl: string | null;
   status: "pending" | "sent" | "delivered" | "read" | "failed";
   aiGenerated: boolean;
   createdAt: string;

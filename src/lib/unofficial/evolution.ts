@@ -45,14 +45,23 @@ type EvoMessage = {
   pushName?: string;
   messageType?: string;
   messageTimestamp?: number | string;
+  /** Presente quando a Evolution está configurada com storage de mídia (S3/minio). */
+  mediaUrl?: string;
   message?: {
     conversation?: string;
     extendedTextMessage?: { text?: string };
     imageMessage?: { caption?: string };
     videoMessage?: { caption?: string };
-    documentMessage?: { caption?: string };
+    documentMessage?: { caption?: string; fileName?: string };
+    mediaUrl?: string;
   };
 };
+
+/** URL direta apenas se o gateway fornecer uma http(s) real (S3/minio). */
+function extractMediaUrl(m: EvoMessage): string | null {
+  const url = m.mediaUrl ?? m.message?.mediaUrl ?? null;
+  return url && /^https?:\/\//i.test(url) ? url : null;
+}
 
 function extractText(m: EvoMessage): string | null {
   const msg = m.message;
@@ -167,9 +176,40 @@ export const evolutionAdapter: UnofficialAdapter = {
         text: extractText(m),
         timestamp: m.messageTimestamp ?? null,
         type: normalizeType(m.messageType),
+        mediaUrl: extractMediaUrl(m),
       });
     }
     return out;
+  },
+
+  mediaAuthHeaders(cfg) {
+    return { apikey: cfg.apiKey };
+  },
+
+  async fetchMediaById(cfg, providerMessageId) {
+    const res = await gatewayRequest<{
+      base64?: string;
+      mimetype?: string;
+      mimeType?: string;
+    }>(
+      `${base(cfg)}/chat/getBase64FromMediaMessage/${encodeURIComponent(cfg.instanceName)}`,
+      {
+        method: "POST",
+        headers: headers(cfg),
+        body: JSON.stringify({
+          message: { key: { id: providerMessageId } },
+          convertToMp4: false,
+        }),
+        timeoutMs: 30000,
+      }
+    );
+    if (!res.base64) return null;
+    // Aceita tanto base64 puro quanto data-URL.
+    const raw = res.base64.replace(/^data:[^;]+;base64,/, "");
+    return {
+      data: Buffer.from(raw, "base64"),
+      mimeType: res.mimetype ?? res.mimeType ?? "application/octet-stream",
+    };
   },
 
   async configureWebhook(cfg, webhookUrl) {

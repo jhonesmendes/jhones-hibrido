@@ -34,6 +34,7 @@ export async function processUnofficialWebhook(
       timestamp: m.timestamp === null ? "" : String(m.timestamp),
       channel: "unofficial",
       fromMe: m.fromMe,
+      mediaUrl: m.mediaUrl ?? null,
     });
   }
 }

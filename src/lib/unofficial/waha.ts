@@ -2,6 +2,7 @@ import {
   gatewayRequest,
   isGroupJid,
   jidToPhone,
+  mediaTypeFromMime,
   toQrDataUrl,
   UnofficialApiError,
   type ChannelConfig,
@@ -44,6 +45,7 @@ type WahaWebhookBody = {
     body?: string;
     timestamp?: number | string;
     hasMedia?: boolean;
+    media?: { url?: string; mimetype?: string; filename?: string };
     _data?: { notifyName?: string; type?: string };
   };
 };
@@ -142,18 +144,28 @@ export const wahaAdapter: UnofficialAdapter = {
     if ((payload.event ?? "") !== "message") return [];
     const p = payload.payload;
     if (!p?.id || !p.from || isGroupJid(p.from)) return [];
+    const mediaUrl =
+      p.media?.url && /^https?:\/\//i.test(p.media.url) ? p.media.url : null;
     const out: NormalizedInbound[] = [
       {
         from: jidToPhone(p.from),
         providerMessageId: p.id,
         fromMe: p.fromMe ?? false,
         pushName: p._data?.notifyName ?? null,
+        // Em mídia com hasMedia, body costuma ser a legenda.
         text: p.body ?? null,
         timestamp: p.timestamp ?? null,
-        type: p.hasMedia ? "document" : "text",
+        type: p.hasMedia
+          ? mediaTypeFromMime(p.media?.mimetype)
+          : "text",
+        mediaUrl,
       },
     ];
     return out;
+  },
+
+  mediaAuthHeaders(cfg) {
+    return { "X-Api-Key": cfg.apiKey };
   },
 
   async configureWebhook(cfg, webhookUrl) {

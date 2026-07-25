@@ -41,6 +41,12 @@ export type NormalizedInbound = {
   timestamp: string | number | null;
   /** Tipo de contenido normalizado (text, image, audio…). */
   type: string;
+  /**
+   * URL direta da mídia no gateway/CDN, quando ele fornece uma acessível.
+   * Nunca vai ao navegador: o CRM a serve via proxy autenticado
+   * (/api/media/[id]) para não expor o gateway nem a API key.
+   */
+  mediaUrl?: string | null;
 };
 
 export interface UnofficialAdapter {
@@ -56,6 +62,16 @@ export interface UnofficialAdapter {
    * Devuelve false si el proveedor no lo soporta vía API (config manual).
    */
   configureWebhook(cfg: ChannelConfig, webhookUrl: string): Promise<boolean>;
+  /** Headers de auth para o proxy baixar mídia hospedada no gateway. */
+  mediaAuthHeaders(cfg: ChannelConfig): Record<string, string>;
+  /**
+   * Busca a mídia pelo ID da mensagem quando o webhook não trouxe URL
+   * direta (ex.: Evolution sem S3 → getBase64FromMediaMessage).
+   */
+  fetchMediaById?(
+    cfg: ChannelConfig,
+    providerMessageId: string
+  ): Promise<{ data: Buffer; mimeType: string } | null>;
 }
 
 /** Error tipado del gateway; `status` 0 = red/timeout. */
@@ -104,6 +120,15 @@ export async function gatewayRequest<T>(
     );
   }
   return data as T;
+}
+
+/** MIME → tipo de mensagem normalizado (image, audio, video, document). */
+export function mediaTypeFromMime(mime: string | null | undefined): string {
+  if (!mime) return "document";
+  if (mime.startsWith("image/")) return "image";
+  if (mime.startsWith("audio/")) return "audio";
+  if (mime.startsWith("video/")) return "video";
+  return "document";
 }
 
 /** "5511999999999@c.us" | "...@s.whatsapp.net" → dígitos puros. */
