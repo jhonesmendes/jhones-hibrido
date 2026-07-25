@@ -48,7 +48,7 @@ export function BrandingClient() {
       const data = (await res?.json().catch(() => null)) as {
         error?: { message?: string };
       } | null;
-      setError(data?.error?.message ?? "No se pudo guardar");
+      setError(data?.error?.message ?? "Não foi possível salvar");
       return;
     }
     setSaved(true);
@@ -56,21 +56,21 @@ export function BrandingClient() {
     router.refresh();
   }
 
-  if (!loaded) return <p className="text-sm text-text-3">Cargando…</p>;
+  if (!loaded) return <p className="text-sm text-text-3">Carregando…</p>;
 
   return (
     <div className="max-w-2xl space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>Marca del CRM</CardTitle>
+          <CardTitle>Marca do CRM</CardTitle>
           <CardDescription>
-            Este CRM es tuyo: ponle el nombre de tu negocio y tu color. Se
-            reflejan en toda la interfaz y en la pantalla de inicio de sesión.
+            Este CRM é seu: coloque o nome do seu negócio e a sua cor. Elas
+            aparecem em toda a interface e na tela de login.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
           <div className="space-y-1.5">
-            <Label htmlFor="brand-name">Nombre</Label>
+            <Label htmlFor="brand-name">Nome</Label>
             <Input
               id="brand-name"
               maxLength={30}
@@ -82,7 +82,7 @@ export function BrandingClient() {
           </div>
 
           <div className="space-y-2">
-            <Label>Color de acento</Label>
+            <Label>Cor de destaque</Label>
             <div className="flex flex-wrap items-center gap-2">
               {Object.entries(ACCENT_PRESETS).map(([hex, preset]) => (
                 <button
@@ -120,8 +120,8 @@ export function BrandingClient() {
               </label>
             </div>
             <p className="text-xs text-text-3">
-              Con un color personalizado, los tonos derivados (hover, fondos
-              suaves) se calculan solos y se ajusta el contraste.
+              Com uma cor personalizada, os tons derivados (hover, fundos
+              suaves) são calculados sozinhos e o contraste é ajustado.
             </p>
           </div>
 
@@ -145,15 +145,15 @@ export function BrandingClient() {
                 className="rounded-md px-3 py-1.5 text-xs font-medium text-white"
                 style={{ background: previewSet.accent }}
               >
-                Botón de ejemplo
+                Botão de exemplo
               </span>
             </div>
           </div>
 
           {error && <p className="text-sm text-destructive">{error}</p>}
-          {saved && <p className="text-sm" style={{ color: previewSet.text }}>Marca guardada ✓</p>}
+          {saved && <p className="text-sm" style={{ color: previewSet.text }}>Marca salva ✓</p>}
           <Button disabled={saving || !name.trim()} onClick={() => void save()}>
-            {saving ? "Guardando…" : "Guardar marca"}
+            {saving ? "Salvando…" : "Salvar marca"}
           </Button>
         </CardContent>
       </Card>

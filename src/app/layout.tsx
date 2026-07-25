@@ -17,7 +17,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const branding = await getBranding().catch(() => DEFAULT_BRANDING);
   return {
     title: `${branding.name} — CRM de WhatsApp`,
-    description: "CRM de WhatsApp con agente de IA y Laboratorio de auto-evaluación",
+    description: "CRM de WhatsApp com agente de IA e Laboratório de autoavaliação",
   };
 }
 
@@ -26,11 +26,20 @@ export default async function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   const branding = await getBranding().catch(() => DEFAULT_BRANDING);
   return (
-    <html lang="es" className={geist.variable}>
+    <html lang="pt-BR" className={geist.variable} suppressHydrationWarning>
       <head>
         {/* Acento white-label inyectado en SSR: sin flash de tema */}
         <style
           dangerouslySetInnerHTML={{ __html: accentCssVariables(branding.accent) }}
+        />
+        {/* Tema claro/escuro/sistema aplicado ANTES da hidratação (sem flash) */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              `(function(){try{var m=localStorage.getItem("vocero-theme");` +
+              `var d=m==="dark"||(m!=="light"&&window.matchMedia("(prefers-color-scheme: dark)").matches);` +
+              `if(d)document.documentElement.classList.add("dark");}catch(e){}})();`,
+          }}
         />
       </head>
       <body className="font-sans">{children}</body>

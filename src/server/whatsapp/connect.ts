@@ -29,7 +29,7 @@ export async function testConnection(
         ok: false,
         code: "meta_error",
         message:
-          "Meta no devolvió el número: verifica que el Phone Number ID sea correcto",
+          "A Meta não devolveu o número: verifique se o Phone Number ID está correto",
       };
     }
     return {
@@ -44,14 +44,14 @@ export async function testConnection(
           ok: false,
           code: "invalid_token",
           message:
-            "El token no es válido o expiró. Verifica que corresponde a este número (modo directo: token de usuario del sistema; modo agencia: token entregado por tu backend).",
+            "O token não é válido ou expirou. Verifique se corresponde a este número (modo direto: token de usuário do sistema; modo agência: token entregue pelo seu backend).",
         };
       }
       if (err.status === 0 || err.status >= 500) {
         return {
           ok: false,
           code: "meta_unavailable",
-          message: "Meta no está disponible en este momento; intenta de nuevo",
+          message: "A Meta não está disponível no momento; tente de novo",
         };
       }
       return { ok: false, code: "meta_error", message: err.message };

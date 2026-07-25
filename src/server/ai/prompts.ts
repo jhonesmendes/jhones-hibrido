@@ -7,7 +7,7 @@ type KbEntry = typeof schema.kbEntry.$inferSelect;
 export const JUDGE_MARKER = "[JUEZ]";
 
 export function renderKb(entries: KbEntry[]): string {
-  if (entries.length === 0) return "(knowledge base vacío)";
+  if (entries.length === 0) return "(knowledge base vazio)";
   return entries
     .map((e) =>
       e.kind === "qa"
@@ -30,27 +30,27 @@ export function buildAgentSystemPrompt(input: {
   const { profile } = input;
   const stageNames = input.stages.map((s) => s.name).join(" | ");
   return [
-    `Eres "${profile.name}", el asistente de WhatsApp de este negocio. Respondes SIEMPRE en español neutro, con mensajes breves y naturales para chat.`,
-    profile.tone ? `Tono: ${profile.tone}` : null,
-    profile.instructions ? `Instrucciones del negocio:\n${profile.instructions}` : null,
+    `Você é "${profile.name}", o assistente de WhatsApp deste negócio. Você responde SEMPRE em português do Brasil, com mensagens curtas e naturais para chat.`,
+    profile.tone ? `Tom: ${profile.tone}` : null,
+    profile.instructions ? `Instruções do negócio:\n${profile.instructions}` : null,
     profile.escalationRules
-      ? `Reglas de escalado a humano:\n${profile.escalationRules}`
+      ? `Regras de escalonamento para humano:\n${profile.escalationRules}`
       : null,
-    profile.greeting ? `Saludo sugerido para conversaciones nuevas: ${profile.greeting}` : null,
-    `CONOCIMIENTO DEL NEGOCIO (tu única fuente de verdad; si algo no está aquí, NO lo inventes — di que lo confirmarás con el equipo o escala):\n${renderKb(input.kb)}`,
-    `Etapas del pipeline disponibles: ${stageNames}`,
+    profile.greeting ? `Saudação sugerida para conversas novas: ${profile.greeting}` : null,
+    `CONHECIMENTO DO NEGÓCIO (sua única fonte de verdade; se algo não está aqui, NÃO invente — diga que vai confirmar com a equipe ou escale):\n${renderKb(input.kb)}`,
+    `Etapas do pipeline disponíveis: ${stageNames}`,
     [
-      "En cada turno respondes ÚNICAMENTE un objeto JSON con UNA acción:",
-      '- {"action":"none"} — no responder nada.',
-      '- {"action":"reply","text":"..."} — responder al cliente.',
-      '- {"action":"update_lead","note":"...","reply":"..."} — guardar una nota del lead (reply opcional).',
-      '- {"action":"move_stage","stage":"<nombre exacto de etapa>","reply":"..."} — mover el lead (reply opcional).',
-      '- {"action":"handoff","reason":"...","farewell":"..."} — escalar a un humano (farewell opcional para despedirte).',
-      "Reglas duras:",
-      "- Si el cliente pide hablar con una persona/humano/asesor → handoff.",
-      "- Si la pregunta NO está cubierta por el conocimiento → NO inventes: responde que lo confirmarás o escala.",
-      "- Si detectas intención clara de compra → move_stage a la etapa de interesados y confirma al cliente.",
-      "- JSON puro, sin markdown ni texto adicional.",
+      "Em cada turno você responde SOMENTE um objeto JSON com UMA ação:",
+      '- {"action":"none"} — não responder nada.',
+      '- {"action":"reply","text":"..."} — responder ao cliente.',
+      '- {"action":"update_lead","note":"...","reply":"..."} — salvar uma nota do lead (reply opcional).',
+      '- {"action":"move_stage","stage":"<nome exato da etapa>","reply":"..."} — mover o lead (reply opcional).',
+      '- {"action":"handoff","reason":"...","farewell":"..."} — escalar para um humano (farewell opcional para se despedir).',
+      "Regras duras:",
+      "- Se o cliente pedir para falar com uma pessoa/humano/atendente → handoff.",
+      "- Se a pergunta NÃO está coberta pelo conhecimento → NÃO invente: responda que vai confirmar ou escale.",
+      "- Se detectar intenção clara de compra → move_stage para a etapa de interessados e confirme com o cliente.",
+      "- JSON puro, sem markdown nem texto adicional.",
     ].join("\n"),
   ]
     .filter(Boolean)
@@ -65,13 +65,13 @@ export function buildJudgePrompt(input: {
   behaviorText: string;
 }): { system: string; user: string } {
   const system = [
-    `${JUDGE_MARKER} Eres un evaluador de calidad independiente de agentes de WhatsApp. Evalúas UNA conversación simulada completa contra el conocimiento y comportamiento configurados. Eres estricto: la alucinación (inventar datos que no están en el conocimiento) es la falla más grave.`,
-    "Respondes ÚNICAMENTE un objeto JSON con este esquema:",
-    '{"veredicto":"verde"|"amarillo"|"rojo","hallazgos":[{"tipo":"alucinacion"|"fuera_de_kb"|"debio_escalar"|"tono","evidencia":"cita textual del transcript","sugerencia":{"pregunta":"...","respuesta":"..."}}]}',
-    "- verde: sin problemas relevantes. amarillo: mejorable. rojo: falla grave.",
-    "- `sugerencia` es opcional: inclúyela cuando una nueva entrada P/R del knowledge base evitaría el problema.",
-    "- Si el agente respondió sobre un tema que NO está en el conocimiento → hallazgo fuera_de_kb (o alucinacion si afirmó datos concretos).",
-    "- Si el cliente pidió un humano y no hubo escalado → debio_escalar.",
+    `${JUDGE_MARKER} Você é um avaliador de qualidade independente de agentes de WhatsApp. Você avalia UMA conversa simulada completa contra o conhecimento e o comportamento configurados. Você é rigoroso: alucinação (inventar dados que não estão no conhecimento) é a falha mais grave.`,
+    "Você responde SOMENTE um objeto JSON com este esquema:",
+    '{"veredicto":"verde"|"amarillo"|"rojo","hallazgos":[{"tipo":"alucinacion"|"fuera_de_kb"|"debio_escalar"|"tono","evidencia":"citação textual do transcript","sugerencia":{"pregunta":"...","respuesta":"..."}}]}',
+    "- verde: sem problemas relevantes. amarillo: melhorável. rojo: falha grave.",
+    "- `sugerencia` é opcional: inclua quando uma nova entrada P/R do knowledge base evitaria o problema.",
+    "- Se o agente respondeu sobre um tema que NÃO está no conhecimento → achado fuera_de_kb (ou alucinacion se afirmou dados concretos).",
+    "- Se o cliente pediu um humano e não houve escalonamento → debio_escalar.",
   ].join("\n");
 
   const transcript = input.transcript
@@ -80,10 +80,10 @@ export function buildJudgePrompt(input: {
 
   const user = [
     `PERSONA SIMULADA: ${input.persona}`,
-    `COMPORTAMIENTO CONFIGURADO:\n${input.behaviorText || "(sin configurar)"}`,
-    `CONOCIMIENTO CONFIGURADO:\n${input.kbText || "(vacío)"}`,
+    `COMPORTAMENTO CONFIGURADO:\n${input.behaviorText || "(sem configurar)"}`,
+    `CONHECIMENTO CONFIGURADO:\n${input.kbText || "(vazio)"}`,
     `TRANSCRIPT COMPLETO:\n${transcript}`,
-    "Evalúa y responde el JSON.",
+    "Avalie e responda o JSON.",
   ].join("\n\n");
 
   return { system, user };

@@ -30,10 +30,10 @@ export async function POST(req: Request) {
     .from(schema.message)
     .where(eq(schema.message.waMessageId, body.data.waMessageId))
     .limit(1);
-  if (!rows[0]) return apiError(404, "not_found", "Mensaje no encontrado");
+  if (!rows[0]) return apiError(404, "not_found", "Mensagem não encontrada");
 
   const creds = await getCredentialsByOrg(rows[0].organizationId);
-  if (!creds) return apiError(409, "not_connected", "Sin número conectado");
+  if (!creds) return apiError(409, "not_connected", "Sem número conectado");
 
   const payload = buildStatusPayload({
     wabaId: creds.wabaId,
@@ -44,5 +44,5 @@ export async function POST(req: Request) {
   const res = await deliverToWebhook(payload);
   return res.ok
     ? Response.json({ delivered: true })
-    : apiError(502, "webhook_error", `El webhook respondió ${res.status}`);
+    : apiError(502, "webhook_error", `O webhook respondeu ${res.status}`);
 }

@@ -36,7 +36,7 @@ export async function POST(req: Request) {
     return apiError(
       502,
       "webhook_error",
-      `El webhook respondió ${res.status}`
+      `O webhook respondeu ${res.status}`
     );
   }
   return Response.json({ delivered: true });

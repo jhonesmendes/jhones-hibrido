@@ -14,7 +14,7 @@ export const GET = withAuth(async (session) => {
     .where(scoped(schema.agentProfile.organizationId, session.organizationId))
     .limit(1);
   const p = rows[0];
-  if (!p) return apiError(404, "not_found", "Perfil del agente no encontrado");
+  if (!p) return apiError(404, "not_found", "Perfil do agente não encontrado");
   return Response.json({
     profile: {
       enabled: p.enabled,
@@ -47,6 +47,6 @@ export const PUT = withAuth(async (session, req: Request) => {
     .set({ ...body.data, updatedAt: new Date() })
     .where(scoped(schema.agentProfile.organizationId, session.organizationId))
     .returning();
-  if (!updated[0]) return apiError(404, "not_found", "Perfil no encontrado");
+  if (!updated[0]) return apiError(404, "not_found", "Perfil não encontrado");
   return Response.json({ ok: true });
 });

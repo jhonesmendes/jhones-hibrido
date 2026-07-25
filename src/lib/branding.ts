@@ -104,10 +104,31 @@ export function resolveAccentSet(accentHex: string): AccentSet {
   };
 }
 
+/**
+ * Variante escura do acento: mesmo matiz, superfícies misturadas com o
+ * fundo escuro e texto clareado para manter contraste.
+ */
+export function resolveDarkAccentSet(accentHex: string): AccentSet {
+  const light = resolveAccentSet(accentHex);
+  const base = hexToRgb(light.accent);
+  const darkBg: Rgb = hexToRgb("#131417");
+  return {
+    accent: rgbToHex(mix(base, WHITE, 0.08)),
+    hover: rgbToHex(mix(base, WHITE, 0.2)),
+    soft: rgbToHex(mix(base, darkBg, 0.6)),
+    tint: rgbToHex(mix(base, darkBg, 0.8)),
+    text: rgbToHex(mix(base, WHITE, 0.62)),
+  };
+}
+
 /** CSS de variables para inyectar en el <head> (SSR, sin flash). */
 export function accentCssVariables(accentHex: string): string {
   const s = resolveAccentSet(accentHex);
-  return `:root{--accent:${s.accent};--accent-hover:${s.hover};--accent-soft:${s.soft};--accent-tint:${s.tint};--accent-text:${s.text};}`;
+  const d = resolveDarkAccentSet(accentHex);
+  return (
+    `:root{--accent:${s.accent};--accent-hover:${s.hover};--accent-soft:${s.soft};--accent-tint:${s.tint};--accent-text:${s.text};}` +
+    `.dark{--accent:${d.accent};--accent-hover:${d.hover};--accent-soft:${d.soft};--accent-tint:${d.tint};--accent-text:${d.text};}`
+  );
 }
 
 export function normalizeBranding(input: Partial<Branding> | null): Branding {

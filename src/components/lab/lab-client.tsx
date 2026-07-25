@@ -48,10 +48,10 @@ type Case = {
 };
 
 const TIPO_LABELS: Record<Hallazgo["tipo"], string> = {
-  alucinacion: "Alucinación",
-  fuera_de_kb: "Fuera del conocimiento",
-  debio_escalar: "Debió escalar",
-  tono: "Tono",
+  alucinacion: "Alucinação",
+  fuera_de_kb: "Fora do conhecimento",
+  debio_escalar: "Deveria escalar",
+  tono: "Tom",
 };
 
 export function LabClient() {
@@ -107,7 +107,7 @@ export function LabClient() {
       const data = (await res.json().catch(() => null)) as {
         error?: { message?: string };
       } | null;
-      setError(data?.error?.message ?? "No se pudo lanzar la corrida");
+      setError(data?.error?.message ?? "Não foi possível iniciar a rodada");
       return;
     }
     const data = (await res.json()) as { runId: string };
@@ -123,12 +123,12 @@ export function LabClient() {
         <div className="m-6 rounded-lg border border-brand-soft bg-brand-tint p-8 text-center">
           <Sparkles className="mx-auto mb-2 h-8 w-8 text-primary" />
           <p className="font-medium">
-            Configura tu proveedor de IA para usar el Laboratorio
+            Configure seu provedor de IA para usar o Laboratório
           </p>
           <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-            El Laboratorio necesita el agente activo: agrega{" "}
-            <code className="rounded bg-secondary px-1">OPENROUTER_API_TOKEN</code> a la
-            instancia y vuelve aquí.
+            O Laboratório precisa do agente ativo: adicione{" "}
+            <code className="rounded bg-secondary px-1">OPENROUTER_API_TOKEN</code> à
+            instância e volte aqui.
           </p>
         </div>
       </div>
@@ -150,7 +150,7 @@ export function LabClient() {
       {running && progress && (
         <div className="mx-6 mt-4 rounded-lg border bg-card p-4">
           <div className="mb-2 flex items-center justify-between text-sm">
-            <span className="font-medium">Evaluando personas…</span>
+            <span className="font-medium">Avaliando personas…</span>
             <span className="text-muted-foreground">
               {progress.done} / {progress.total}
             </span>
@@ -175,8 +175,8 @@ export function LabClient() {
         ) : (
           <div className="rounded-lg border border-dashed p-10 text-center text-sm text-muted-foreground">
             {runs.length === 0
-              ? "Corre tu primera evaluación: 6 clientes simulados conversarán con tu agente y un juez calificará cada conversación."
-              : "Elige una corrida del historial."}
+              ? "Rode sua primeira avaliação: 6 clientes simulados vão conversar com seu agente e um juiz dará nota a cada conversa."
+              : "Escolha uma rodada do histórico."}
           </div>
         )}
       </div>
@@ -199,15 +199,15 @@ function Header({
     <header className="flex items-center justify-between border-b px-6 py-4">
       <div>
         <h2 className="flex items-center gap-2 font-semibold">
-          <FlaskConical className="h-4 w-4 text-primary" /> Laboratorio
+          <FlaskConical className="h-4 w-4 text-primary" /> Laboratório
         </h2>
         <p className="text-xs text-muted-foreground">
-          Sandbox interno — no envía mensajes reales
+          Sandbox interno — não envia mensagens reais
         </p>
       </div>
       <Button onClick={onLaunch} disabled={disabled || running || launching}>
         <Play className="h-4 w-4" />
-        {running ? "Corrida en curso…" : "Correr evaluación"}
+        {running ? "Rodada em andamento…" : "Rodar avaliação"}
       </Button>
     </header>
   );
@@ -225,10 +225,10 @@ function HistoryList({
   return (
     <div className="space-y-2">
       <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        Historial
+        Histórico
       </p>
       {runs.length === 0 && (
-        <p className="text-xs text-muted-foreground">Sin corridas todavía.</p>
+        <p className="text-xs text-muted-foreground">Nenhuma rodada ainda.</p>
       )}
       {runs.map((run) => (
         <button
@@ -257,7 +257,7 @@ function HistoryList({
             )}
           </div>
           <p className="mt-1 text-[11px] text-muted-foreground">
-            {new Date(run.startedAt).toLocaleString("es-MX", {
+            {new Date(run.startedAt).toLocaleString("pt-BR", {
               day: "numeric",
               month: "short",
               hour: "2-digit",
@@ -271,8 +271,8 @@ function HistoryList({
 }
 
 function ScoreBadge({ run }: { run: Run }) {
-  if (run.status === "running") return <Badge variant="secondary">En curso…</Badge>;
-  if (run.status === "failed") return <Badge variant="destructive">Fallida</Badge>;
+  if (run.status === "running") return <Badge variant="secondary">Em andamento…</Badge>;
+  if (run.status === "failed") return <Badge variant="destructive">Falhou</Badge>;
   const score = run.score ?? 0;
   const variant = score >= 80 ? "success" : score >= 50 ? "warning" : "destructive";
   return <Badge variant={variant}>Score {score}</Badge>;
@@ -291,32 +291,38 @@ function Report({
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle>Reporte</CardTitle>
+            <CardTitle>Relatório</CardTitle>
             <ScoreBadge run={run} />
           </div>
           {run.status === "failed" && (
             <p className="text-sm text-destructive">
-              La corrida falló: {run.error ?? "error desconocido"}. Vuelve a
-              intentarlo.
+              A rodada falhou: {run.error ?? "erro desconhecido"}. Tente de
+              novo.
             </p>
           )}
         </CardHeader>
         {run.status === "done" && (
           <CardContent>
             <div className="grid grid-cols-3 gap-3 text-center text-sm">
-              {(["verde", "amarillo", "rojo"] as const).map((v) => (
-                <div key={v} className="rounded-md border p-3">
+              {(
+                [
+                  { id: "verde", label: "verdes" },
+                  { id: "amarillo", label: "amarelos" },
+                  { id: "rojo", label: "vermelhos" },
+                ] as const
+              ).map((v) => (
+                <div key={v.id} className="rounded-md border p-3">
                   <p className="text-2xl font-bold">
-                    {cases.filter((c) => c.veredicto === v).length}
+                    {cases.filter((c) => c.veredicto === v.id).length}
                   </p>
-                  <p className="capitalize text-muted-foreground">{v}s</p>
+                  <p className="capitalize text-muted-foreground">{v.label}</p>
                 </div>
               ))}
             </div>
             {cases.some((c) => c.status === "judge_failed") && (
               <p className="mt-3 text-xs text-[#8a6d3b]">
-                {cases.filter((c) => c.status === "judge_failed").length} caso(s) sin
-                veredicto (el juez no respondió válido); excluidos del score.
+                {cases.filter((c) => c.status === "judge_failed").length} caso(s) sem
+                veredito (o juiz não respondeu válido); excluídos do score.
               </p>
             )}
           </CardContent>
@@ -355,11 +361,11 @@ function CaseCard({ testCase, onApplied }: { testCase: Case; onApplied: () => vo
             {icon}
             {c.personaLabel}
             {c.status === "judge_failed" && (
-              <Badge variant="secondary">sin veredicto</Badge>
+              <Badge variant="secondary">sem veredito</Badge>
             )}
           </span>
           <span className="flex items-center gap-2 text-xs text-muted-foreground">
-            {c.hallazgos.length > 0 && `${c.hallazgos.length} hallazgo(s)`}
+            {c.hallazgos.length > 0 && `${c.hallazgos.length} achado(s)`}
             {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           </span>
         </button>
@@ -432,21 +438,21 @@ function HallazgoCard({
         <Badge variant="warning">{TIPO_LABELS[hallazgo.tipo]}</Badge>
         {hallazgo.sugerencia && !applied && !editing && (
           <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
-            Agregar al conocimiento
+            Adicionar ao conhecimento
           </Button>
         )}
         {applied && (
-          <span className="text-xs text-success">Agregado al conocimiento ✓</span>
+          <span className="text-xs text-success">Adicionado ao conhecimento ✓</span>
         )}
       </div>
       <p className="mt-2 text-sm text-muted-foreground">
-        <span className="font-medium text-foreground">Evidencia:</span>{" "}
+        <span className="font-medium text-foreground">Evidência:</span>{" "}
         {hallazgo.evidencia}
       </p>
       {editing && hallazgo.sugerencia && (
         <div className="mt-3 space-y-2 rounded-md border bg-card p-3">
           <div className="space-y-1">
-            <Label htmlFor={`sug-q-${caseId}-${index}`}>Pregunta</Label>
+            <Label htmlFor={`sug-q-${caseId}-${index}`}>Pergunta</Label>
             <Input
               id={`sug-q-${caseId}-${index}`}
               value={pregunta}
@@ -454,7 +460,7 @@ function HallazgoCard({
             />
           </div>
           <div className="space-y-1">
-            <Label htmlFor={`sug-a-${caseId}-${index}`}>Respuesta</Label>
+            <Label htmlFor={`sug-a-${caseId}-${index}`}>Resposta</Label>
             <Textarea
               id={`sug-a-${caseId}-${index}`}
               rows={3}
@@ -468,7 +474,7 @@ function HallazgoCard({
               onClick={() => void apply()}
               disabled={saving || !pregunta.trim() || !respuesta.trim()}
             >
-              {saving ? "Guardando…" : "Guardar en el KB"}
+              {saving ? "Salvando…" : "Salvar no KB"}
             </Button>
             <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
               Cancelar

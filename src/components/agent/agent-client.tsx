@@ -54,7 +54,7 @@ export function AgentClient() {
   if (!profile) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-        Cargando…
+        Carregando…
       </div>
     );
   }
@@ -75,14 +75,14 @@ export function AgentClient() {
       <header className="flex items-center justify-between border-b px-6 py-4">
         <h2 className="font-semibold">Agente de IA</h2>
         <div className="flex items-center gap-3">
-          {saved && <span className="text-xs text-primary">Guardado ✓</span>}
+          {saved && <span className="text-xs text-primary">Salvo ✓</span>}
           <span className="text-sm text-muted-foreground">
-            {profile.enabled ? "Encendido" : "Apagado"}
+            {profile.enabled ? "Ligado" : "Desligado"}
           </span>
           <button
             role="switch"
             aria-checked={profile.enabled}
-            aria-label="Agente encendido"
+            aria-label="Agente ligado"
             disabled={!aiConfigured}
             onClick={() => void saveProfile({ enabled: !profile.enabled })}
             className={`relative h-6 w-11 rounded-full transition-colors disabled:opacity-40 ${
@@ -101,12 +101,12 @@ export function AgentClient() {
       {!aiConfigured && (
         <div className="mx-6 mt-6 rounded-lg border border-brand-soft bg-brand-tint p-6 text-center">
           <Sparkles className="mx-auto mb-2 h-8 w-8 text-primary" />
-          <p className="font-medium">Configura tu proveedor de IA para activar el agente</p>
+          <p className="font-medium">Configure seu provedor de IA para ativar o agente</p>
           <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-            Agrega <code className="rounded bg-secondary px-1">OPENROUTER_API_TOKEN</code> y{" "}
-            <code className="rounded bg-secondary px-1">OPENROUTER_MODEL</code> a las variables
-            de entorno de la instancia y reiníciala. Mientras tanto puedes dejar listo el
-            comportamiento y el conocimiento aquí abajo.
+            Adicione <code className="rounded bg-secondary px-1">OPENROUTER_API_TOKEN</code> e{" "}
+            <code className="rounded bg-secondary px-1">OPENROUTER_MODEL</code> às variáveis
+            de ambiente da instância e reinicie. Enquanto isso, você pode deixar prontos o
+            comportamento e o conhecimento aqui embaixo.
           </p>
         </div>
       )}
@@ -132,14 +132,14 @@ function ProfileSection({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Comportamiento</CardTitle>
+        <CardTitle>Comportamento</CardTitle>
         <CardDescription>
-          Cómo se presenta y actúa el agente al responder a tus clientes.
+          Como o agente se apresenta e age ao responder aos seus clientes.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-1.5">
-          <Label htmlFor="agent-name">Nombre del agente</Label>
+          <Label htmlFor="agent-name">Nome do agente</Label>
           <Input
             id="agent-name"
             value={form.name}
@@ -147,44 +147,44 @@ function ProfileSection({
           />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="agent-tone">Tono</Label>
+          <Label htmlFor="agent-tone">Tom</Label>
           <Input
             id="agent-tone"
-            placeholder="p. ej. cercano y directo, con usted"
+            placeholder="ex.: próximo e direto, com você"
             value={form.tone ?? ""}
             onChange={(e) => setForm({ ...form, tone: e.target.value })}
           />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="agent-instructions">Instrucciones</Label>
+          <Label htmlFor="agent-instructions">Instruções</Label>
           <Textarea
             id="agent-instructions"
             rows={5}
-            placeholder="Qué debe y no debe hacer el agente…"
+            placeholder="O que o agente deve e não deve fazer…"
             value={form.instructions ?? ""}
             onChange={(e) => setForm({ ...form, instructions: e.target.value })}
           />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="agent-escalation">Reglas de escalado</Label>
+          <Label htmlFor="agent-escalation">Regras de escalonamento</Label>
           <Textarea
             id="agent-escalation"
             rows={3}
-            placeholder="Cuándo pasar la conversación a un humano…"
+            placeholder="Quando passar a conversa para um humano…"
             value={form.escalationRules ?? ""}
             onChange={(e) => setForm({ ...form, escalationRules: e.target.value })}
           />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="agent-greeting">Saludo</Label>
+          <Label htmlFor="agent-greeting">Saudação</Label>
           <Input
             id="agent-greeting"
-            placeholder="Saludo para conversaciones nuevas"
+            placeholder="Saudação para conversas novas"
             value={form.greeting ?? ""}
             onChange={(e) => setForm({ ...form, greeting: e.target.value })}
           />
         </div>
-        <Button onClick={() => void onSave(form)}>Guardar comportamiento</Button>
+        <Button onClick={() => void onSave(form)}>Salvar comportamento</Button>
       </CardContent>
     </Card>
   );
@@ -238,33 +238,33 @@ function KbSection({
           <div>
             <CardTitle>Knowledge base</CardTitle>
             <CardDescription>
-              La única fuente de verdad del agente: lo que no está aquí, no lo
+              A única fonte de verdade do agente: o que não está aqui, ele não
               afirma.
             </CardDescription>
           </div>
           {kbSize && (
             <Badge variant={kbSize.warning ? "warning" : "secondary"}>
-              {kbSize.chars.toLocaleString("es-MX")} caracteres
+              {kbSize.chars.toLocaleString("pt-BR")} caracteres
             </Badge>
           )}
         </div>
         {kbSize?.warning && (
           <p className="text-xs text-[#8a6d3b]">
-            El conocimiento se acerca al límite del contexto del modelo (v1 lo
-            inyecta completo en cada turno). Considera depurar entradas.
+            O conhecimento está se aproximando do limite de contexto do modelo
+            (a v1 injeta tudo em cada turno). Considere enxugar as entradas.
           </p>
         )}
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-2 rounded-md border p-3">
-          <p className="text-sm font-medium">Nueva pregunta / respuesta</p>
+          <p className="text-sm font-medium">Nova pergunta / resposta</p>
           <Input
-            placeholder="Pregunta (p. ej. ¿Hacen envíos?)"
+            placeholder="Pergunta (ex.: Vocês fazem entrega?)"
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
           />
           <Textarea
-            placeholder="Respuesta"
+            placeholder="Resposta"
             rows={2}
             value={answer}
             onChange={(e) => setAnswer(e.target.value)}
@@ -274,20 +274,20 @@ function KbSection({
             onClick={() => void addQa()}
             disabled={!question.trim() || !answer.trim()}
           >
-            <Plus className="h-4 w-4" /> Agregar P/R
+            <Plus className="h-4 w-4" /> Adicionar P/R
           </Button>
         </div>
 
         <div className="space-y-2 rounded-md border p-3">
-          <p className="text-sm font-medium">Nuevo bloque de texto libre</p>
+          <p className="text-sm font-medium">Novo bloco de texto livre</p>
           <Textarea
-            placeholder="Horarios, direcciones, políticas…"
+            placeholder="Horários, endereços, políticas…"
             rows={3}
             value={block}
             onChange={(e) => setBlock(e.target.value)}
           />
           <Button size="sm" onClick={() => void addBlock()} disabled={!block.trim()}>
-            <Plus className="h-4 w-4" /> Agregar bloque
+            <Plus className="h-4 w-4" /> Adicionar bloco
           </Button>
         </div>
 
@@ -307,7 +307,7 @@ function KbSection({
               <Button
                 variant="ghost"
                 size="icon"
-                aria-label="Eliminar entrada"
+                aria-label="Excluir entrada"
                 onClick={() => void remove(e.id)}
               >
                 <Trash2 className="h-4 w-4" />
@@ -316,7 +316,7 @@ function KbSection({
           ))}
           {entries.length === 0 && (
             <p className="py-2 text-center text-xs text-muted-foreground">
-              Sin entradas todavía: agrega lo que el agente debe saber.
+              Nenhuma entrada ainda: adicione o que o agente precisa saber.
             </p>
           )}
         </ul>

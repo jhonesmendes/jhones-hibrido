@@ -51,7 +51,7 @@ export async function applyStatusUpdate(
     next === "failed"
       ? (status.errors?.[0]?.message ??
         status.errors?.[0]?.title ??
-        "Envío fallido")
+        "Falha no envio")
       : null;
 
   await db

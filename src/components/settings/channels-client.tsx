@@ -42,14 +42,14 @@ const PROVIDERS: { id: Provider; label: string; hint: string }[] = [
   {
     id: "evolution",
     label: "Evolution API",
-    hint: "API key global o de la instancia (header apikey)",
+    hint: "API key global ou da instância (header apikey)",
   },
   {
     id: "wppconnect",
     label: "WPPConnect",
-    hint: "Token Bearer generado con el SECRET_KEY del server",
+    hint: "Token Bearer gerado com o SECRET_KEY do server",
   },
-  { id: "waha", label: "WAHA", hint: "X-Api-Key del servidor WAHA" },
+  { id: "waha", label: "WAHA", hint: "X-Api-Key do servidor WAHA" },
 ];
 
 export function ChannelsClient() {
@@ -70,7 +70,7 @@ export function ChannelsClient() {
   }, [refetch]);
 
   if (!loaded) {
-    return <p className="text-sm text-muted-foreground">Cargando…</p>;
+    return <p className="text-sm text-muted-foreground">Carregando…</p>;
   }
 
   return (
@@ -78,10 +78,10 @@ export function ChannelsClient() {
       <div className="flex items-start gap-2 rounded-lg border border-[#ece2cf] bg-[#faf7f0] p-4 text-sm text-[#8a6d3b]">
         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
         <p>
-          Canal <strong>no oficial</strong> (gateway tipo Baileys). Meta puede
-          banear el número: usa uno secundario, no el principal del negocio.
-          En el modelo híbrido, la captación entra por la Cloud API oficial y
-          la automatización opera por este número.
+          Canal <strong>não oficial</strong> (gateway tipo Baileys). A Meta
+          pode banir o número: use um secundário, não o principal do negócio.
+          No modelo híbrido, a captação entra pela Cloud API oficial e a
+          automação opera por este número.
         </p>
       </div>
 
@@ -114,7 +114,7 @@ function StatusCard({
       const data = (await res.json().catch(() => null)) as {
         error?: { message?: string };
       } | null;
-      setError(data?.error?.message ?? "Error consultando el gateway");
+      setError(data?.error?.message ?? "Erro ao consultar o gateway");
     }
   }, []);
 
@@ -127,7 +127,7 @@ function StatusCard({
   }, [poll]);
 
   async function remove() {
-    if (!confirm("¿Eliminar la configuración del canal no oficial?")) return;
+    if (!confirm("Excluir a configuração do canal não oficial?")) return;
     await fetch("/api/settings/channels", { method: "DELETE" });
     await onChanged();
   }
@@ -160,7 +160,7 @@ function StatusCard({
             {state === "connected" ? (
               <Badge variant="success">Conectado</Badge>
             ) : state === "connecting" ? (
-              <Badge>Esperando QR…</Badge>
+              <Badge>Aguardando QR…</Badge>
             ) : (
               <Badge variant="destructive">Desconectado</Badge>
             )}
@@ -176,7 +176,7 @@ function StatusCard({
             <CheckCircle2 className="h-5 w-5 text-success" />
             <p className="font-medium text-[#3f6b52]">
               Número conectado
-              {live?.phoneNumber ?? channel.displayPhoneNumber
+              {(live?.phoneNumber ?? channel.displayPhoneNumber)
                 ? `: +${live?.phoneNumber ?? channel.displayPhoneNumber}`
                 : ""}
             </p>
@@ -188,18 +188,18 @@ function StatusCard({
             <div className="flex h-44 w-44 shrink-0 items-center justify-center rounded-lg border bg-secondary">
               {qr && !qrIsText ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={qr} alt="Código QR" className="h-40 w-40" />
+                <img src={qr} alt="QR code" className="h-40 w-40" />
               ) : (
                 <QrCode className="h-10 w-10 text-text-3" strokeWidth={1.2} />
               )}
             </div>
             <div className="space-y-2 text-sm text-text-2">
               <p className="font-medium text-foreground">
-                Escanea el QR con el teléfono del número secundario
+                Escaneie o QR com o celular do número secundário
               </p>
               <p>
-                WhatsApp → Dispositivos vinculados → Vincular dispositivo. El
-                estado se actualiza solo (se consulta cada 5 s).
+                WhatsApp → Aparelhos conectados → Conectar um aparelho. O
+                status atualiza sozinho (consulta a cada 5 s).
               </p>
               {qrIsText && qr && (
                 <p className="break-all rounded-md border bg-secondary p-2 font-mono text-[11px]">
@@ -212,17 +212,18 @@ function StatusCard({
         )}
 
         <div className="space-y-1.5">
-          <Label>Webhook del gateway (eventos entrantes)</Label>
+          <Label>Webhook do gateway (eventos de entrada)</Label>
           <div className="flex items-center gap-2">
             <Input readOnly value={channel.webhookUrl} className="font-mono text-xs" />
             <Button size="sm" variant="outline" onClick={copyWebhook}>
               <Copy className="h-4 w-4" strokeWidth={1.7} />
-              {copied ? "Copiado" : "Copiar"}
+              {copied ? "Copiado!" : "Copiar"}
             </Button>
           </div>
           <p className="text-xs text-text-3">
-            Evolution y WAHA se configuran solos al guardar. En WPPConnect
-            ponla como <code>webhook.url</code> en el config.json del server.
+            Evolution e WAHA são configurados sozinhos ao salvar. No
+            WPPConnect, coloque como <code>webhook.url</code> no config.json
+            do server.
           </p>
         </div>
       </CardContent>
@@ -270,7 +271,7 @@ function ConfigForm({
     } | null;
     setError(
       data?.error?.message ??
-        "No se pudo validar el gateway: revisa URL, instancia y API key"
+        "Não foi possível validar o gateway: confira URL, instância e API key"
     );
   }
 
@@ -280,16 +281,16 @@ function ConfigForm({
     <Card>
       <CardHeader>
         <CardTitle>
-          {existing ? "Reconfigurar canal" : "Conectar gateway no oficial"}
+          {existing ? "Reconfigurar canal" : "Conectar gateway não oficial"}
         </CardTitle>
         <CardDescription>
-          Apunta a tu gateway self-hosted. La API key se cifra en reposo y
-          nunca se muestra completa.
+          Aponte para o seu gateway self-hosted. A API key é criptografada em
+          repouso e nunca é exibida completa.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-1.5">
-          <Label>Proveedor</Label>
+          <Label>Provedor</Label>
           <div className="flex gap-2">
             {PROVIDERS.map((p) => (
               <button
@@ -309,17 +310,17 @@ function ConfigForm({
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="ch-url">URL base del gateway</Label>
+          <Label htmlFor="ch-url">URL base do gateway</Label>
           <Input
             id="ch-url"
-            placeholder="https://evolution.midominio.com"
+            placeholder="https://evolution.meudominio.com.br"
             value={baseUrl}
             onChange={(e) => setBaseUrl(e.target.value)}
           />
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="ch-instance">Instancia / sesión</Label>
+          <Label htmlFor="ch-instance">Instância / sessão</Label>
           <Input
             id="ch-instance"
             placeholder="principal"
@@ -334,7 +335,7 @@ function ConfigForm({
             id="ch-key"
             type="password"
             placeholder={
-              existing ? `Actual: …${existing.apiKeyLast4} (pega una nueva)` : ""
+              existing ? `Atual: …${existing.apiKeyLast4} (cole uma nova)` : ""
             }
             value={apiKey}
             onChange={(e) => setApiKey(e.target.value)}
@@ -345,7 +346,7 @@ function ConfigForm({
         {error && <p className="text-sm text-destructive">{error}</p>}
 
         <Button disabled={!canSave} onClick={() => void save()}>
-          {saving ? "Validando…" : "Guardar y conectar"}
+          {saving ? "Validando…" : "Salvar e conectar"}
         </Button>
       </CardContent>
     </Card>

@@ -43,17 +43,17 @@ export function TemplateSender({
   }, []);
 
   if (templates === null) {
-    return <p className="text-xs text-muted-foreground">Cargando plantillas…</p>;
+    return <p className="text-xs text-muted-foreground">Carregando modelos…</p>;
   }
 
   if (templates.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">
-        Aún no hay plantillas aprobadas. Créalas en{" "}
+        Ainda não há modelos aprovados. Crie-os em{" "}
         <a href="/settings/templates" className="text-primary hover:underline">
-          Configuración → Plantillas
+          Configurações → Modelos
         </a>{" "}
-        y espera la aprobación de Meta.
+        e aguarde a aprovação da Meta.
       </p>
     );
   }
@@ -81,7 +81,7 @@ export function TemplateSender({
       const data = (await res.json().catch(() => null)) as {
         error?: { message?: string };
       } | null;
-      setError(data?.error?.message ?? "No se pudo enviar la plantilla");
+      setError(data?.error?.message ?? "Não foi possível enviar o modelo");
       return;
     }
     setSelectedId("");
@@ -92,14 +92,14 @@ export function TemplateSender({
   return (
     <div className="space-y-3">
       <div className="space-y-1.5">
-        <Label htmlFor="template-select">Plantilla aprobada</Label>
+        <Label htmlFor="template-select">Modelo aprovado</Label>
         <select
           id="template-select"
           value={selectedId}
           onChange={(e) => setSelectedId(e.target.value)}
           className="flex h-9 w-full rounded-md border border-input bg-card px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         >
-          <option value="">Elige una plantilla…</option>
+          <option value="">Escolha um modelo…</option>
           {templates.map((t) => (
             <option key={t.id} value={t.id}>
               {t.name} ({t.language})
@@ -114,12 +114,12 @@ export function TemplateSender({
       )}
       {needsVariable && (
         <div className="space-y-1.5">
-          <Label htmlFor="template-variable">Valor de la variable {"{{1}}"}</Label>
+          <Label htmlFor="template-variable">Valor da variável {"{{1}}"}</Label>
           <Input
             id="template-variable"
             value={variable}
             onChange={(e) => setVariable(e.target.value)}
-            placeholder="p. ej. el nombre del cliente"
+            placeholder="ex.: o nome do cliente"
           />
         </div>
       )}
@@ -128,7 +128,7 @@ export function TemplateSender({
         onClick={() => void send()}
         disabled={!selected || sending || (needsVariable && !variable.trim())}
       >
-        {sending ? "Enviando…" : "Enviar plantilla"}
+        {sending ? "Enviando…" : "Enviar modelo"}
       </Button>
     </div>
   );

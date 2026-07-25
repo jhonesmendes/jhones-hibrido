@@ -10,10 +10,10 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 
 const HANDOFF_LABELS: Record<string, string> = {
-  cliente: "El cliente pidió un humano",
-  modelo: "El agente decidió escalar",
-  error: "Error del proveedor de IA",
-  ventana: "Ventana de 24h cerrada",
+  cliente: "O cliente pediu um humano",
+  modelo: "O agente decidiu escalar",
+  error: "Erro do provedor de IA",
+  ventana: "Janela de 24h fechada",
 };
 
 export function ContactPanel({
@@ -121,11 +121,11 @@ export function ContactPanel({
     <div className="flex h-full flex-col">
       <header className="sticky top-0 flex items-center justify-between border-b bg-background px-4 py-3">
         <h3 className="text-[13px] font-[650] uppercase tracking-wide text-text-2">
-          Detalles
+          Detalhes
         </h3>
         <button
           onClick={onClose}
-          aria-label="Ocultar panel"
+          aria-label="Ocultar painel"
           className="rounded p-1 text-text-3 hover:bg-accent hover:text-foreground"
         >
           <ChevronRight className="h-4 w-4" strokeWidth={1.7} />
@@ -154,11 +154,11 @@ export function ContactPanel({
           {conversation.handoffAt && (
             <div className="mt-3 rounded-md border border-[#ece2cf] bg-[#faf7f0] p-3">
               <p className="flex items-center gap-1.5 text-[13px] font-medium text-[#8a6d3b]">
-                <UserRound className="h-4 w-4" strokeWidth={1.7} /> Atención humana
+                <UserRound className="h-4 w-4" strokeWidth={1.7} /> Atendimento humano
               </p>
               <p className="mt-1 text-xs text-[#8a6d3b]/80">
                 {HANDOFF_LABELS[conversation.handoffReason ?? ""] ??
-                  "La IA está en pausa en esta conversación."}
+                  "A IA está pausada nesta conversa."}
               </p>
               <Button
                 size="sm"
@@ -167,7 +167,7 @@ export function ContactPanel({
                 disabled={!agentReady}
                 onClick={() => void onPatchConversation({ reactivate: true })}
               >
-                Reactivar IA
+                Reativar IA
               </Button>
             </div>
           )}
@@ -175,21 +175,21 @@ export function ContactPanel({
           <div className="mt-3 rounded-md border bg-secondary/50 px-3 py-2.5">
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-[13px] font-medium">IA en esta conversación</p>
+                <p className="text-[13px] font-medium">IA nesta conversa</p>
                 <p className="text-[11px] text-text-3">
                   {!agentReady
-                    ? "Agente sin activar"
+                    ? "Agente não ativado"
                     : conversation.handoffAt
-                      ? "En pausa · atención humana"
+                      ? "Pausada · atendimento humano"
                       : conversation.aiEnabled
-                        ? "Respondiendo"
-                        : "En pausa"}
+                        ? "Respondendo"
+                        : "Pausada"}
                 </p>
               </div>
               <button
                 role="switch"
                 aria-checked={aiActive}
-                aria-label="IA en esta conversación"
+                aria-label="IA nesta conversa"
                 disabled={!agentReady}
                 onClick={() => {
                   if (!agentReady) return;
@@ -220,8 +220,8 @@ export function ContactPanel({
                 />
                 <p className="text-[11px] leading-relaxed text-[#8a6d3b]">
                   {aiConfigured
-                    ? "La IA todavía no responde por su cuenta. Configura lo básico del agente y enciéndelo."
-                    : "Falta la clave de IA de la instancia (OPENROUTER_API_TOKEN) para que el agente pueda responder."}
+                    ? "A IA ainda não responde sozinha. Configure o básico do agente e ative-o."
+                    : "Falta a chave de IA da instância (OPENROUTER_API_TOKEN) para o agente poder responder."}
                   {aiConfigured && (
                     <Link
                       href="/agent"
@@ -236,17 +236,17 @@ export function ContactPanel({
           </div>
           {/* Canal de salida (modelo híbrido oficial / no oficial) */}
           <div className="mt-3 rounded-md border bg-secondary/50 px-3 py-2.5">
-            <p className="text-[13px] font-medium">Canal de envío</p>
+            <p className="text-[13px] font-medium">Canal de envio</p>
             <p className="text-[11px] text-text-3">
               {conversation.channel === "unofficial"
-                ? "Gateway no oficial · sin ventana de 24h"
+                ? "Gateway não oficial · sem janela de 24h"
                 : "WhatsApp Cloud API oficial"}
             </p>
             <div className="mt-2 flex gap-1.5">
               {(
                 [
                   { id: "official", label: "Oficial" },
-                  { id: "unofficial", label: "No oficial" },
+                  { id: "unofficial", label: "Não oficial" },
                 ] as const
               ).map((ch) => (
                 <button
@@ -273,7 +273,7 @@ export function ContactPanel({
         {stages.length > 0 && leadId && (
           <section className="border-b p-4">
             <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-text-3">
-              Etapa del pipeline
+              Etapa do pipeline
             </p>
             <ol>
               {stages.map((s, i) => {
@@ -291,7 +291,7 @@ export function ContactPanel({
                     )}
                     <button
                       onClick={() => void moveToStage(s.id)}
-                      aria-label={`Mover a ${s.name}`}
+                      aria-label={`Mover para ${s.name}`}
                       className={cn(
                         "relative z-10 mt-0.5 flex h-[15px] w-[15px] shrink-0 items-center justify-center rounded-full transition-colors",
                         done && "bg-brand text-white",
@@ -324,7 +324,7 @@ export function ContactPanel({
           </p>
           <Textarea
             rows={5}
-            placeholder="Notas internas sobre este contacto…"
+            placeholder="Notas internas sobre este contato…"
             value={notes}
             disabled={!notesLoaded}
             onChange={(e) => setNotes(e.target.value)}
@@ -336,7 +336,7 @@ export function ContactPanel({
             disabled={savingNotes || !notesLoaded}
             onClick={() => void saveNotes()}
           >
-            {savingNotes ? "Guardando…" : "Guardar notas"}
+            {savingNotes ? "Salvando…" : "Salvar notas"}
           </Button>
         </section>
       </div>

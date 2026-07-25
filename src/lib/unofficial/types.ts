@@ -100,7 +100,7 @@ export async function gatewayRequest<T>(
         : raw.slice(0, 300);
     throw new UnofficialApiError(
       res.status,
-      `Gateway respondió ${res.status}: ${detail}`
+      `Gateway respondeu ${res.status}: ${detail}`
     );
   }
   return data as T;

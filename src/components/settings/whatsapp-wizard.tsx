@@ -50,7 +50,7 @@ export function WhatsappWizard() {
   }, [refetch]);
 
   if (!loaded) {
-    return <p className="text-sm text-muted-foreground">Cargando…</p>;
+    return <p className="text-sm text-muted-foreground">Carregando…</p>;
   }
 
   return (
@@ -60,11 +60,11 @@ export function WhatsappWizard() {
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
           <div>
             <p className="font-medium text-[#a2504c]">
-              El token de WhatsApp expiró o fue revocado.
+              O token do WhatsApp expirou ou foi revogado.
             </p>
             <p className="text-[#a2504c]/80">
-              Los envíos están pausados. Pega un token nuevo abajo y prueba la
-              conexión para reconectar.
+              Os envios estão pausados. Cole um token novo abaixo e teste a
+              conexão para reconectar.
             </p>
           </div>
         </div>
@@ -126,7 +126,7 @@ function ConnectForm({
     }).catch(() => null);
     setTesting(false);
     if (!res) {
-      setTestResult({ ok: false, message: "Sin conexión con el servidor" });
+      setTestResult({ ok: false, message: "Sem conexão com o servidor" });
       return;
     }
     const data = (await res.json().catch(() => null)) as {
@@ -138,7 +138,7 @@ function ConnectForm({
     } else {
       setTestResult({
         ok: false,
-        message: data?.error?.message ?? "La validación falló",
+        message: data?.error?.message ?? "A validação falhou",
       });
     }
   }
@@ -156,7 +156,7 @@ function ConnectForm({
       const data = (await res?.json().catch(() => null)) as {
         error?: { message?: string };
       } | null;
-      setSaveError(data?.error?.message ?? "No se pudo guardar la conexión");
+      setSaveError(data?.error?.message ?? "Não foi possível salvar a conexão");
       return;
     }
     setToken("");
@@ -168,35 +168,35 @@ function ConnectForm({
     <Card>
       <CardHeader>
         <CardTitle>
-          {existing ? "Reconectar / actualizar el número" : "Conectar tu número de WhatsApp"}
+          {existing ? "Reconectar / atualizar o número" : "Conectar seu número de WhatsApp"}
         </CardTitle>
         <CardDescription>
-          Pega las credenciales de WhatsApp Cloud API. El token se valida
-          contra Meta ANTES de guardarse y se almacena cifrado.
+          Cole as credenciais da WhatsApp Cloud API. O token é validado na
+          Meta ANTES de ser salvo e é armazenado criptografado.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid gap-3 rounded-md border bg-background/40 p-4 text-sm">
-          <p className="font-medium">¿De dónde sale el token?</p>
+          <p className="font-medium">De onde vem o token?</p>
           <div className="grid gap-3 md:grid-cols-2">
             <div className="rounded-md border p-3">
-              <p className="mb-1 font-medium text-primary">Modo directo</p>
+              <p className="mb-1 font-medium text-primary">Modo direto</p>
               <p className="text-muted-foreground">
-                El negocio tiene su propia app en{" "}
+                O negócio tem o próprio app em{" "}
                 <span className="text-foreground">developers.facebook.com</span>:
-                usa un token de <span className="text-foreground">usuario del sistema</span>{" "}
-                (no expira) con permisos de WhatsApp. En este modo conviene
-                configurar también el App Secret para la firma del webhook.
+                use um token de <span className="text-foreground">usuário do sistema</span>{" "}
+                (não expira) com permissões de WhatsApp. Neste modo, vale
+                configurar também o App Secret para a assinatura do webhook.
               </p>
             </div>
             <div className="rounded-md border p-3">
-              <p className="mb-1 font-medium text-primary">Modo agencia (Tech Provider)</p>
+              <p className="mb-1 font-medium text-primary">Modo agência (Tech Provider)</p>
               <p className="text-muted-foreground">
-                Tu agencia hace el Embedded Signup en SU plataforma y su
-                backend obtiene el token del cliente; te lo entrega para
-                pegarlo aquí. El webhook se conecta con el{" "}
+                Sua agência faz o Embedded Signup na plataforma DELA e o
+                backend dela obtém o token do cliente; ela entrega o token
+                para colar aqui. O webhook conecta com o{" "}
                 <span className="text-foreground">override por WABA</span>{" "}
-                (checklist de 5 pasos en el README).
+                (checklist de 5 passos no README).
               </p>
             </div>
           </div>
@@ -207,7 +207,7 @@ function ConnectForm({
             <Label htmlFor="waba-id">WABA ID</Label>
             <Input
               id="waba-id"
-              placeholder="ID de la cuenta de WhatsApp Business"
+              placeholder="ID da conta do WhatsApp Business"
               value={wabaId}
               onChange={(e) => setWabaId(e.target.value)}
             />
@@ -216,18 +216,18 @@ function ConnectForm({
             <Label htmlFor="phone-number-id">Phone Number ID</Label>
             <Input
               id="phone-number-id"
-              placeholder="ID del número de teléfono"
+              placeholder="ID do número de telefone"
               value={phoneNumberId}
               onChange={(e) => setPhoneNumberId(e.target.value)}
             />
           </div>
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="token">Token de acceso</Label>
+          <Label htmlFor="token">Token de acesso</Label>
           <Input
             id="token"
             type="password"
-            placeholder={existing ? `Guardado (…${existing.tokenLast4}) — pega uno nuevo para cambiarlo` : "EAAG…"}
+            placeholder={existing ? `Salvo (…${existing.tokenLast4}) — cole um novo para trocar` : "EAAG…"}
             value={token}
             onChange={(e) => {
               setToken(e.target.value);
@@ -241,7 +241,7 @@ function ConnectForm({
             className={`text-sm ${testResult.ok ? "text-success" : "text-destructive"}`}
           >
             {testResult.ok
-              ? `✓ Token válido para ${testResult.display}. Ya puedes guardar.`
+              ? `✓ Token válido para ${testResult.display}. Já pode salvar.`
               : testResult.message}
           </p>
         )}
@@ -253,13 +253,13 @@ function ConnectForm({
             disabled={!canTest || testing}
             onClick={() => void test()}
           >
-            {testing ? "Probando…" : "Probar conexión"}
+            {testing ? "Testando…" : "Testar conexão"}
           </Button>
           <Button
             disabled={!testResult?.ok || saving}
             onClick={() => void save()}
           >
-            {saving ? "Guardando…" : "Guardar conexión"}
+            {saving ? "Salvando…" : "Salvar conexão"}
           </Button>
         </div>
       </CardContent>
@@ -280,28 +280,28 @@ function WebhookCard({ webhook }: { webhook: WebhookInfo }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Webhook de WhatsApp</CardTitle>
+        <CardTitle>Webhook do WhatsApp</CardTitle>
         <CardDescription>
-          Pega estos valores en el panel de Meta (modo directo) o úsalos en el
-          override de tu backend de agencia (a nivel WABA).{" "}
+          Cole estes valores no painel da Meta (modo direto) ou use-os no
+          override do backend da sua agência (no nível da WABA).{" "}
           <strong className="text-foreground">
-            Guarda la conexión ANTES de configurar el webhook:
+            Salve a conexão ANTES de configurar o webhook:
           </strong>{" "}
-          la verificación (handshake) funciona sin guardar, pero los mensajes
-          solo se reciben si la conexión está guardada — se enrutan por tu
-          Phone Number ID.
+          a verificação (handshake) funciona sem salvar, mas as mensagens só
+          são recebidas com a conexão salva — o roteamento usa o seu Phone
+          Number ID.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         {!webhook.isHttps && (
           <p className="flex items-start gap-2 rounded-md border border-[#ece2cf] bg-[#faf7f0] p-3 text-xs text-[#8a6d3b]">
             <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            La URL configurada no es https: Meta exige https para los webhooks.
-            Ajusta APP_BASE_URL con tu dominio público.
+            A URL configurada não é https: a Meta exige https para webhooks.
+            Ajuste APP_BASE_URL com o seu domínio público.
           </p>
         )}
         <div className="space-y-1.5">
-          <Label>URL del webhook (callback URL)</Label>
+          <Label>URL do webhook (callback URL)</Label>
           <div className="flex items-center gap-2">
             <code className="min-w-0 flex-1 truncate rounded-md border bg-background/60 px-3 py-2 text-xs">
               {webhook.url}
@@ -319,8 +319,7 @@ function WebhookCard({ webhook }: { webhook: WebhookInfo }) {
             )}
           </div>
           <p className="text-xs text-muted-foreground">
-            La URL contiene el token secreto en la ruta: trátala como una
-            contraseña.
+            A URL contém o token secreto no caminho: trate-a como uma senha.
           </p>
         </div>
         <div className="space-y-1.5">
@@ -344,16 +343,16 @@ function WebhookCard({ webhook }: { webhook: WebhookInfo }) {
         </div>
         {webhook.signatureLayer ? (
           <p className="flex items-center gap-2 text-xs text-success">
-            <ShieldCheck className="h-4 w-4" /> Verificación de firma activa
-            (META_APP_SECRET configurado): cada evento se valida con
+            <ShieldCheck className="h-4 w-4" /> Verificação de assinatura ativa
+            (META_APP_SECRET configurado): cada evento é validado com
             x-hub-signature-256.
           </p>
         ) : (
           <p className="flex items-start gap-2 text-xs text-muted-foreground">
-            <Info className="mt-0.5 h-4 w-4 shrink-0" /> Sin App Secret
-            configurado: el webhook queda protegido por la URL secreta (normal
-            en modo agencia). Para la capa extra de firma, agrega
-            META_APP_SECRET a la instancia.
+            <Info className="mt-0.5 h-4 w-4 shrink-0" /> Sem App Secret
+            configurado: o webhook fica protegido pela URL secreta (normal no
+            modo agência). Para a camada extra de assinatura, adicione
+            META_APP_SECRET à instância.
           </p>
         )}
       </CardContent>

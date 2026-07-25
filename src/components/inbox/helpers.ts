@@ -6,12 +6,12 @@ export function formatTime(iso: string | null): string {
   const now = new Date();
   const sameDay = d.toDateString() === now.toDateString();
   if (sameDay) {
-    return d.toLocaleTimeString("es-MX", {
+    return d.toLocaleTimeString("pt-BR", {
       hour: "2-digit",
       minute: "2-digit",
     });
   }
-  return d.toLocaleDateString("es-MX", { day: "numeric", month: "short" });
+  return d.toLocaleDateString("pt-BR", { day: "numeric", month: "short" });
 }
 
 export function formatRemaining(ms: number): string {
@@ -23,18 +23,18 @@ export function formatRemaining(ms: number): string {
 }
 
 const MEDIA_LABELS: Record<string, string> = {
-  image: "Imagen",
-  audio: "Audio",
-  video: "Video",
+  image: "Imagem",
+  audio: "Áudio",
+  video: "Vídeo",
   document: "Documento",
-  sticker: "Sticker",
-  location: "Ubicación",
-  contacts: "Contacto compartido",
-  template: "Plantilla",
+  sticker: "Figurinha",
+  location: "Localização",
+  contacts: "Contato compartilhado",
+  template: "Modelo",
 };
 
 export function mediaLabel(type: string): string {
-  return MEDIA_LABELS[type] ?? "Contenido";
+  return MEDIA_LABELS[type] ?? "Conteúdo";
 }
 
 export function previewText(preview: string | null): string {

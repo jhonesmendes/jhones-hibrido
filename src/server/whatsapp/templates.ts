@@ -54,10 +54,10 @@ export function countVariables(body: string): number {
 export function validateBodyVariables(body: string): string | null {
   const matches = [...body.matchAll(VARIABLE_REGEX)];
   if (matches.length > 1) {
-    return "v1 admite una sola variable {{1}} en el cuerpo";
+    return "A v1 admite uma única variável {{1}} no corpo";
   }
   if (matches.length === 1 && matches[0]![1] !== "1") {
-    return "La variable debe ser {{1}}";
+    return "A variável deve ser {{1}}";
   }
   return null;
 }
@@ -90,17 +90,17 @@ export async function createTemplate(
 
   const creds = await getCredentialsByOrg(organizationId);
   if (!creds) {
-    throw new TemplateError("not_connected", "Conecta tu número de WhatsApp primero");
+    throw new TemplateError("not_connected", "Conecte seu número de WhatsApp primeiro");
   }
   if (creds.status === "reconnect_required") {
-    throw new TemplateError("reconnect_required", "Reconecta tu número antes de crear plantillas");
+    throw new TemplateError("reconnect_required", "Reconecte seu número antes de criar modelos");
   }
 
   const name = input.name
     .toLowerCase()
     .replace(/\s+/g, "_")
     .replace(/[^a-z0-9_]/g, "");
-  if (!name) throw new TemplateError("invalid", "Nombre de plantilla inválido");
+  if (!name) throw new TemplateError("invalid", "Nome de modelo inválido");
 
   const hasVariable = countVariables(input.body) === 1;
   let waTemplateId: string | null = null;
@@ -131,10 +131,10 @@ export async function createTemplate(
     if (err instanceof MetaApiError) {
       if (err.isAuthError) {
         await markReconnectRequired(organizationId);
-        throw new TemplateError("reconnect_required", "El token expiró: reconecta el número");
+        throw new TemplateError("reconnect_required", "O token expirou: reconecte o número");
       }
       if (err.status === 0 || err.status >= 500) {
-        throw new TemplateError("meta_unavailable", "Meta no está disponible ahora");
+        throw new TemplateError("meta_unavailable", "A Meta não está disponível agora");
       }
       throw new TemplateError("meta_error", err.message);
     }
@@ -193,7 +193,7 @@ function mapMetaStatus(
 export async function syncTemplates(organizationId: string): Promise<number> {
   const creds = await getCredentialsByOrg(organizationId);
   if (!creds) {
-    throw new TemplateError("not_connected", "Conecta tu número de WhatsApp primero");
+    throw new TemplateError("not_connected", "Conecte seu número de WhatsApp primeiro");
   }
 
   let data: {
@@ -207,9 +207,9 @@ export async function syncTemplates(organizationId: string): Promise<number> {
     if (err instanceof MetaApiError) {
       if (err.isAuthError) {
         await markReconnectRequired(organizationId);
-        throw new TemplateError("reconnect_required", "El token expiró: reconecta el número");
+        throw new TemplateError("reconnect_required", "O token expirou: reconecte o número");
       }
-      throw new TemplateError("meta_unavailable", "No se pudo consultar Meta");
+      throw new TemplateError("meta_unavailable", "Não foi possível consultar a Meta");
     }
     throw err;
   }
@@ -296,13 +296,13 @@ export async function sendTemplate(input: {
     )
     .limit(1);
   const template = templates[0];
-  if (!template) throw new TemplateError("not_found", "Plantilla no encontrada");
+  if (!template) throw new TemplateError("not_found", "Modelo não encontrado");
   if (template.status !== "approved") {
-    throw new TemplateError("invalid", "Solo se pueden enviar plantillas aprobadas");
+    throw new TemplateError("invalid", "Só é possível enviar modelos aprovados");
   }
   const needsVariable = countVariables(template.body) === 1;
   if (needsVariable && !input.variable?.trim()) {
-    throw new TemplateError("invalid", "La plantilla requiere el valor de {{1}}");
+    throw new TemplateError("invalid", "O modelo requer o valor de {{1}}");
   }
 
   const rows = await db
@@ -321,19 +321,19 @@ export async function sendTemplate(input: {
     )
     .limit(1);
   const row = rows[0];
-  if (!row) throw new TemplateError("not_found", "Conversación no encontrada");
+  if (!row) throw new TemplateError("not_found", "Conversa não encontrada");
   if (row.conversation.isTest) {
     // Aserción dura del sandbox (FR-031)
     throw new SendError(
       "sandbox_violation",
-      "Conversación de prueba del Laboratorio: el envío real está prohibido"
+      "Conversa de teste do Laboratório: o envio real é proibido"
     );
   }
 
   const creds = await getCredentialsByOrg(input.organizationId);
-  if (!creds) throw new TemplateError("not_connected", "Sin número conectado");
+  if (!creds) throw new TemplateError("not_connected", "Sem número conectado");
   if (creds.status === "reconnect_required") {
-    throw new TemplateError("reconnect_required", "Reconecta el número");
+    throw new TemplateError("reconnect_required", "Reconecte o número");
   }
 
   const waMessageId = await callGraphSend(creds, {

@@ -6,7 +6,7 @@ export default function SettingsLayout({
   return (
     <div className="flex h-full flex-col">
       <header className="border-b px-6 py-4">
-        <h2 className="font-semibold">Configuración</h2>
+        <h2 className="font-semibold">Configurações</h2>
       </header>
       <div className="flex min-h-0 flex-1">
         <SettingsNav />

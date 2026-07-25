@@ -20,9 +20,9 @@ export function aiMockCompletion(messages: InMessage[]): string {
   if (system.includes(JUDGE_MARKER)) {
     const kbSection =
       lastUser
-        .split("CONOCIMIENTO CONFIGURADO:")[1]
+        .split("CONHECIMENTO CONFIGURADO:")[1]
         ?.split("TRANSCRIPT COMPLETO:")[0] ?? "";
-    const kbCoversWarranty = /garant|devoluc/i.test(kbSection);
+    const kbCoversWarranty = /garant|devolu/i.test(kbSection);
     if (lastUser.includes("fuera_de_kb") && !kbCoversWarranty) {
       return JSON.stringify({
         veredicto: "rojo",
@@ -30,11 +30,11 @@ export function aiMockCompletion(messages: InMessage[]): string {
           {
             tipo: "fuera_de_kb",
             evidencia:
-              "El cliente preguntó por garantías y devoluciones y el conocimiento no lo cubre.",
+              "O cliente perguntou sobre garantia e devolução e o conhecimento não cobre.",
             sugerencia: {
-              pregunta: "¿Cuál es la política de garantías y devoluciones?",
+              pregunta: "Qual é a política de garantia e devolução?",
               respuesta:
-                "Aceptamos devoluciones dentro de los 30 días con ticket de compra; la garantía depende del fabricante.",
+                "Aceitamos devoluções em até 30 dias com o cupom da compra; a garantia depende do fabricante.",
             },
           },
         ],
@@ -47,26 +47,32 @@ export function aiMockCompletion(messages: InMessage[]): string {
 
   // Persona pide_humano (el regex de respaldo captura la frase canónica; esta
   // rama cubre variantes que llegan al modelo).
-  if (text.includes("humano") || text.includes("asesor")) {
+  if (
+    text.includes("humano") ||
+    text.includes("asesor") ||
+    text.includes("atendente")
+  ) {
     return JSON.stringify({ action: "handoff", reason: "cliente" });
   }
 
-  // Intención de compra → mover a Interesado.
+  // Intención de compra → mover a Interessado.
   if (
     text.includes("lo compro") ||
     text.includes("quiero comprar") ||
-    text.includes("me lo llevo")
+    text.includes("me lo llevo") ||
+    text.includes("vou levar") ||
+    text.includes("quero comprar")
   ) {
     return JSON.stringify({
       action: "move_stage",
-      stage: "Interesado",
-      reply: "¡Excelente! Te aparto el producto y un compañero te confirma el pago.",
+      stage: "Interessado",
+      reply: "Excelente! Vou reservar o produto e um colega confirma o pagamento.",
     });
   }
 
   const eco = lastUser.slice(0, 80);
   return JSON.stringify({
     action: "reply",
-    text: `Respuesta de prueba sobre: ${eco}`,
+    text: `Resposta de teste sobre: ${eco}`,
   });
 }

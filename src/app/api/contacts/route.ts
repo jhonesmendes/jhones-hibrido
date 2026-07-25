@@ -43,7 +43,7 @@ const createSchema = z.object({
   phone: z
     .string()
     .trim()
-    .regex(/^\d{7,15}$/, "Teléfono en dígitos, con código de país (ej. 5215512345678)"),
+    .regex(/^\d{7,15}$/, "Telefone em dígitos, com código do país (ex.: 5511912345678)"),
   notes: z.string().max(4000).optional(),
 });
 
@@ -66,7 +66,7 @@ export const POST = withAuth(async (session, req: Request) => {
     })
     .returning();
   if (!inserted[0]) {
-    return apiError(409, "duplicate", "Ya existe un contacto con ese teléfono");
+    return apiError(409, "duplicate", "Já existe um contato com esse telefone");
   }
   return Response.json(
     { contact: serializeContact(inserted[0]) },

@@ -56,7 +56,7 @@ export async function chatJson<T>(
             {
               role: "system",
               content:
-                "STRICT: tu respuesta anterior no fue JSON válido según el esquema. Responde ÚNICAMENTE el objeto JSON, sin explicaciones ni markdown.",
+                "STRICT: sua resposta anterior não foi JSON válido segundo o esquema. Responda SOMENTE o objeto JSON, sem explicações nem markdown.",
             },
           ];
     try {

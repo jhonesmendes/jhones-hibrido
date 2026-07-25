@@ -20,7 +20,7 @@ export const PATCH = withAuth(async (session, req: Request, ctx: Params) => {
   if (!body.ok) return body.response;
 
   const updated = await updateConversation(session.organizationId, id, body.data);
-  if (!updated) return apiError(404, "not_found", "Conversación no encontrada");
+  if (!updated) return apiError(404, "not_found", "Conversa não encontrada");
 
   const row = await getConversation(session.organizationId, id);
   if (row) {

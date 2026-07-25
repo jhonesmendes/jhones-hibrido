@@ -83,7 +83,7 @@ export function PipelineClient() {
       <header className="flex items-center justify-between border-b px-6 py-4">
         <h2 className="font-semibold">Pipeline</h2>
         <Button variant="outline" size="sm" onClick={() => setManaging(true)}>
-          <Settings2 className="h-4 w-4" /> Gestionar etapas
+          <Settings2 className="h-4 w-4" /> Gerenciar etapas
         </Button>
       </header>
 
@@ -182,15 +182,15 @@ function LeadCard({ lead, overlay = false }: { lead: BoardLead; overlay?: boolea
           <p className="truncate text-sm font-medium">{lead.contact.name}</p>
           <p className="text-[11px] text-muted-foreground">
             {lead.lastActivityAt
-              ? `Actividad: ${formatTime(lead.lastActivityAt)}`
-              : "Sin actividad"}
+              ? `Atividade: ${formatTime(lead.lastActivityAt)}`
+              : "Sem atividade"}
           </p>
         </div>
         {lead.conversationId && (
           <Link
             href={`/inbox?contact=${lead.contact.id}`}
             onPointerDown={(e) => e.stopPropagation()}
-            aria-label="Abrir conversación"
+            aria-label="Abrir conversa"
             className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
           >
             <MessageSquareText className="h-4 w-4" />

@@ -74,7 +74,7 @@ function createAuth() {
           const result = checkRateLimit(`${ctx.path}:${ip}`, AUTH_RATE_LIMIT);
           if (!result.allowed) {
             throw new APIError("TOO_MANY_REQUESTS", {
-              message: "Demasiados intentos; espera unos minutos",
+              message: "Muitas tentativas; aguarde alguns minutos",
             });
           }
         }
@@ -83,7 +83,7 @@ function createAuth() {
           if (!isInternalSignup() && !(await isPublicSignupAllowed())) {
             throw new APIError("FORBIDDEN", {
               message:
-                "El registro está cerrado: esta instancia ya tiene su organización",
+                "O cadastro está fechado: esta instância já tem a sua organização",
             });
           }
         }

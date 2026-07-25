@@ -21,7 +21,7 @@ describe("countVariables / validateBodyVariables (FR-050)", () => {
     expect(countVariables("Hola {{1}}, tu pedido {{2}} llegó")).toBe(2);
     expect(
       validateBodyVariables("Hola {{1}}, tu pedido {{2}} llegó")
-    ).toMatch(/una sola variable/);
+    ).toMatch(/uma única variável/);
   });
 
   it("variable {{2}} sola → inválida (debe ser {{1}})", () => {

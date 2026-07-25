@@ -16,7 +16,7 @@ type Params = { params: Promise<{ id: string }> };
 export const GET = withAuth(async (session, _req: Request, ctx: Params) => {
   const { id } = await ctx.params;
   const contact = await getContactById(session.organizationId, id);
-  if (!contact) return apiError(404, "not_found", "Contacto no encontrado");
+  if (!contact) return apiError(404, "not_found", "Contato não encontrado");
   const stageRow = await getContactStage(session.organizationId, id);
   return Response.json({
     contact: serializeContact(contact),
@@ -62,6 +62,6 @@ export const PATCH = withAuth(async (session, req: Request, ctx: Params) => {
       )
     )
     .returning();
-  if (!updated[0]) return apiError(404, "not_found", "Contacto no encontrado");
+  if (!updated[0]) return apiError(404, "not_found", "Contato não encontrado");
   return Response.json({ contact: serializeContact(updated[0]) });
 });

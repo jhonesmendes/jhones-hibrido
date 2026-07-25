@@ -65,13 +65,13 @@ export async function sendText(input: {
     .limit(1);
   const row = rows[0];
   if (!row || row.conversation.organizationId !== input.organizationId) {
-    throw new SendError("meta_error", "Conversación no encontrada");
+    throw new SendError("meta_error", "Conversa não encontrada");
   }
 
   if (row.conversation.isTest) {
     throw new SendError(
       "sandbox_violation",
-      "Conversación de prueba del Laboratorio: el envío real está prohibido"
+      "Conversa de teste do Laboratório: o envio real é proibido"
     );
   }
 
@@ -83,18 +83,18 @@ export async function sendText(input: {
   if (!isWindowOpen(row.conversation.lastInboundAt)) {
     throw new SendError(
       "window_closed",
-      "La ventana de 24 horas está cerrada; usa una plantilla aprobada"
+      "A janela de 24 horas está fechada; use um modelo aprovado"
     );
   }
 
   const credentials = await getCredentialsByOrg(input.organizationId);
   if (!credentials) {
-    throw new SendError("not_connected", "No hay número de WhatsApp conectado");
+    throw new SendError("not_connected", "Não há número de WhatsApp conectado");
   }
   if (credentials.status === "reconnect_required") {
     throw new SendError(
       "reconnect_required",
-      "El token de WhatsApp expiró: reconecta el número en Configuración"
+      "O token do WhatsApp expirou: reconecte o número em Configurações"
     );
   }
 
@@ -157,7 +157,7 @@ async function sendViaUnofficial(
   if (!channel) {
     throw new SendError(
       "not_connected",
-      "No hay gateway no oficial configurado: revisa Configuración → Canales"
+      "Não há gateway não oficial configurado: confira Configurações → Canal não oficial"
     );
   }
 
@@ -175,13 +175,13 @@ async function sendViaUnofficial(
         await updateChannelStatus(input.organizationId, "disconnected");
         throw new SendError(
           "reconnect_required",
-          "El gateway rechazó la API key: revisa Configuración → Canales"
+          "O gateway rejeitou a API key: confira Configurações → Canal não oficial"
         );
       }
       if (err.status === 0 || err.status >= 500) {
         throw new SendError(
           "meta_unavailable",
-          "El gateway no oficial no está disponible ahora"
+          "O gateway não oficial não está disponível agora"
         );
       }
       throw new SendError("meta_error", err.message);
@@ -236,7 +236,7 @@ export async function callGraphSend(
       { method: "POST", token: credentials.token, body: payload }
     );
     const id = res.messages?.[0]?.id;
-    if (!id) throw new SendError("meta_error", "Meta no devolvió ID de mensaje");
+    if (!id) throw new SendError("meta_error", "A Meta não devolveu o ID da mensagem");
     return id;
   } catch (err) {
     if (err instanceof MetaApiError) {
@@ -244,11 +244,11 @@ export async function callGraphSend(
         await markReconnectRequired(credentials.organizationId);
         throw new SendError(
           "reconnect_required",
-          "El token de WhatsApp expiró: reconecta el número en Configuración"
+          "O token do WhatsApp expirou: reconecte o número em Configurações"
         );
       }
       if (err.status === 0 || err.status >= 500) {
-        throw new SendError("meta_unavailable", "Meta no está disponible ahora");
+        throw new SendError("meta_unavailable", "A Meta não está disponível agora");
       }
       throw new SendError("meta_error", err.message);
     }

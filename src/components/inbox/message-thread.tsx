@@ -28,13 +28,13 @@ function dayLabel(iso: string): string {
   const d = new Date(iso);
   const today = new Date();
   const yesterday = new Date(today.getTime() - 86400000);
-  if (d.toDateString() === today.toDateString()) return "Hoy";
-  if (d.toDateString() === yesterday.toDateString()) return "Ayer";
-  return d.toLocaleDateString("es-MX", { day: "numeric", month: "long" });
+  if (d.toDateString() === today.toDateString()) return "Hoje";
+  if (d.toDateString() === yesterday.toDateString()) return "Ontem";
+  return d.toLocaleDateString("pt-BR", { day: "numeric", month: "long" });
 }
 
 function bubbleTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString("es-MX", {
+  return new Date(iso).toLocaleTimeString("pt-BR", {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
@@ -104,7 +104,7 @@ export function MessageThread({ messages }: { messages: MessageDto[] }) {
                   {m.aiGenerated && (
                     <span
                       className="inline-flex items-center gap-0.5 text-[10px] font-medium text-brand"
-                      title="Respuesta generada por IA"
+                      title="Resposta gerada por IA"
                     >
                       <Sparkles className="h-3 w-3" strokeWidth={1.7} /> IA
                     </span>

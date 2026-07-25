@@ -6,10 +6,10 @@ import { cn } from "@/lib/utils";
 
 const TABS = [
   { href: "/settings/whatsapp", label: "WhatsApp" },
-  { href: "/settings/channels", label: "Canal no oficial" },
+  { href: "/settings/channels", label: "Canal não oficial" },
   { href: "/settings/branding", label: "Marca" },
-  { href: "/settings/templates", label: "Plantillas" },
-  { href: "/settings/team", label: "Equipo" },
+  { href: "/settings/templates", label: "Modelos" },
+  { href: "/settings/team", label: "Equipe" },
 ] as const;
 
 export function SettingsNav() {

@@ -64,11 +64,11 @@ export function Composer({
         <div className="mb-3 flex items-start gap-2 rounded-md border border-[#ece2cf] bg-[#faf7f0] p-3 text-sm text-[#8a6d3b]">
           <Clock3 className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={1.7} />
           <div>
-            <p className="font-medium">La ventana de 24 horas está cerrada.</p>
+            <p className="font-medium">A janela de 24 horas está fechada.</p>
             <p className="opacity-80">
-              WhatsApp solo permite texto libre dentro de las 24 horas
-              siguientes al último mensaje del cliente. Para retomar la
-              conversación, envía una plantilla aprobada.
+              O WhatsApp só permite texto livre dentro das 24 horas seguintes
+              à última mensagem do cliente. Para retomar a conversa, envie um
+              modelo aprovado.
             </p>
           </div>
         </div>
@@ -101,7 +101,7 @@ export function Composer({
       <div className="flex items-end gap-2 rounded-md border bg-background px-3 py-2 transition-shadow focus-within:border-brand focus-within:ring-[3px] focus-within:ring-brand-soft">
         <textarea
           ref={taRef}
-          placeholder="Escribe una respuesta…"
+          placeholder="Escreva uma resposta…"
           value={text}
           rows={1}
           onChange={(e) => {
@@ -131,7 +131,9 @@ export function Composer({
       <div className="mt-1.5 flex items-center justify-between">
         {error ? <p className="text-xs text-destructive">{error}</p> : <span />}
         <p className="text-[11px] text-text-3">
-          Ventana abierta · quedan {formatRemaining(conversation.windowRemainingMs)}
+          {conversation.channel === "unofficial"
+            ? "Canal não oficial · sem janela de 24h"
+            : `Janela aberta · restam ${formatRemaining(conversation.windowRemainingMs)}`}
         </p>
       </div>
     </div>

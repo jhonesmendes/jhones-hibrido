@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
 export const GET = withAuth(async (session) => {
   const channel = await getChannelByOrg(session.organizationId);
   if (!channel) {
-    return apiError(404, "not_configured", "No hay canal configurado");
+    return apiError(404, "not_configured", "Não há canal configurado");
   }
 
   const adapter = getAdapter(channel.provider);

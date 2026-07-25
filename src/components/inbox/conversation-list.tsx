@@ -9,11 +9,16 @@ import { Button } from "@/components/ui/button";
 import { formatTime, previewText } from "./helpers";
 
 const STAGE_DOT: Record<string, string> = {
+  // pt-BR (novas organizações)
+  Novo: "#9ca3af",
+  "Em conversa": "#7b93b3",
+  Interessado: "#b08b5e",
+  Cliente: "#5f8f74",
+  Perdido: "#a2504c",
+  // es (dados legados)
   Nuevo: "#9ca3af",
   "En conversación": "#7b93b3",
   Interesado: "#b08b5e",
-  Cliente: "#5f8f74",
-  Perdido: "#a2504c",
 };
 
 function EmptyState({ onSeeded }: { onSeeded: () => void }) {
@@ -32,10 +37,10 @@ function EmptyState({ onSeeded }: { onSeeded: () => void }) {
 
   return (
     <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
-      <p className="text-sm font-medium">Sin conversaciones todavía</p>
+      <p className="text-sm font-medium">Nenhuma conversa ainda</p>
       <p className="text-xs text-text-3">
-        Cuando alguien escriba a tu número de WhatsApp, su conversación
-        aparecerá aquí en tiempo real.
+        Quando alguém escrever para o seu número de WhatsApp, a conversa
+        aparecerá aqui em tempo real.
       </p>
       {!failed && (
         <Button
@@ -45,7 +50,7 @@ function EmptyState({ onSeeded }: { onSeeded: () => void }) {
           onClick={() => void seed()}
         >
           <Sparkles className="h-4 w-4" strokeWidth={1.7} />
-          {seeding ? "Cargando demo…" : "Cargar datos de demostración"}
+          {seeding ? "Carregando demo…" : "Carregar dados de demonstração"}
         </Button>
       )}
     </div>
@@ -85,13 +90,13 @@ export function ConversationList({
     <div className="flex h-full flex-col">
       <header className="border-b px-4 pb-3 pt-4">
         <div className="mb-3 flex items-baseline gap-2">
-          <h2 className="text-[17px] font-[650] tracking-tight">Bandeja</h2>
+          <h2 className="text-[17px] font-[650] tracking-tight">Caixa de entrada</h2>
           <span className="text-sm text-text-3">{conversations.length}</span>
         </div>
         <div className="flex items-center gap-2 rounded-md border bg-secondary px-3 py-[7px] transition-colors focus-within:border-brand focus-within:bg-background focus-within:ring-[3px] focus-within:ring-brand-soft">
           <Search className="h-4 w-4 shrink-0 text-text-3" strokeWidth={1.7} />
           <input
-            placeholder="Buscar conversación…"
+            placeholder="Buscar conversa…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             className="w-full bg-transparent text-[13px] outline-none placeholder:text-text-3"
@@ -103,7 +108,7 @@ export function ConversationList({
         {(
           [
             { id: "all", label: "Todas", count: searched.length },
-            { id: "unread", label: "No leídas", count: unreadCount },
+            { id: "unread", label: "Não lidas", count: unreadCount },
           ] as const
         ).map((f) => (
           <button
@@ -131,12 +136,12 @@ export function ConversationList({
 
       <div className="flex-1 overflow-y-auto">
         {loading ? (
-          <p className="p-6 text-center text-xs text-text-3">Cargando…</p>
+          <p className="p-6 text-center text-xs text-text-3">Carregando…</p>
         ) : conversations.length === 0 ? (
           <EmptyState onSeeded={onSeeded} />
         ) : visible.length === 0 ? (
           <p className="p-6 text-center text-xs text-text-3">
-            Sin resultados para este filtro.
+            Nenhum resultado para este filtro.
           </p>
         ) : (
           <ul>
@@ -210,13 +215,13 @@ export function ConversationList({
                         {c.channel === "unofficial" && (
                           <span className="inline-flex items-center gap-1 rounded-full border border-[#d6dcec] bg-[#f2f5fb] px-2 py-0.5 text-[11px] text-[#5a6c99]">
                             <Zap className="h-3 w-3" strokeWidth={1.7} />
-                            No oficial
+                            Não oficial
                           </span>
                         )}
                         {c.handoffAt && (
                           <span className="inline-flex items-center gap-1 rounded-full border border-[#ece2cf] bg-[#faf7f0] px-2 py-0.5 text-[11px] text-[#8a6d3b]">
                             <UserRound className="h-3 w-3" strokeWidth={1.7} />
-                            Atención humana
+                            Atendimento humano
                           </span>
                         )}
                       </span>

@@ -48,7 +48,7 @@ export const PATCH = withAuth(async (session, req: Request, ctx: Params) => {
       )
     )
     .returning();
-  if (!updated[0]) return apiError(404, "not_found", "Lead no encontrado");
+  if (!updated[0]) return apiError(404, "not_found", "Lead não encontrado");
 
   // Notifica a la bandeja para que la etapa se refleje en vivo (panel de
   // detalles y punto de etapa de la lista) sin recargar.
