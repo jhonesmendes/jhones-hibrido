@@ -47,5 +47,5 @@ HEALTHCHECK --interval=15s --timeout=5s --start-period=40s --retries=5 \
   CMD wget -q -O /dev/null http://127.0.0.1:3000/api/health || exit 1
 
 # Migrar al BOOT del contenedor nuevo y arrancar el server standalone
-#CMD ["sh", "-c", "node migrate.mjs && node server.js"]
-CMD ["node", "server.js"]
+CMD ["sh", "-c", "node migrate.mjs && node server.js"]
+#CMD ["node", "server.js"]
