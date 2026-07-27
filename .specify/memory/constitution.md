@@ -1,31 +1,52 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Versión: 1.1.0 (plantilla starter) → 1.2.0
+Versión: 1.2.0 → 2.0.0
 
 Cambios:
-  - Título y descripción del producto: Vocero CRM (CRM de WhatsApp con agente de
-    IA, open source MIT, self-hosted, gratuito; una instancia = un negocio).
-  - Principio II "Soberanía / Self-Hosted" → ENDURECIDO: se elimina la excepción
-    de almacenamiento de objetos S3-compatible; lista cerrada de dependencias
-    externas en runtime (WhatsApp Cloud API + proveedor LLM opcional vía
-    adaptador OpenRouter-compatible); prohibición explícita v1 de S3/R2, email,
-    Stripe y Google; requisitos mínimos del instalador fijados.
-  - Principio VIII "Foco Vertical" → definido: CRM de conversaciones y leads de
-    WhatsApp que las agencias despliegan para negocios.
-  - Principios I, III, IV, V, VI, VII y IX: íntegros (sin cambio semántico).
-  - Governance: Ratified / Last Amended = 2026-07-09.
+  - Principio II "Soberanía / Self-Hosted" → REDEFINIDO DE FORMA INCOMPATIBLE:
+    la lista cerrada de canales WhatsApp permitidos en runtime pasa de UNO
+    (WhatsApp Cloud API únicamente) a DOS, coexistiendo por organización:
+    (1) WhatsApp Cloud API (Meta Graph API) y (2) un canal WhatsApp no oficial
+    (conexión directa tipo Baileys/WhatsApp Web, con Evolution API como
+    variante de despliegue) tras un adaptador dedicado propio. Se mantiene
+    intacta la prohibición v1 de S3/R2, email, Stripe y Google. El adaptador
+    LLM opcional vía OpenRouter no cambia.
+  - Principio VIII "Foco Vertical" → REDEFINIDO DE FORMA INCOMPATIBLE: se
+    elimina la exclusión expresa de "broadcast masivo" del alcance de v1 y se
+    admite una feature de Campañas (disparo en masa) en dos modos — oficial
+    (templates aprobados Meta API) y no oficial (texto libre vía el canal
+    Baileys/Evolution, riesgo de ban asumido explícitamente por el operador).
+    Se mantiene la exclusión de scraping de números y de flujos visuales
+    genéricos no relacionados con conversaciones/leads de WhatsApp.
+  - Principio IX "Verificación de Comportamiento en Vivo" → expandido
+    (no incompatible): el guardrail de herramientas no oficiales se extiende
+    de "solo prueba interna" a también cubrir el canal no oficial como
+    FEATURE DE PRODUCTO — exige advertencia de riesgo de ban en la UI antes de
+    disparar una campaña no oficial, e intervalo entre envíos SIEMPRE
+    configurable (nunca fijo en código), alineado con el principio de "nada de
+    valor de negocio fijo en el código" que introduce el roadmap de Campañas.
+  - Principios I, III, IV, V, VI y VII: íntegros (sin cambio semántico).
+  - Governance: Ratified 2026-07-09 / Last Amended 2026-07-26.
 
-Bump: MINOR (1.1.0 → 1.2.0) — expansión material del Principio II y definición
-del Principio VIII; sin eliminaciones ni redefiniciones incompatibles.
+Bump: MAJOR (1.2.0 → 2.0.0) — el Principio II deja de ser una lista cerrada de
+UN canal (redefinición incompatible con la v1.x, que prohibía explícitamente
+cualquier canal WhatsApp fuera de Meta Graph API) y el Principio VIII elimina
+una exclusión expresa de alcance ("broadcast masivo" pasa de PROHIBIDO a
+PERMITIDO bajo condiciones). Ambos son cambios incompatibles hacia atrás, no
+expansiones aditivas.
 
 Plantillas dependientes:
   - .specify/templates/plan-template.md — ✅ compatible (Constitution Check
-    genérico; los gates se evalúan contra esta versión).
-  - .specify/templates/spec-template.md — ✅ compatible (sin secciones nuevas).
+    genérico; los gates se evalúan contra esta versión; no requiere cambios).
+  - .specify/templates/spec-template.md — ✅ compatible (sin secciones nuevas
+    requeridas; specs de Campañas/canal no oficial usan las secciones
+    existentes, marcando el aviso de riesgo de ban en Requirements).
   - .specify/templates/tasks-template.md — ✅ compatible.
-  - CLAUDE.md — ⚠ se personaliza para el usuario final del repo en la fase de
-    implementación (tarea planificada de la feature 001).
+  - CLAUDE.md — ⚠ PENDIENTE: actualizar la tabla "Mapa del código" y la
+    sección "Reglas de la constitución" para reflejar el canal no oficial
+    (src/server/whatsapp/baileys/) y Campañas (src/server/campaigns/) cuando
+    se implementen (feature del roadmap vocero_roadmap.md, aún no iniciada).
 
 TODOs diferidos: ninguno.
 -->
@@ -63,24 +84,39 @@ Vocero CRM opera completo sobre la infraestructura del operador. La lista de
 dependencias externas en runtime es CERRADA:
 
 - Dependencias externas permitidas en runtime, ÚNICAMENTE:
-  1. **WhatsApp Cloud API** (Meta Graph API) — el canal es la razón de ser del
-     producto.
+  1. **Canal WhatsApp**, en uno o ambos modos, coexistiendo por organización:
+     a. **WhatsApp Cloud API** (Meta Graph API) — el canal oficial, sin riesgo
+        de baneo, limitado a templates aprobados fuera de la ventana de 24h.
+     b. **Canal WhatsApp no oficial** — conexión directa tipo WhatsApp Web
+        (Baileys) o vía Evolution API como variante de despliegue, tras un
+        adaptador dedicado propio (`src/server/whatsapp/baileys/` o
+        equivalente). Habilita texto libre y disparo en masa, con el riesgo de
+        baneo del número a cargo del operador (ver Principio IX).
   2. **El proveedor LLM**, opcional, accedido EXCLUSIVAMENTE a través del adaptador
      OpenRouter-compatible (`OPENROUTER_BASE_URL` / `OPENROUTER_MODEL`). Sin token
      configurado, el producto funciona como CRM sin agente de IA.
 - **PROHIBIDO en v1**: almacenamiento de objetos externo (S3/R2), servicios de
   email, Stripe u otro billing, y servicios de Google. Cualquier feature que los
   requiera queda fuera del alcance de v1.
-- El instalador solo necesita: un VPS con Coolify o Docker, un dominio, credenciales
-  de Meta y (opcional) un token de OpenRouter. Nada más.
+- El instalador solo necesita: un VPS con Coolify o Docker, un dominio, y
+  credenciales del canal WhatsApp elegido (Meta y/o sesión del canal no
+  oficial) y (opcional) un token de OpenRouter. Nada más.
 - Las funciones core —autenticación y base de datos— corren self-hosted (Better
   Auth + PostgreSQL propios de la instancia).
 - Las integraciones externas permitidas se aíslan tras adaptadores dedicados
-  (cliente Graph API propio; adaptador LLM) para no acoplar el dominio a ellas.
+  (cliente Graph API propio; adaptador del canal no oficial; adaptador LLM)
+  para no acoplar el dominio a ellas. El dominio (conversaciones, pipeline,
+  agente) no distingue el canal salvo donde el comportamiento observable
+  difiera (ventana 24h y templates solo aplican al canal oficial).
 
 **Rationale**: El producto se regala para que agencias lo desplieguen en VPS de
 clientes; cada dependencia externa adicional es un costo, un punto de fallo y una
-fuga de soberanía que rompe la promesa "gratis y tuyo".
+fuga de soberanía que rompe la promesa "gratis y tuyo". El canal no oficial no
+introduce un servicio de terceros nuevo —sigue corriendo dentro de la
+infraestructura del operador— por lo que amplía las opciones de canal sin
+romper la soberanía; su costo es el riesgo de cuenta, no de infraestructura, y
+por eso se gobierna con guardarraíles explícitos (Principio IX) en vez de
+prohibirse.
 
 ### III. Multi-Tenancy Real
 
@@ -154,22 +190,29 @@ de deuda oculta; hacerlas visibles permite corregirlas a tiempo.
 ### VIII. Foco Vertical — CRM de Conversaciones y Leads de WhatsApp
 
 Es un CRM de conversaciones y leads de WhatsApp que las agencias despliegan para
-negocios. No es plataforma de marketing masivo, ni constructor visual de flujos, ni
-herramienta de scraping. Lo que no ayude a *atender, organizar y convertir
-conversaciones de WhatsApp de UN negocio* se rechaza.
+negocios. No es constructor visual de flujos genérico ni herramienta de scraping.
+Lo que no ayude a *atender, organizar y convertir conversaciones de WhatsApp de UN
+negocio* se rechaza.
 
 - El modelo de datos y los flujos MUST reflejar ese dominio: contactos que escriben
-  por WhatsApp, conversaciones con ventana de 24h, leads en un pipeline, un agente
-  de IA que atiende con el conocimiento del negocio y escala a humanos.
-- WhatsApp Cloud API es el canal; el producto es el CRM. Features de canal que no
-  sirvan a atender/organizar/convertir (broadcast masivo, scraping de números,
-  flujos visuales genéricos) quedan FUERA del alcance de v1.
+  por WhatsApp, conversaciones con ventana de 24h (canal oficial), leads en un
+  pipeline, un agente de IA que atiende con el conocimiento del negocio y escala a
+  humanos.
+- WhatsApp (Cloud API y/o canal no oficial, Principio II) es el canal; el producto
+  es el CRM. Se admite disparo en masa (Campañas) como extensión de "convertir
+  conversaciones" — captar y reactivar leads a escala— en dos modos: oficial
+  (templates aprobados Meta API, sin riesgo de ban) y no oficial (texto libre,
+  riesgo de ban asumido por el operador, con los guardarraíles del Principio IX).
+  Scraping de números y constructores de flujos visuales genéricos no relacionados
+  con conversaciones/leads de WhatsApp quedan FUERA del alcance de v1.
 - Toda feature MUST servir a la agencia que despliega o al negocio que opera UNA
   instancia. Lo que solo sirva a una plataforma centralizada (billing, planes,
   multi-instancia) queda FUERA.
 
 **Rationale**: Un foco vertical explícito mantiene el modelo de datos alineado con el
-negocio real y da un criterio claro para aceptar o rechazar alcance.
+negocio real y da un criterio claro para aceptar o rechazar alcance. Admitir
+Campañas no diluye el foco: sigue siendo conversión de leads de WhatsApp de UN
+negocio, solo que iniciada en masa por el operador en vez de una por una.
 
 ### IX. Verificación de Comportamiento en Vivo (NO NEGOCIABLE)
 
@@ -199,6 +242,13 @@ el piso, no el techo.
   destinatarios de una allowlist, NUNCA mensajes en ráfaga (anti-flood obligatorio), y
   minimizar el volumen. La integridad de la cuenta del operador es un activo a proteger, en
   línea con el Principio I.
+- **Guardarraíles del canal no oficial como feature de producto.** El canal no oficial
+  (Principio II) ya no es solo herramienta de prueba interna: es una capacidad que el
+  operador usa contra su propio número real. Toda superficie que dispare mensajes por ese
+  canal (Campañas u otra) MUST: (a) advertir el riesgo de baneo en la UI, de forma explícita,
+  antes de que el operador confirme el disparo; (b) exponer el intervalo entre envíos como
+  configuración editable por el operador, NUNCA como valor fijo en el código; (c) aplicar el
+  mismo anti-flood/minimización que en pruebas internas también en producción.
 
 **Rationale**: El gate técnico no detecta que un agente "se calló", que una tarjeta no
 llegó como un solo mensaje, o que un botón de UI no disparó nada — eso solo aparece
@@ -260,4 +310,4 @@ práctica, convención o preferencia; ante un conflicto, gana la constitución.
 - **Propagación**: al enmendar la constitución se revisan y, si procede, se actualizan
   las plantillas dependientes (plan, spec, tasks).
 
-**Version**: 1.2.0 | **Ratified**: 2026-07-09 | **Last Amended**: 2026-07-09
+**Version**: 2.0.0 | **Ratified**: 2026-07-09 | **Last Amended**: 2026-07-26

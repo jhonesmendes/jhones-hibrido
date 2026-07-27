@@ -7,6 +7,7 @@ import type { WebhookValue } from "@/server/inbox/webhook";
 import { applyStatusUpdate } from "@/server/inbox/status";
 import { onLeadActivity } from "@/server/inbox/lead-activity";
 import { maybeRunAgentTurn } from "@/server/ai/trigger";
+import { onInboundMedia } from "@/server/pipeline/followup-document";
 
 /** Tipos de contenido soportados; el resto se ignora sin error. */
 const SUPPORTED_TYPES = new Set([
@@ -207,6 +208,9 @@ export async function ingestInboundMessage(input: {
     .where(eq(schema.conversation.id, conversation.id));
 
   await onLeadActivity(organizationId, contact.id, waTimestamp);
+  if (!fromMe && MEDIA_TYPES.has(input.type)) {
+    await onInboundMedia(organizationId, contact.id);
+  }
 
   publish(organizationId, {
     type: "message.new",

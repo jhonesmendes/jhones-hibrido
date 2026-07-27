@@ -21,6 +21,16 @@ export type SseEvent =
         progress: { done: number; total: number };
         score?: number | null;
       };
+    }
+  | {
+      type: "campaign.run";
+      data: {
+        campaignId: string;
+        status: string;
+        total: number;
+        sent: number;
+        failed: number;
+      };
     };
 
 const globalForBus = globalThis as unknown as { __voceroBus?: EventEmitter };

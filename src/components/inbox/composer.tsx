@@ -20,7 +20,20 @@ export function Composer({
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [templates, setTemplates] = useState<TemplateDto[]>([]);
+  const [pickerIndex, setPickerIndex] = useState(0);
+  const [pickerDismissed, setPickerDismissed] = useState(false);
   const taRef = useRef<HTMLTextAreaElement>(null);
+
+  // Atalho "/" (primeiro caractere, sem espaço ainda) abre o seletor de modelos.
+  const slashMatch = /^\/(\S*)$/.exec(text);
+  const pickerQuery = slashMatch?.[1] ?? null;
+  const pickerResults =
+    pickerQuery !== null
+      ? templates.filter((t) =>
+          t.name.toLowerCase().includes(pickerQuery.toLowerCase())
+        )
+      : [];
+  const showPicker = pickerQuery !== null && !pickerDismissed;
 
   useEffect(() => {
     let cancelled = false;
@@ -41,6 +54,28 @@ export function Composer({
     if (!el) return;
     el.style.height = "auto";
     el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
+  }
+
+  /**
+   * Insere o corpo do modelo e deixa a primeira variável numerada
+   * selecionada — escrever por cima a substitui; não tocando, ela vai no
+   * envio como está (FR-004).
+   */
+  function applyTemplate(t: TemplateDto) {
+    setText(t.body);
+    setPickerDismissed(true);
+    setTimeout(() => {
+      autogrow();
+      const el = taRef.current;
+      if (!el) return;
+      el.focus();
+      const variable = /\{\{\s*\d+\s*\}\}/.exec(t.body);
+      if (variable) {
+        el.setSelectionRange(variable.index, variable.index + variable[0].length);
+      } else {
+        el.setSelectionRange(t.body.length, t.body.length);
+      }
+    }, 0);
   }
 
   async function submit() {
@@ -85,12 +120,7 @@ export function Composer({
             <button
               key={t.id}
               className="rounded-full border bg-secondary px-3 py-1 text-xs font-medium text-text-2 transition-colors hover:border-brand-soft hover:bg-brand-tint hover:text-brand-text"
-              onClick={() => {
-                const firstName = conversation.contact.name.split(" ")[0] ?? "";
-                setText(t.body.replace(/\{\{\s*1\s*\}\}/g, firstName));
-                taRef.current?.focus();
-                setTimeout(autogrow, 0);
-              }}
+              onClick={() => applyTemplate(t)}
               title={t.body}
             >
               {t.name.replace(/_/g, " ")}
@@ -98,35 +128,96 @@ export function Composer({
           ))}
         </div>
       )}
-      <div className="flex items-end gap-2 rounded-md border bg-background px-3 py-2 transition-shadow focus-within:border-brand focus-within:ring-[3px] focus-within:ring-brand-soft">
-        <textarea
-          ref={taRef}
-          placeholder="Escreva uma resposta…"
-          value={text}
-          rows={1}
-          onChange={(e) => {
-            setText(e.target.value);
-            autogrow();
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              void submit();
-            }
-          }}
-          className="max-h-[120px] w-full resize-none bg-transparent text-sm leading-relaxed outline-none placeholder:text-text-3"
-        />
-        <button
-          onClick={() => void submit()}
-          disabled={sending || text.trim().length === 0}
-          aria-label="Enviar"
-          className={cn(
-            "flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[9px] bg-brand text-white transition-opacity hover:bg-brand-hover",
-            (sending || !text.trim()) && "opacity-40"
-          )}
-        >
-          <Send className="h-4 w-4" strokeWidth={1.7} />
-        </button>
+      <div className="relative">
+        {showPicker && (
+          <div className="absolute bottom-full left-0 mb-1.5 w-full max-w-sm overflow-hidden rounded-md border bg-background shadow-lg">
+            {pickerResults.length === 0 ? (
+              <p className="px-3 py-2.5 text-xs text-text-3">
+                Nenhum modelo encontrado.
+              </p>
+            ) : (
+              <ul className="max-h-56 overflow-y-auto py-1">
+                {pickerResults.map((t, i) => (
+                  <li key={t.id}>
+                    <button
+                      type="button"
+                      onClick={() => applyTemplate(t)}
+                      onMouseEnter={() => setPickerIndex(i)}
+                      className={cn(
+                        "flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left text-sm",
+                        i === Math.min(pickerIndex, pickerResults.length - 1)
+                          ? "bg-brand-tint"
+                          : "hover:bg-secondary"
+                      )}
+                    >
+                      <span className="font-medium">
+                        {t.name.replace(/_/g, " ")}
+                      </span>
+                      <span className="line-clamp-1 text-xs text-text-3">
+                        {t.body}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+        <div className="flex items-end gap-2 rounded-md border bg-background px-3 py-2 transition-shadow focus-within:border-brand focus-within:ring-[3px] focus-within:ring-brand-soft">
+          <textarea
+            ref={taRef}
+            placeholder="Escreva uma resposta… (dica: use / para inserir um modelo)"
+            value={text}
+            rows={1}
+            onChange={(e) => {
+              setText(e.target.value);
+              setPickerIndex(0);
+              setPickerDismissed(false);
+              autogrow();
+            }}
+            onKeyDown={(e) => {
+              if (showPicker && pickerResults.length > 0) {
+                if (e.key === "ArrowDown") {
+                  e.preventDefault();
+                  setPickerIndex((i) => Math.min(i + 1, pickerResults.length - 1));
+                  return;
+                }
+                if (e.key === "ArrowUp") {
+                  e.preventDefault();
+                  setPickerIndex((i) => Math.max(i - 1, 0));
+                  return;
+                }
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  const chosen = pickerResults[Math.min(pickerIndex, pickerResults.length - 1)];
+                  if (chosen) applyTemplate(chosen);
+                  return;
+                }
+              }
+              if (showPicker && e.key === "Escape") {
+                e.preventDefault();
+                setPickerDismissed(true);
+                return;
+              }
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                void submit();
+              }
+            }}
+            className="max-h-[120px] w-full resize-none bg-transparent text-sm leading-relaxed outline-none placeholder:text-text-3"
+          />
+          <button
+            onClick={() => void submit()}
+            disabled={sending || text.trim().length === 0}
+            aria-label="Enviar"
+            className={cn(
+              "flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[9px] bg-brand text-white transition-opacity hover:bg-brand-hover",
+              (sending || !text.trim()) && "opacity-40"
+            )}
+          >
+            <Send className="h-4 w-4" strokeWidth={1.7} />
+          </button>
+        </div>
       </div>
       <div className="mt-1.5 flex items-center justify-between">
         {error ? <p className="text-xs text-destructive">{error}</p> : <span />}

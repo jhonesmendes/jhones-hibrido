@@ -28,6 +28,11 @@ const envSchema = z.object({
   OPENROUTER_JUDGE_MODEL: z.string().optional(),
   ALLOW_SIGNUP: z.string().optional(),
   AGENT_COALESCE_MS: z.coerce.number().int().min(0).default(6000),
+  FOLLOWUP_SCHEDULER_INTERVAL_MS: z.coerce
+    .number()
+    .int()
+    .min(1000)
+    .default(5 * 60 * 1000),
   WA_MOCK_ENABLED: z.string().optional(),
   NODE_ENV: z.string().default("development"),
 });

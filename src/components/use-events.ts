@@ -16,6 +16,13 @@ export type EventHandlers = {
     progress: { done: number; total: number };
     score?: number | null;
   }) => void;
+  onCampaignRun?: (data: {
+    campaignId: string;
+    status: string;
+    total: number;
+    sent: number;
+    failed: number;
+  }) => void;
   /** Se llama tras RECONECTAR (no en la conexión inicial): catch-up con refetch. */
   onReconnect?: () => void;
 };
@@ -51,6 +58,9 @@ export function useEvents(handlers: EventHandlers): void {
       handlersRef.current.onConversationUpdated?.(d as never)
     );
     listen("lab.run", (d) => handlersRef.current.onLabRun?.(d as never));
+    listen("campaign.run", (d) =>
+      handlersRef.current.onCampaignRun?.(d as never)
+    );
 
     source.onerror = () => {
       hadError = true;

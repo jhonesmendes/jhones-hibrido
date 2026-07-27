@@ -13,13 +13,14 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import { MessageSquareText, Settings2, Trophy, XCircle } from "lucide-react";
+import { Clock3, MessageSquareText, Settings2, Trophy, XCircle } from "lucide-react";
 import type { StageDto } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { ContactAvatar } from "@/components/avatar";
 import { Button } from "@/components/ui/button";
 import { formatTime } from "@/components/inbox/helpers";
 import { StageManager } from "./stage-manager";
+import { FollowupManager } from "./followup-manager";
 
 export type BoardLead = {
   id: string;
@@ -35,6 +36,7 @@ export function PipelineClient() {
   const [leads, setLeads] = useState<BoardLead[]>([]);
   const [activeLead, setActiveLead] = useState<BoardLead | null>(null);
   const [managing, setManaging] = useState(false);
+  const [configuringFollowup, setConfiguringFollowup] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } })
@@ -82,9 +84,18 @@ export function PipelineClient() {
     <div className="flex h-full flex-col">
       <header className="flex items-center justify-between border-b px-6 py-4">
         <h2 className="font-semibold">Pipeline</h2>
-        <Button variant="outline" size="sm" onClick={() => setManaging(true)}>
-          <Settings2 className="h-4 w-4" /> Gerenciar etapas
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setConfiguringFollowup(true)}
+          >
+            <Clock3 className="h-4 w-4" /> Follow-up automático
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setManaging(true)}>
+            <Settings2 className="h-4 w-4" /> Gerenciar etapas
+          </Button>
+        </div>
       </header>
 
       <div className="flex-1 overflow-x-auto p-4">
@@ -115,6 +126,13 @@ export function PipelineClient() {
           stages={stages}
           onClose={() => setManaging(false)}
           onChanged={() => void refetch()}
+        />
+      )}
+
+      {configuringFollowup && (
+        <FollowupManager
+          stages={stages}
+          onClose={() => setConfiguringFollowup(false)}
         />
       )}
     </div>

@@ -143,6 +143,22 @@ export function InboxClient() {
     [refetchMessages, refetchConversations]
   );
 
+  const startConversation = useCallback(
+    async (phone: string): Promise<boolean> => {
+      const res = await fetch("/api/conversations", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ phone }),
+      }).catch(() => null);
+      if (!res?.ok) return false;
+      const data = (await res.json()) as { conversation: ConversationDto };
+      await refetchConversations();
+      select(data.conversation.id);
+      return true;
+    },
+    [refetchConversations, select]
+  );
+
   const patchConversation = useCallback(
     async (patch: {
       aiEnabled?: boolean;
@@ -168,6 +184,7 @@ export function InboxClient() {
           selectedId={selectedId}
           onSelect={select}
           onSeeded={() => void refetchConversations()}
+          onStartConversation={startConversation}
         />
       </section>
 

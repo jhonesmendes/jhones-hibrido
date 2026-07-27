@@ -375,6 +375,123 @@ export const template = pgTable(
   ]
 );
 
+/**
+ * Campanha de disparo em massa: oficial (template aprovado + {{1}}) ou não
+ * oficial (texto livre + variáveis nomeadas, canal já conectado). Roda
+ * in-process (Constituição II) — sem fila externa.
+ */
+export const campaign = pgTable(
+  "campaign",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    channel: text("channel", { enum: ["official", "unofficial"] }).notNull(),
+    /** Somente canal oficial. */
+    templateId: text("template_id").references(() => template.id),
+    /** Somente canal não oficial: corpo com {{variavel}} nomeada. */
+    messageTemplate: text("message_template"),
+    sendIntervalMs: integer("send_interval_ms").notNull().default(5000),
+    status: text("status", {
+      enum: ["draft", "sending", "sent", "cancelled"],
+    })
+      .notNull()
+      .default("draft"),
+    total: integer("total").notNull().default(0),
+    sent: integer("sent").notNull().default(0),
+    failed: integer("failed").notNull().default(0),
+    cancelRequested: boolean("cancel_requested").notNull().default(false),
+    startedAt: timestamp("started_at"),
+    completedAt: timestamp("completed_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("campaign_org_created_idx").on(t.organizationId, t.createdAt)]
+);
+
+export const campaignRecipient = pgTable(
+  "campaign_recipient",
+  {
+    id: text("id").primaryKey(),
+    campaignId: text("campaign_id")
+      .notNull()
+      .references(() => campaign.id, { onDelete: "cascade" }),
+    organizationId: text("organization_id").notNull(),
+    phone: text("phone").notNull(),
+    /** {"1": "valor"} (oficial) ou {"nome": "...", ...} (não oficial). */
+    variables: jsonb("variables"),
+    contactId: text("contact_id").references(() => contact.id),
+    conversationId: text("conversation_id").references(() => conversation.id),
+    messageId: text("message_id").references(() => message.id),
+    status: text("status", { enum: ["pending", "sent", "failed"] })
+      .notNull()
+      .default("pending"),
+    error: text("error"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("campaign_recipient_campaign_idx").on(t.campaignId, t.status)]
+);
+
+/**
+ * Configuración de follow-up automático del pipeline — singular por
+ * organización (este proyecto no modela múltiples pipelines con nombre).
+ * Nada de negocio fijo en el código: etapas, intervalo y mensaje vienen de acá.
+ */
+export const pipelineFollowup = pgTable(
+  "pipeline_followup",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    enabled: boolean("enabled").notNull().default(false),
+    triggerStageId: text("trigger_stage_id").references(() => pipelineStage.id),
+    intervalValue: integer("interval_value").notNull().default(4),
+    intervalUnit: text("interval_unit", { enum: ["hours", "days"] })
+      .notNull()
+      .default("hours"),
+    message: text("message"),
+    successStageId: text("success_stage_id").references(() => pipelineStage.id),
+    expiredStageId: text("expired_stage_id").references(() => pipelineStage.id),
+    requiresDocument: boolean("requires_document").notNull().default(false),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("pipeline_followup_org_uq").on(t.organizationId)]
+);
+
+/**
+ * Registro de recordatorios de follow-up enviados — existe para no reenviar
+ * de más (idempotencia) y para saber a quién se le venció el plazo de gracia.
+ * Se crea ya con el resultado del intento (no es una cola con fecha futura).
+ */
+export const followupSend = pgTable(
+  "followup_send",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id").notNull(),
+    leadId: text("lead_id")
+      .notNull()
+      .references(() => lead.id, { onDelete: "cascade" }),
+    conversationId: text("conversation_id")
+      .notNull()
+      .references(() => conversation.id, { onDelete: "cascade" }),
+    message: text("message").notNull(),
+    status: text("status", {
+      enum: ["sent", "failed", "cancelled", "expired"],
+    }).notNull(),
+    sentAt: timestamp("sent_at").notNull().defaultNow(),
+    resolvedAt: timestamp("resolved_at"),
+  },
+  (t) => [
+    // Como máximo un recordatorio "activo" (esperando resolución) por lead.
+    uniqueIndex("followup_send_lead_active_uq")
+      .on(t.leadId)
+      .where(sql`${t.status} = 'sent'`),
+    index("followup_send_org_idx").on(t.organizationId),
+  ]
+);
+
 export const agentTestRun = pgTable(
   "agent_test_run",
   {

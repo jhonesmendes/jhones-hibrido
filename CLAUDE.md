@@ -28,7 +28,9 @@ externas: el trabajo en segundo plano (agente, Laboratorio) es in-process.
 | El comportamiento/prompt del agente | `src/server/ai/prompts.ts` |
 | Las acciones que puede tomar el agente | `src/server/ai/actions.ts` + ejecución en `src/server/ai/pipeline.ts` |
 | Las personas o el juez del Laboratorio | `src/server/lab/personas.ts` · `src/server/lab/judge.ts` |
-| El canal WhatsApp (Graph API) | `src/lib/meta/` (cliente único) + `src/server/whatsapp/` |
+| El canal WhatsApp oficial (Graph API) | `src/lib/meta/` (cliente único) + `src/server/whatsapp/` |
+| El canal WhatsApp no oficial (Baileys/Evolution) | `src/server/whatsapp/baileys/` (adaptador dedicado, roadmap en curso — ver `vocero_roadmap.md`) |
+| Campañas (disparo en masa, oficial y no oficial) | `src/server/campaigns/` + `src/lib/campaigns/` (roadmap en curso) |
 | Campos/tablas | `src/lib/db/schema.ts` → `pnpm db:generate` → migración nueva en `drizzle/` |
 | La ingesta/envío de mensajes | `src/server/inbox/` (ingest idempotente, send con guard de sandbox, ventana 24h) |
 | UI | `src/components/` + `src/app/(app)/` |
@@ -41,10 +43,15 @@ producción.
 
 Ver [.specify/memory/constitution.md](.specify/memory/constitution.md).
 
-- **Soberanía (II, endurecida)**: dependencias de runtime SOLO WhatsApp Cloud
-  API + proveedor LLM OpenRouter-compatible opcional. PROHIBIDO en v1
-  introducir S3/R2, email, Stripe, Google u otros servicios externos. Auth y
-  BD self-hosted.
+- **Soberanía (II, v2.0.0)**: dependencias de runtime SOLO canal WhatsApp —
+  Cloud API oficial y/o canal no oficial (Baileys/Evolution), coexistiendo por
+  organización — + proveedor LLM OpenRouter-compatible opcional. PROHIBIDO en
+  v1 introducir S3/R2, email, Stripe, Google u otros servicios externos. Auth y
+  BD self-hosted. El canal no oficial es riesgo de cuenta, no fuga de
+  soberanía — se gobierna con guardarraíles (ver Principio IX), no se prohíbe.
+- **Foco Vertical (VIII, v2.0.0)**: se admite disparo en masa (Campañas,
+  oficial y no oficial) como extensión de "convertir conversaciones". Sigue
+  fuera: scraping de números, flujos visuales genéricos.
 - **Seguridad (I)**: secretos cifrados en reposo (AES-256-GCM, `lib/crypto`);
   jamás al cliente ni a logs. El token de WhatsApp solo muestra sus últimos 4.
 - **Multi-tenancy (III)**: `organization_id` NOT NULL en toda tabla de dominio;
@@ -53,6 +60,10 @@ Ver [.specify/memory/constitution.md](.specify/memory/constitution.md).
   monotónicos; seeds y migraciones re-ejecutables.
 - **Sandbox del Laboratorio**: las conversaciones `is_test` JAMÁS tocan la API
   real — el sender lanza excepción (no lo "arregles": es un guardrail).
+- **Canal no oficial como feature (IX, v2.0.0)**: toda campaña/disparo por el
+  canal no oficial MUST advertir riesgo de ban en la UI antes de confirmar, y
+  el intervalo entre envíos MUST ser configuración editable, nunca un valor
+  fijo en el código.
 
 ## Variables de entorno
 

@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Search, Sparkles, UserRound, Zap } from "lucide-react";
+import { MessageSquarePlus, Search, Sparkles, UserRound, Zap } from "lucide-react";
 import type { ConversationDto } from "@/lib/types";
-import { cn } from "@/lib/utils";
+import { cn, formatPhone, normalizePhoneInput } from "@/lib/utils";
 import { ContactAvatar } from "@/components/avatar";
 import { Button } from "@/components/ui/button";
 import { formatTime, previewText } from "./helpers";
@@ -62,14 +62,22 @@ export function ConversationList({
   selectedId,
   onSelect,
   onSeeded,
+  onStartConversation,
 }: {
   conversations: ConversationDto[] | null;
   selectedId: string | null;
   onSelect: (id: string) => void;
   onSeeded: () => void;
+  /**
+   * Cria/abre a conversa de um número digitado na busca (estilo WhatsApp).
+   * Retorna `false` em falha, para não limpar a busca e deixar o botão
+   * reintentável.
+   */
+  onStartConversation: (phone: string) => Promise<boolean>;
 }) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<"all" | "unread">("all");
+  const [starting, setStarting] = useState(false);
 
   const loading = conversationsProp === null;
   const conversations = conversationsProp ?? [];
@@ -85,6 +93,42 @@ export function ConversationList({
   const unreadCount = searched.filter((c) => c.unreadCount > 0).length;
   const visible =
     filter === "unread" ? searched.filter((c) => c.unreadCount > 0) : searched;
+
+  // Busca parece um telefone → atalho "iniciar conversa" (como no WhatsApp).
+  const phoneCandidate = normalizePhoneInput(query);
+
+  async function startConversation() {
+    if (!phoneCandidate || starting) return;
+    setStarting(true);
+    try {
+      const ok = await onStartConversation(phoneCandidate);
+      if (ok) setQuery("");
+    } finally {
+      setStarting(false);
+    }
+  }
+
+  const startButton = phoneCandidate && (
+    <div className="px-4 py-3">
+      <button
+        onClick={() => void startConversation()}
+        disabled={starting}
+        className="flex w-full items-center gap-3 rounded-md border border-dashed px-3 py-2.5 text-left text-sm transition-colors hover:border-brand hover:bg-brand-tint"
+      >
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand text-white">
+          <MessageSquarePlus className="h-4 w-4" strokeWidth={1.7} />
+        </span>
+        <span className="min-w-0">
+          <span className="block font-medium">
+            {starting ? "Abrindo conversa…" : "Iniciar conversa"}
+          </span>
+          <span className="block text-xs text-text-3">
+            com {formatPhone(phoneCandidate)}
+          </span>
+        </span>
+      </button>
+    </div>
+  );
 
   return (
     <div className="flex h-full flex-col">
@@ -135,6 +179,7 @@ export function ConversationList({
       </div>
 
       <div className="flex-1 overflow-y-auto">
+        {startButton}
         {loading ? (
           <p className="p-6 text-center text-xs text-text-3">Carregando…</p>
         ) : conversations.length === 0 ? (

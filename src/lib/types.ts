@@ -53,3 +53,27 @@ export type ContactDto = {
   notes: string | null;
   archivedAt: string | null;
 };
+
+export type CampaignDto = {
+  id: string;
+  name: string;
+  channel: "official" | "unofficial";
+  templateId: string | null;
+  messageTemplate: string | null;
+  sendIntervalMs: number;
+  status: "draft" | "sending" | "sent" | "cancelled";
+  total: number;
+  sent: number;
+  failed: number;
+  startedAt: string | null;
+  completedAt: string | null;
+  createdAt: string;
+};
+
+export type CampaignRecipientDto = {
+  id: string;
+  phone: string;
+  variables: Record<string, string>;
+  status: "pending" | "sent" | "failed";
+  error: string | null;
+};

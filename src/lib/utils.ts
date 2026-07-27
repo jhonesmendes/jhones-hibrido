@@ -38,3 +38,17 @@ export function avatarColor(seed: string): string {
 export function formatPhone(phone: string): string {
   return `+${phone}`;
 }
+
+/**
+ * Normaliza um telefone digitado livre para dígitos com código do país.
+ * Ex.: "66 99674-6147" → "5566996746147". 10–11 dígitos (fixo/celular BR
+ * com DDD) ganham prefixo 55. Devolve null se não parecer telefone.
+ */
+export function normalizePhoneInput(input: string): string | null {
+  const digits = input.replace(/\D/g, "");
+  if (digits.length < 8 || digits.length > 15) return null;
+  // Sem sinal de texto junto (busca por nome não vira telefone)
+  if (/[a-zA-Z]{2,}/.test(input)) return null;
+  if (digits.length === 10 || digits.length === 11) return `55${digits}`;
+  return digits;
+}
