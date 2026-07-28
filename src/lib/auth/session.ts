@@ -4,6 +4,7 @@ import { resolveMembership } from "@/server/auth/on-signup";
 
 export type SessionContext = {
   userId: string;
+  memberId: string;
   organizationId: string;
   role: string;
 };
@@ -16,27 +17,33 @@ export class UnauthorizedError extends Error {
 }
 
 /**
- * Sesión + organización activa para route handlers y server components.
- * Lanza UnauthorizedError si no hay sesión u organización.
+ * Sessão + organização ativa para route handlers e server components.
+ * Lança UnauthorizedError se não houver sessão ou organização.
  */
 export async function requireSession(): Promise<SessionContext> {
   const auth = getAuth();
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) throw new UnauthorizedError();
-  // La sesión puede crearse antes de que la membresía exista (registro
-  // inicial) — la membresía en BD es la fuente de verdad de org + rol.
+  // A sessão pode ser criada antes de a membresia existir (registro
+  // inicial) — a membresia no BD é a fonte de verdade de org + papel.
   const membership = await resolveMembership(session.user.id);
   if (!membership) {
     throw new UnauthorizedError("Sessão sem organização ativa");
   }
+  // Reavaliado a cada requisição: um membro desativado a meio da sessão
+  // perde acesso na próxima chamada, não só num futuro login (FR-009).
+  if (!membership.isActive) {
+    throw new UnauthorizedError("Conta desativada");
+  }
   return {
     userId: session.user.id,
+    memberId: membership.memberId,
     organizationId: membership.organizationId,
     role: membership.role,
   };
 }
 
-/** Igual que requireSession pero devuelve null en vez de lanzar. */
+/** Igual a requireSession mas retorna null em vez de lançar. */
 export async function getSessionOrNull(): Promise<SessionContext | null> {
   try {
     return await requireSession();

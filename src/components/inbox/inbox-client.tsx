@@ -19,8 +19,8 @@ export function InboxClient() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [messages, setMessages] = useState<MessageDto[]>([]);
   const [panelOpen, setPanelOpen] = useState(true);
-  // Se incrementa con cada evento SSE que puede cambiar la etapa/lead o el
-  // estado del agente: el panel de detalles lo observa y refetch en vivo.
+  // É incrementado a cada evento SSE que pode mudar a etapa/lead ou o
+  // estado do agente: o painel de detalhes observa isso e refaz o fetch ao vivo.
   const [detailRev, setDetailRev] = useState(0);
 
   useEffect(() => {
@@ -69,7 +69,7 @@ export function InboxClient() {
     [refetchMessages]
   );
 
-  // Enlace directo desde Contactos/Pipeline: /inbox?contact=<id>
+  // Link direto a partir de Contatos/Pipeline: /inbox?contact=<id>
   const searchParams = useSearchParams();
   const contactParam = searchParams.get("contact");
   useEffect(() => {
@@ -92,7 +92,7 @@ export function InboxClient() {
         });
       }
       void refetchConversations();
-      // Un entrante nuevo puede crear/mover el lead: refresca el panel.
+      // Uma mensagem recebida nova pode criar/mover o lead: atualiza o painel.
       setDetailRev((v) => v + 1);
     },
     onMessageStatus: ({ conversationId, messageId, status }) => {
@@ -105,11 +105,11 @@ export function InboxClient() {
     },
     onConversationUpdated: () => {
       void refetchConversations();
-      // El agente movió de etapa o cambió el handoff: refresca el panel en vivo.
+      // O agente mudou de etapa ou alterou o handoff: atualiza o painel ao vivo.
       setDetailRev((v) => v + 1);
     },
     onReconnect: () => {
-      // Catch-up tras reconexión (contrato sse.md): refetch completo.
+      // Catch-up após reconexão (contrato sse.md): refetch completo.
       void refetchConversations();
       if (selectedIdRef.current) void refetchMessages(selectedIdRef.current);
       setDetailRev((v) => v + 1);

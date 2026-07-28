@@ -5,7 +5,7 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-/** Iniciales (máx 2) para el avatar de un contacto. */
+/** Iniciais (máx 2) para o avatar de um contato. */
 export function initials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return "?";
@@ -14,7 +14,7 @@ export function initials(name: string): string {
   return (first + second).toUpperCase() || "?";
 }
 
-/* Paleta desaturada del handoff (AV): sobria sobre fondo claro. */
+/* Paleta dessaturada do handoff (AV): sóbria sobre fundo claro. */
 const AVATAR_COLORS = [
   "bg-[#5b7291]", // steel
   "bg-[#647082]", // slate
@@ -26,7 +26,7 @@ const AVATAR_COLORS = [
   "bg-[#6b7280]", // graphite
 ] as const;
 
-/** Color estable por contacto: hash simple del id/teléfono → misma clase siempre. */
+/** Cor estável por contato: hash simples do id/telefone → sempre a mesma classe. */
 export function avatarColor(seed: string): string {
   let hash = 0;
   for (let i = 0; i < seed.length; i++) {

@@ -1,32 +1,32 @@
-# Contrato: Webhook de WhatsApp Cloud API
+# Contrato: Webhook do WhatsApp Cloud API
 
-Ruta: `/api/webhooks/wa/[webhookToken]` — `[webhookToken]` DEBE igualar
-`META_WEBHOOK_VERIFY_TOKEN` (comparación timing-safe). Segmento incorrecto → **404**
-sin efectos (GET y POST). Ruta `force-dynamic`.
+Rota: `/api/webhooks/wa/[webhookToken]` — `[webhookToken]` DEVE ser igual a
+`META_WEBHOOK_VERIFY_TOKEN` (comparação timing-safe). Segmento incorreto → **404**
+sem efeitos (GET e POST). Rota `force-dynamic`.
 
-## GET (handshake de verificación)
+## GET (handshake de verificação)
 
 Query: `hub.mode=subscribe`, `hub.verify_token`, `hub.challenge`.
 
-- `hub.verify_token` == `META_WEBHOOK_VERIFY_TOKEN` y segmento correcto → `200` con
+- `hub.verify_token` == `META_WEBHOOK_VERIFY_TOKEN` e segmento correto → `200` com
   body = `hub.challenge` (texto plano).
-- Cualquier otro caso → `403` (segmento incorrecto → `404`).
+- Qualquer outro caso → `403` (segmento incorreto → `404`).
 
 ## POST (eventos)
 
-1. **Capa 1**: segmento ≠ token → `404` (sin leer el body).
-2. **Capa 2** (solo si `META_APP_SECRET` configurado): validar
-   `x-hub-signature-256: sha256=<hmac>` = HMAC-SHA256(app_secret, raw body). Inválida o
-   ausente → `401`. Sin `META_APP_SECRET` → se omite.
-3. Responder `200 {"received":true}` SIEMPRE tras encolar/procesar — nunca 5xx por
-   errores de dominio (Meta reintenta y desactiva webhooks que fallan).
+1. **Camada 1**: segmento ≠ token → `404` (sem ler o body).
+2. **Camada 2** (somente se `META_APP_SECRET` estiver configurado): validar
+   `x-hub-signature-256: sha256=<hmac>` = HMAC-SHA256(app_secret, raw body). Inválida ou
+   ausente → `401`. Sem `META_APP_SECRET` → é ignorado.
+3. Responder `200 {"received":true}` SEMPRE após enfileirar/processar — nunca 5xx por
+   erros de domínio (a Meta reenvia e desativa webhooks que falham).
 
-### Payload (subset procesado)
+### Payload (subconjunto processado)
 
 ```jsonc
 { "object": "whatsapp_business_account",
   "entry": [{ "id": "<WABA_ID>", "changes": [{
-    "field": "messages",            // o "message_template_status_update"
+    "field": "messages",            // ou "message_template_status_update"
     "value": {
       "metadata": { "phone_number_id": "...", "display_phone_number": "..." },
       "contacts": [{ "wa_id": "5215512345678", "profile": { "name": "..." } }],
@@ -38,16 +38,16 @@ Query: `hub.mode=subscribe`, `hub.verify_token`, `hub.challenge`.
     } }] }] }
 ```
 
-Reglas de procesamiento:
+Regras de processamento:
 
-- Ruteo por `metadata.phone_number_id` → `meta_credentials.phone_number_id` → org. Sin
-  match → `200` e ignorar.
-- `messages[]` → ingesta idempotente (`wa_message_id` UNIQUE; duplicado → no-op).
-  Tipos no-texto → mensaje con `type` correspondiente y body NULL (chip). Tipos
-  desconocidos → `unsupported`, sin error.
-- `statuses[]` → upgrade monotónico del estado (`sent<delivered<read`; nunca degradar;
+- Roteamento por `metadata.phone_number_id` → `meta_credentials.phone_number_id` → org. Sem
+  correspondência → `200` e ignorar.
+- `messages[]` → ingestão idempotente (`wa_message_id` UNIQUE; duplicado → no-op).
+  Tipos não-texto → mensagem com `type` correspondente e body NULL (chip). Tipos
+  desconhecidos → `unsupported`, sem erro.
+- `statuses[]` → upgrade monotônico do estado (`sent<delivered<read`; nunca degradar;
   `failed` registra `error_detail`).
 - `field: "message_template_status_update"` → `value: { event: "APPROVED"|"REJECTED"|"PENDING",
   message_template_id, message_template_name, message_template_language, reason }` →
-  actualizar `template.status` (por nombre+idioma u id), idempotente.
-- Tras ingesta: emitir evento SSE y disparar pipeline del agente (si aplica).
+  atualizar `template.status` (por nome+idioma ou id), idempotente.
+- Após a ingestão: emitir evento SSE e disparar o pipeline do agente (se aplicável).

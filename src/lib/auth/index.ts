@@ -1,28 +1,31 @@
 import { AsyncLocalStorage } from "node:async_hooks";
+import { eq } from "drizzle-orm";
 import { betterAuth } from "better-auth";
 import { APIError, createAuthMiddleware } from "better-auth/api";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { organization } from "better-auth/plugins";
 import { getDb, schema } from "@/lib/db";
+import { logAudit } from "@/server/auth/audit";
 import { getEnv } from "@/lib/env";
 import { AUTH_RATE_LIMIT, checkRateLimit } from "@/lib/rate-limit";
 import {
   onUserCreated,
   resolveActiveOrganizationId,
+  resolveMembership,
 } from "@/server/auth/on-signup";
 import { isPublicSignupAllowed } from "@/server/auth/registration";
 
 /**
- * Contexto interno del proceso: permite que el alta de cuentas de equipo
- * (owner → API) atraviese el gate de registro cerrado. No es alcanzable
- * desde fuera: solo envuelve llamadas server-side.
+ * Contexto interno do processo: permite que a criação de contas de equipe
+ * (owner → API) atravesse o gate de registro fechado. Não é alcançável
+ * de fora: só envolve chamadas server-side.
  */
 const globalForSignup = globalThis as unknown as {
   __voceroInternalSignup?: AsyncLocalStorage<boolean>;
 };
 
-// En globalThis: los módulos pueden evaluarse más de una vez (una por ruta en
-// dev) y todas las copias deben compartir el mismo contexto.
+// Em globalThis: os módulos podem ser avaliados mais de uma vez (uma por
+// rota em dev) e todas as cópias devem compartilhar o mesmo contexto.
 function internalSignupContext(): AsyncLocalStorage<boolean> {
   if (!globalForSignup.__voceroInternalSignup) {
     globalForSignup.__voceroInternalSignup = new AsyncLocalStorage<boolean>();
@@ -65,7 +68,7 @@ function createAuth() {
     plugins: [organization({ creatorRole: "owner" })],
     hooks: {
       before: createAuthMiddleware(async (ctx) => {
-        // Rate limit por IP en login/registro (FR-062): 10 / 10 min → 429.
+        // Rate limit por IP em login/registro (FR-062): 10 / 10 min → 429.
         if (RATE_LIMITED_PATHS.has(ctx.path)) {
           const ip =
             ctx.headers?.get("x-forwarded-for")?.split(",")[0]?.trim() ||
@@ -78,12 +81,47 @@ function createAuth() {
             });
           }
         }
-        // Registro público cerrado tras la primera organización (FR-060).
+        // Registro público fechado após a primeira organização (FR-060).
         if (ctx.path === "/sign-up/email") {
           if (!isInternalSignup() && !(await isPublicSignupAllowed())) {
             throw new APIError("FORBIDDEN", {
               message:
                 "O cadastro está fechado: esta instância já tem a sua organização",
+            });
+          }
+        }
+        // Membro desativado não consegue logar (FR-009). Não importa se a
+        // senha estaria certa — o bloqueio é por status, verificado antes
+        // da credencial para não depender de sessão criada e revogada.
+        if (ctx.path === "/sign-in/email") {
+          const email = (ctx.body as { email?: string } | undefined)?.email;
+          if (email) {
+            const db = getDb();
+            const rows = await db
+              .select({ isActive: schema.member.isActive })
+              .from(schema.user)
+              .innerJoin(schema.member, eq(schema.member.userId, schema.user.id))
+              .where(eq(schema.user.email, email))
+              .limit(1);
+            if (rows[0] && !rows[0].isActive) {
+              throw new APIError("FORBIDDEN", {
+                message: "Conta desativada — fale com o administrador",
+              });
+            }
+          }
+        }
+      }),
+      after: createAuthMiddleware(async (ctx) => {
+        if (ctx.path === "/sign-in/email" && ctx.context.newSession) {
+          const membership = await resolveMembership(
+            ctx.context.newSession.user.id
+          );
+          if (membership) {
+            await logAudit({
+              organizationId: membership.organizationId,
+              memberId: membership.memberId,
+              action: "user.login",
+              req: ctx.request,
             });
           }
         }

@@ -6,6 +6,7 @@ import { isWindowOpen, windowRemainingMs } from "@/server/inbox/window";
 export type ConversationDto = {
   id: string;
   contact: { id: string; name: string; phone: string };
+  assignedTo: string | null;
   stageName: string | null;
   /** Canal activo: official (Cloud API) o unofficial (gateway). */
   channel: "official" | "unofficial";
@@ -22,7 +23,8 @@ export type ConversationDto = {
 
 export async function listConversations(
   organizationId: string,
-  since?: Date
+  since?: Date,
+  assignedToFilter?: string
 ): Promise<ConversationDto[]> {
   const db = getDb();
   const previewSql = sql<string | null>`(
@@ -56,7 +58,10 @@ export async function listConversations(
         schema.conversation.organizationId,
         organizationId,
         eq(schema.conversation.isTest, false),
-        since ? gt(schema.conversation.updatedAt, since) : undefined
+        since ? gt(schema.conversation.updatedAt, since) : undefined,
+        assignedToFilter
+          ? eq(schema.conversation.assignedTo, assignedToFilter)
+          : undefined
       )
     )
     .orderBy(desc(sql`coalesce(${schema.conversation.lastMessageAt}, ${schema.conversation.createdAt})`));
@@ -120,6 +125,7 @@ export function serializeConversation(
   return {
     id: c.id,
     contact: { id: contact.id, name: contact.name, phone: contact.phone },
+    assignedTo: c.assignedTo,
     stageName,
     channel: c.channel,
     aiEnabled: c.aiEnabled,
@@ -144,12 +150,14 @@ export async function updateConversation(
     reactivate?: boolean;
     markRead?: boolean;
     channel?: "official" | "unofficial";
+    assignedTo?: string | null;
   }
 ) {
   const db = getDb();
   const set: Record<string, unknown> = { updatedAt: new Date() };
   if (patch.aiEnabled !== undefined) set.aiEnabled = patch.aiEnabled;
   if (patch.channel !== undefined) set.channel = patch.channel;
+  if (patch.assignedTo !== undefined) set.assignedTo = patch.assignedTo;
   if (patch.reactivate) {
     set.handoffAt = null;
     set.handoffReason = null;

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { apiError, parseBody, withAuth } from "@/lib/api";
 import { getDb, schema } from "@/lib/db";
 import { scoped } from "@/lib/db/tenant";
+import { resolvePermissions } from "@/lib/auth/require-permission";
 import { listConversations, serializeConversation } from "@/server/inbox/queries";
 import {
   getOrCreateContact,
@@ -15,9 +16,20 @@ export const GET = withAuth(async (session, req: Request) => {
   const url = new URL(req.url);
   const sinceParam = url.searchParams.get("since");
   const since = sinceParam ? new Date(sinceParam) : undefined;
+
+  // Sem conversations:view_all, só vê as conversas atribuídas a si (FR-007).
+  let assignedToFilter: string | undefined;
+  if (session.role !== "owner") {
+    const effective = await resolvePermissions(session.memberId, session.role);
+    if (!effective.has("conversations:view_all")) {
+      assignedToFilter = session.memberId;
+    }
+  }
+
   const conversations = await listConversations(
     session.organizationId,
-    since && !Number.isNaN(since.getTime()) ? since : undefined
+    since && !Number.isNaN(since.getTime()) ? since : undefined,
+    assignedToFilter
   );
   return Response.json({ conversations });
 });

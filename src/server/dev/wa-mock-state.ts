@@ -1,7 +1,7 @@
 /**
- * Estado en memoria del harness wa-mock (solo dev/test). Vive en globalThis
- * porque Next recarga módulos en dev; una instancia = un proceso, así que el
- * outbox en memoria es suficiente para las aserciones del self-test.
+ * Estado em memória do harness wa-mock (somente dev/test). Vive em globalThis
+ * porque o Next recarrega módulos em dev; uma instância = um processo, então
+ * o outbox em memória é suficiente para as asserções do self-test.
  */
 
 export type OutboxEntry = {

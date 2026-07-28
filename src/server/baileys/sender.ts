@@ -10,14 +10,14 @@ export class BaileysSendError extends Error {
 }
 
 /**
- * Resuelve el JID real del destinatario contra los servidores de WhatsApp
- * (`onWhatsApp`) en vez de asumir `${phone}@s.whatsapp.net` a ciegas. Esto
- * es necesario porque WhatsApp resuelve del lado del servidor casos donde el
- * número guardado no coincide byte a byte con el JID registrado (p. ej. el
- * "nono dígito" de los celulares de Brasil) — enviar al JID crudo en esos
- * casos falla en silencio (Baileys no lanza error; el mensaje simplemente
- * nunca llega). Si el número no existe en WhatsApp, falla explícito en vez
- * de fingir un envío exitoso.
+ * Resolve o JID real do destinatário contra os servidores do WhatsApp
+ * (`onWhatsApp`) em vez de assumir `${phone}@s.whatsapp.net` às cegas. Isso
+ * é necessário porque o WhatsApp resolve do lado do servidor casos em que o
+ * número salvo não coincide byte a byte com o JID registrado (por exemplo o
+ * "nono dígito" dos celulares do Brasil) — enviar ao JID cru nesses
+ * casos falha em silêncio (o Baileys não lança erro; a mensagem simplesmente
+ * nunca chega). Se o número não existir no WhatsApp, falha de forma
+ * explícita em vez de fingir um envio bem-sucedido.
  */
 async function resolveJid(
   sock: NonNullable<ReturnType<typeof getSocket>>,
@@ -34,7 +34,7 @@ async function resolveJid(
   return match.jid;
 }
 
-/** Envía texto libre por el motor nativo; devuelve el ID del mensaje. */
+/** Envia texto livre pelo motor nativo; devolve o ID da mensagem. */
 export async function sendText(
   organizationId: string,
   phone: string,
@@ -42,8 +42,8 @@ export async function sendText(
 ): Promise<string> {
   const sock = getSocket(organizationId);
   const live = await getLiveStatus(organizationId);
-  // No basta con que exista un socket: puede estar "connecting" (pareo aún
-  // no completado) — ahí `sock.sendMessage` quedaría esperando en vano.
+  // Não basta existir um socket: ele pode estar "connecting" (pareamento
+  // ainda não concluído) — nesse caso `sock.sendMessage` ficaria esperando à toa.
   if (!sock || live.status !== "connected") {
     throw new BaileysSendError(
       "not_connected",

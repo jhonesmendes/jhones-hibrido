@@ -1,4 +1,4 @@
-/** DTOs que viajan por la API interna (lado cliente). */
+/** DTOs que trafegam pela API interna (lado cliente). */
 
 export type ConversationDto = {
   id: string;

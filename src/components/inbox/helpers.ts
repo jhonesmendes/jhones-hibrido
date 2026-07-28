@@ -1,4 +1,4 @@
-/** Utilidades de presentación de la bandeja. */
+/** Utilitários de apresentação da caixa de entrada. */
 
 export function formatTime(iso: string | null): string {
   if (!iso) return "";

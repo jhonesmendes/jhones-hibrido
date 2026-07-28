@@ -1,8 +1,8 @@
 /**
- * Ventana de servicio de 24 horas de WhatsApp: solo se puede enviar texto
- * libre dentro de las 24h siguientes al último mensaje ENTRANTE. Una
- * conversación sin entrantes (p. ej. iniciada por plantilla) tiene la
- * ventana cerrada.
+ * Janela de atendimento de 24 horas do WhatsApp: só é possível enviar texto
+ * livre dentro das 24h seguintes à última mensagem RECEBIDA. Uma
+ * conversa sem mensagens recebidas (ex.: iniciada por template) tem a
+ * janela fechada.
  */
 
 export const WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -15,7 +15,7 @@ export function isWindowOpen(
   return now.getTime() - lastInboundAt.getTime() < WINDOW_MS;
 }
 
-/** Milisegundos restantes de ventana (0 si está cerrada). */
+/** Milissegundos restantes de janela (0 se estiver fechada). */
 export function windowRemainingMs(
   lastInboundAt: Date | null,
   now: Date = new Date()

@@ -6,71 +6,71 @@
 
 ## Summary
 
-Configuración singular por organización (habilitado, etapa gatillo, intervalo,
-mensaje, etapa de éxito, etapa de expiración, requiere documento) más un scheduler
-in-process que corre cada N minutos (mismo patrón que el resto del trabajo en
-segundo plano del proyecto — sin colas externas) para: enviar el recordatorio a
-leads inactivos en la etapa gatillo, y expirar a los que no respondieron tras el
-plazo de gracia. La detección de documento se resuelve de forma reactiva (en el
-mismo momento de la ingesta del mensaje entrante), no por scheduler, para cumplir
-SC-004. Reutiliza `sendText` para el envío y `lead.lastActivityAt` (ya existente)
-como única fuente de "última actividad" — sin tracking nuevo para eso.
+Configuração singular por organização (habilitado, etapa gatilho, intervalo,
+mensagem, etapa de sucesso, etapa de expiração, requer documento) mais um scheduler
+in-process que roda a cada N minutos (mesmo padrão do restante do trabalho em
+segundo plano do projeto — sem filas externas) para: enviar o lembrete a
+leads inativos na etapa gatilho, e expirar os que não responderam depois do
+prazo de carência. A detecção de documento é resolvida de forma reativa (no
+mesmo momento da ingestão da mensagem recebida), não por scheduler, para cumprir
+SC-004. Reaproveita `sendText` para o envio e `lead.lastActivityAt` (já
+existente) como única fonte de "última atividade" — sem rastreamento novo para isso.
 
 ## Technical Context
 
 **Language/Version**: TypeScript 5.7 (strict + noUncheckedIndexedAccess), React 19
 
-**Primary Dependencies**: Next.js 15, Drizzle ORM — todas ya en el proyecto. Sin
-dependencias nuevas (nada de `node-cron`: un `setInterval` module-level alcanza,
-igual que `scheduleAgentTurn`).
+**Primary Dependencies**: Next.js 15, Drizzle ORM — todas já no projeto. Sem
+dependências novas (nada de `node-cron`: um `setInterval` module-level basta,
+igual a `scheduleAgentTurn`).
 
-**Storage**: PostgreSQL vía Drizzle. Dos tablas nuevas: `pipelineFollowup`
-(configuración, 1 fila por organización) y `followupSend` (registro/idempotencia).
+**Storage**: PostgreSQL via Drizzle. Duas tabelas novas: `pipelineFollowup`
+(configuração, 1 linha por organização) e `followupSend` (registro/idempotência).
 
-**Testing**: Vitest (unit, para la lógica pura de elegibilidad de un lead) +
-self-test E2E en vivo (Principio IX).
+**Testing**: Vitest (unit, para a lógica pura de elegibilidade de um lead) +
+self-test E2E ao vivo (Princípio IX).
 
-**Target Platform**: Node self-hosted, proceso único de larga duración (no
-serverless) — el `setInterval` del scheduler vive mientras viva el proceso.
+**Target Platform**: Node self-hosted, processo único de longa duração (não
+serverless) — o `setInterval` do scheduler vive enquanto o processo viver.
 
 **Project Type**: Monolito Next.js existente.
 
-**Performance Goals**: N/A — ciclo de revisión periódico de baja frecuencia
-(minutos), no una ruta de alto tráfico.
+**Performance Goals**: N/A — ciclo de verificação periódico de baixa frequência
+(minutos), não uma rota de alto tráfego.
 
-**Constraints**: El intervalo de revisión del scheduler y el intervalo/mensaje de
-follow-up MUST salir de configuración (env var para el primero, banco de datos
-para el segundo) — nunca constantes de negocio en el código (regla explícita del
-roadmap, ya en línea con el resto del proyecto).
+**Constraints**: O intervalo de verificação do scheduler e o intervalo/mensagem de
+follow-up MUST vir de configuração (env var para o primeiro, banco de dados
+para o segundo) — nunca constantes de negócio no código (regra explícita do
+roadmap, já alinhada com o restante do projeto).
 
-**Scale/Scope**: pensado para el volumen de un negocio chico/mediano (decenas de
-leads activos por etapa), coherente con el Principio VIII.
+**Scale/Scope**: pensado para o volume de um negócio pequeno/médio (dezenas de
+leads ativos por etapa), coerente com o Princípio VIII.
 
 ## Constitution Check
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-- **I. Seguridad de Datos**: sin secretos nuevos. PASS.
-- **II. Soberanía**: scheduler in-process, sin colas externas, sin dependencias
-  nuevas. PASS.
-- **III. Multi-tenancy**: `pipelineFollowup`/`followupSend` llevan
-  `organization_id` NOT NULL, queries vía `scoped()`. PASS.
-- **IV. Idempotencia**: índice único parcial sobre `followupSend` (1 registro
-  `pending`/`sent`-sin-resolver activo por lead a la vez) evita duplicar
-  recordatorios; mismo patrón que `test_run_org_running_uq`. PASS.
-- **V. Calidad Verificable**: gate típecheck+lint+build+test sin excepción. PASS
-  (pendiente de ejecutar).
-- **VI. Specs Antes de Código**: este plan y spec preceden la implementación. PASS.
-- **VII. Trazabilidad**: el plazo de gracia = intervalo (asunción) documentado en
+- **I. Segurança de Dados**: sem segredos novos. PASS.
+- **II. Soberania**: scheduler in-process, sem filas externas, sem dependências
+  novas. PASS.
+- **III. Multi-tenancy**: `pipelineFollowup`/`followupSend` levam
+  `organization_id` NOT NULL, queries via `scoped()`. PASS.
+- **IV. Idempotência**: índice único parcial sobre `followupSend` (1 registro
+  `pending`/`sent`-sem-resolver ativo por lead por vez) evita duplicar
+  lembretes; mesmo padrão de `test_run_org_running_uq`. PASS.
+- **V. Qualidade Verificável**: gate typecheck+lint+build+test sem exceção. PASS
+  (pendente de execução).
+- **VI. Specs Antes do Código**: este plano e spec precedem a implementação. PASS.
+- **VII. Rastreabilidade**: o prazo de carência = intervalo (suposição) documentado em
   spec.md → Assumptions. PASS.
-- **VIII. Foco Vertical**: sirve directamente a "atender/organizar/convertir"
-  leads de WhatsApp — no es un builder de flujos genérico (una sola transición
-  configurable: gatillo → éxito/expiración). PASS.
-- **IX. Verificación en Vivo**: el envío del recordatorio respeta el guardrail de
-  sandbox `is_test` (reutiliza `sendText`, que ya lo aplica) — no se introduce un
-  camino de envío nuevo sin ese guardrail. Self-test E2E en vivo antes de "Hecho".
+- **VIII. Foco Vertical**: serve diretamente a "atender/organizar/converter"
+  leads de WhatsApp — não é um builder de fluxos genérico (uma única transição
+  configurável: gatilho → sucesso/expiração). PASS.
+- **IX. Verificação ao Vivo**: o envio do lembrete respeita o guardrail de
+  sandbox `is_test` (reaproveita `sendText`, que já o aplica) — não se introduz um
+  caminho de envio novo sem esse guardrail. Self-test E2E ao vivo antes de "Feito".
 
-Sin violaciones — no aplica Complexity Tracking.
+Sem violações — não se aplica Complexity Tracking.
 
 ## Project Structure
 
@@ -95,19 +95,19 @@ src/
 │   ├── pipeline/
 │   │   ├── followup.ts                 # get/saveFollowupConfig, serialize
 │   │   ├── followup-scheduler.ts       # startFollowupScheduler (setInterval), runFollowupCycle
-│   │   └── followup-document.ts        # onInboundMedia (reactivo, llamado desde ingest.ts)
-│   └── inbox/ingest.ts                 # + llamada a onInboundMedia cuando el mensaje es media
-├── instrumentation-node.ts              # + startFollowupScheduler() en el arranque
+│   │   └── followup-document.ts        # onInboundMedia (reativo, chamado desde ingest.ts)
+│   └── inbox/ingest.ts                 # + chamada a onInboundMedia quando a mensagem é mídia
+├── instrumentation-node.ts              # + startFollowupScheduler() na inicialização
 ├── app/api/pipeline/followup/route.ts   # GET/PUT config
 └── components/pipeline/
-    └── followup-manager.tsx             # modal de configuración (junto a StageManager)
+    └── followup-manager.tsx             # modal de configuração (junto ao StageManager)
 ```
 
-**Structure Decision**: sigue el patrón `src/server/<dominio>/` +
-`src/app/api/<dominio>/` ya establecido; el scheduler se registra en
-`instrumentation-node.ts`, el único punto de arranque de trabajo en segundo plano
-de vida larga que ya existe en el proyecto (hoy solo hace `cleanupOrphanRuns`).
+**Structure Decision**: segue o padrão `src/server/<domínio>/` +
+`src/app/api/<domínio>/` já estabelecido; o scheduler é registrado em
+`instrumentation-node.ts`, o único ponto de inicialização de trabalho em segundo
+plano de vida longa que já existe no projeto (hoje só faz `cleanupOrphanRuns`).
 
 ## Complexity Tracking
 
-*(vacío — no hay violaciones que justificar)*
+*(vazio — não há violações a justificar)*

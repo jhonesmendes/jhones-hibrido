@@ -52,7 +52,7 @@ export function BrandingClient() {
       return;
     }
     setSaved(true);
-    // Re-renderiza el árbol server (layout raíz inyecta el acento y el título)
+    // Renderiza novamente a árvore do servidor (o layout raiz injeta o acento e o título)
     router.refresh();
   }
 
@@ -125,7 +125,7 @@ export function BrandingClient() {
             </p>
           </div>
 
-          {/* Vista previa */}
+          {/* Pré-visualização */}
           <div className="rounded-md border p-4" style={{ background: previewSet.tint }}>
             <div className="flex items-center gap-2.5">
               <span

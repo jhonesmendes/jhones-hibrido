@@ -1,25 +1,25 @@
-# Quickstart — desarrollo local y self-test (001-vocero-core)
+# Quickstart — desenvolvimento local e self-test (001-vocero-core)
 
 ## Requisitos
 
-Node 22 + pnpm · Docker (para Postgres local y la Ruta B) · `.env` a partir de
+Node 22 + pnpm · Docker (para Postgres local e a Rota B) · `.env` a partir de
 `.env.example`.
 
-## Levantar en desarrollo
+## Subindo em desenvolvimento
 
 ```bash
 pnpm install
 docker compose -f docker-compose.dev.yml up -d postgres   # Postgres local
-pnpm db:migrate                                            # aplicar migraciones
+pnpm db:migrate                                            # aplicar migrações
 pnpm dev                                                   # http://localhost:3000
 ```
 
-Primer uso: registrarse (crea la organización) → botón "Cargar datos de demostración"
-(o `pnpm seed:demo`).
+Primeiro uso: cadastre-se (cria a organização) → botão "Carregar dados de demonstração"
+(ou `pnpm seed:demo`).
 
-## Modo de pruebas interno (self-test)
+## Modo de testes interno (self-test)
 
-En `.env` de desarrollo:
+No `.env` de desenvolvimento:
 
 ```
 WA_MOCK_ENABLED=true
@@ -28,27 +28,27 @@ OPENROUTER_BASE_URL=http://localhost:3000/api/dev/ai-mock
 OPENROUTER_API_TOKEN=test-token
 ```
 
-Conectar el número en Settings → WhatsApp con IDs de prueba (cualquier token SIN el
-sufijo `-invalid`). Simular un entrante:
+Conecte o número em Settings → WhatsApp com IDs de teste (qualquer token SEM o
+sufixo `-invalid`). Simular um recebimento:
 
 ```bash
 curl -X POST localhost:3000/api/dev/wa-mock/inbound \
   -H 'content-type: application/json' \
-  -d '{"phoneNumberId":"<el del wizard>","from":"5215511111111","name":"Cliente Demo","text":"hola"}'
+  -d '{"phoneNumberId":"<o do wizard>","from":"5215511111111","name":"Cliente Demo","text":"hola"}'
 ```
 
-## Gate técnico y tests
+## Gate técnico e testes
 
 ```bash
 pnpm typecheck && pnpm lint && pnpm build && pnpm test   # Vitest unit
 ```
 
-Self-test E2E: se conduce con Playwright (MCP) siguiendo los guiones de
-`tests/e2e/` contra `pnpm dev` y contra la Ruta B (`docker compose up`).
+Self-test E2E: conduzido com Playwright (MCP) seguindo os roteiros de
+`tests/e2e/` contra `pnpm dev` e contra a Rota B (`docker compose up`).
 
-## Ruta B local (verificación compose)
+## Rota B local (verificação compose)
 
 ```bash
 DOMAIN=localhost docker compose up -d --build
-# Caddy sirve https://localhost (cert interno); healthchecks en app/db/caddy
+# Caddy serve https://localhost (cert interno); healthchecks em app/db/caddy
 ```

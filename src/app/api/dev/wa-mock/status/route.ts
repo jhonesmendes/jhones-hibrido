@@ -23,7 +23,7 @@ export async function POST(req: Request) {
   const body = await parseBody(req, bodySchema);
   if (!body.ok) return body.response;
 
-  // Resolver el número desde el mensaje (el payload real lleva metadata).
+  // Resolver o número a partir da mensagem (o payload real carrega metadata).
   const db = getDb();
   const rows = await db
     .select({ organizationId: schema.message.organizationId })

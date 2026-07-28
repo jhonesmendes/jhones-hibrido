@@ -1,4 +1,4 @@
-# Specification Quality Checklist: Campañas de disparo en masa
+# Specification Quality Checklist: Campanhas de disparo em massa
 
 **Purpose**: Validate specification completeness and quality before proceeding to planning
 **Created**: 2026-07-26
@@ -31,7 +31,8 @@
 
 ## Notes
 
-- Alcance recortado deliberadamente (sin agendamiento, sin selección de
-  destinatarios desde el pipeline/tags) — documentado en Assumptions, no oculto.
-- Depende de la enmienda de constitución v2.0.0 (ya aplicada) para el canal no
-  oficial y el disparo en masa.
+- Escopo reduzido deliberadamente (sem agendamento, sem seleção de
+  destinatários a partir do pipeline/tags) — documentado em Assumptions, não
+  oculto.
+- Depende da emenda de constituição v2.0.0 (já aplicada) para o canal não
+  oficial e o disparo em massa.

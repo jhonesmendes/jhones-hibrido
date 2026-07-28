@@ -22,6 +22,12 @@ const prefixes = {
   pipelineFollowup: "pfu",
   followupSend: "fus",
   messageMedia: "mm",
+  memberPermission: "mp",
+  memberChannel: "mc",
+  inviteToken: "inv",
+  smtpConfig: "smtp",
+  passwordResetToken: "prt",
+  auditLog: "aud",
 } as const;
 
 export type IdKind = keyof typeof prefixes;

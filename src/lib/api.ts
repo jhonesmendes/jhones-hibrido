@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { requireSession, UnauthorizedError, type SessionContext } from "@/lib/auth/session";
+import { ForbiddenError } from "@/lib/auth/require-permission";
 
-/** Respuesta de error estándar de la API interna (contrato api.md). */
+/** Resposta de erro padrão da API interna (contrato api.md). */
 export function apiError(
   status: number,
   code: string,
@@ -11,8 +12,8 @@ export function apiError(
 }
 
 /**
- * Envuelve un route handler autenticado: resuelve la sesión (401 si no hay),
- * captura errores no controlados (500 sin stack) y deja pasar Response.
+ * Envolve um route handler autenticado: resolve a sessão (401 se não houver),
+ * captura erros não controlados (500 sem stack) e deixa passar Response.
  */
 export function withAuth<Args extends unknown[]>(
   handler: (session: SessionContext, ...args: Args) => Promise<Response>
@@ -23,20 +24,23 @@ export function withAuth<Args extends unknown[]>(
       session = await requireSession();
     } catch (err) {
       if (err instanceof UnauthorizedError) {
-        return apiError(401, "unauthorized", "Não autenticado");
+        return apiError(401, "unauthorized", err.message);
       }
       throw err;
     }
     try {
       return await handler(session, ...args);
     } catch (err) {
-      console.error("[api] error no controlado:", err);
+      if (err instanceof ForbiddenError) {
+        return apiError(403, "forbidden", err.message);
+      }
+      console.error("[api] erro não controlado:", err);
       return apiError(500, "internal", "Erro interno");
     }
   };
 }
 
-/** Parsea el body JSON con un esquema Zod; inválido → Response 422. */
+/** Faz parse do body JSON com um schema Zod; inválido → Response 422. */
 export async function parseBody<T>(
   req: Request,
   schema: z.ZodType<T>

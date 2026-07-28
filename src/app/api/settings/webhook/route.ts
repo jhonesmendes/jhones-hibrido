@@ -3,7 +3,7 @@ import { getEnv } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
 
-/** Datos del webhook para pegar en Meta o en el backend de la agencia (FR-043). */
+/** Dados do webhook para colar na Meta ou no backend da agência (FR-043). */
 export const GET = withAuth(async () => {
   const env = getEnv();
   const url = `${env.APP_BASE_URL.replace(/\/$/, "")}/api/webhooks/wa/${env.META_WEBHOOK_VERIFY_TOKEN}`;

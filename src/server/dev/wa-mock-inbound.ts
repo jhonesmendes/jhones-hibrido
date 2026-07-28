@@ -3,10 +3,10 @@ import { getEnv } from "@/lib/env";
 import { nextN } from "@/server/dev/wa-mock-state";
 
 /**
- * Construye un payload real de Meta y lo entrega al webhook público por
- * loopback (127.0.0.1: mismo proceso, sin salir a la red). Se firma con el
- * META_APP_SECRET real si está configurado — así el self-test ejercita la
- * capa 2 de verdad.
+ * Constrói um payload real da Meta e o entrega ao webhook público por
+ * loopback (127.0.0.1: mesmo processo, sem sair para a rede). É assinado com
+ * o META_APP_SECRET real se estiver configurado — assim o self-test exercita
+ * a camada 2 de verdade.
  */
 export async function deliverToWebhook(payload: unknown): Promise<Response> {
   const env = getEnv();
@@ -43,7 +43,7 @@ export function buildInboundPayload(input: {
     timestamp: String(input.timestamp ?? Math.floor(Date.now() / 1000)),
     type,
   };
-  if (type === "text") message.text = { body: input.text ?? "hola" };
+  if (type === "text") message.text = { body: input.text ?? "oi" };
 
   return {
     object: "whatsapp_business_account",

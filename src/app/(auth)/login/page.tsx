@@ -68,6 +68,11 @@ export default function LoginPage() {
             {loading ? "Entrando…" : "Entrar"}
           </Button>
           <p className="text-center text-sm text-muted-foreground">
+            <Link href="/forgot-password" className="text-primary hover:underline">
+              Esqueci minha senha
+            </Link>
+          </p>
+          <p className="text-center text-sm text-muted-foreground">
             Primeira vez aqui?{" "}
             <Link href="/register" className="text-primary hover:underline">
               Criar a conta inicial

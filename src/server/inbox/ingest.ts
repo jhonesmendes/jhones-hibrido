@@ -9,12 +9,12 @@ import { onLeadActivity } from "@/server/inbox/lead-activity";
 import { maybeRunAgentTurn } from "@/server/ai/trigger";
 import { onInboundMedia } from "@/server/pipeline/followup-document";
 
-/** Marca `message.mediaUrl` cuando los bytes viven en `message_media`
- * (canal no oficial, autohospedado) en vez de una URL externa fetchable
- * (canal oficial, CDN de Meta). */
+/** Marca `message.mediaUrl` quando os bytes vivem em `message_media`
+ * (canal não oficial, autohospedado) em vez de uma URL externa buscável
+ * (canal oficial, CDN da Meta). */
 export const LOCAL_MEDIA_MARKER = "local";
 
-/** Tipos de contenido soportados; el resto se ignora sin error. */
+/** Tipos de conteúdo suportados; o resto é ignorado sem erro. */
 const SUPPORTED_TYPES = new Set([
   "text",
   "image",
@@ -57,9 +57,9 @@ export async function getOrCreateContact(
     )
     .limit(1);
   const existing = rows[0];
-  if (!existing) throw new Error("contacto no encontrado tras upsert");
+  if (!existing) throw new Error("contato não encontrado após upsert");
 
-  // Reactivar si estaba archivado (el nombre editado por el operador se respeta).
+  // Reativar se estava arquivado (o nome editado pelo operador é respeitado).
   if (existing.archivedAt) {
     await db
       .update(schema.contact)
@@ -94,13 +94,13 @@ export async function getOrCreateConversation(
     )
     .limit(1);
   const existing = rows[0];
-  if (!existing) throw new Error("conversación no encontrada tras upsert");
+  if (!existing) throw new Error("conversa não encontrada após upsert");
   return existing;
 }
 
 /**
- * Procesa el `value` de un cambio `messages` del webhook: mensajes entrantes
- * (idempotentes por wa_message_id) y actualizaciones de estado.
+ * Processa o `value` de uma mudança `messages` do webhook: mensagens
+ * recebidas (idempotentes por wa_message_id) e atualizações de status.
  */
 export async function processMessagesValue(value: WebhookValue): Promise<void> {
   const phoneNumberId = value.metadata?.phone_number_id;
@@ -108,11 +108,11 @@ export async function processMessagesValue(value: WebhookValue): Promise<void> {
 
   const credentials = await getCredentialsByPhoneNumberId(phoneNumberId);
   if (!credentials) {
-    // Caso típico: webhook/override configurado ANTES de guardar la conexión
-    // en el wizard — el evento llega pero no hay a qué organización enrutarlo.
+    // Caso típico: webhook/override configurado ANTES de salvar a conexão
+    // no wizard — o evento chega mas não há organização para rotear.
     console.warn(
-      `[webhook] evento para phone_number_id desconocido (${phoneNumberId}): ` +
-        "guarda la conexión en Configuración → WhatsApp para recibir mensajes"
+      `[webhook] evento para phone_number_id desconhecido (${phoneNumberId}): ` +
+        "salve a conexão em Configurações → WhatsApp para receber mensagens"
     );
     return;
   }
@@ -124,7 +124,7 @@ export async function processMessagesValue(value: WebhookValue): Promise<void> {
   }
 
   for (const msg of value.messages ?? []) {
-    if (!SUPPORTED_TYPES.has(msg.type)) continue; // reacciones, etc.: ignorar
+    if (!SUPPORTED_TYPES.has(msg.type)) continue; // reações, etc.: ignorar
     const profileName = value.contacts?.find(
       (c) => c.wa_id === msg.from
     )?.profile?.name;
@@ -148,12 +148,12 @@ export async function ingestInboundMessage(input: {
   type: string;
   text: string | null;
   timestamp: string;
-  /** Canal de origen; sticky en la conversación. Default: official. */
+  /** Canal de origem; sticky na conversa. Padrão: official. */
   channel?: "official" | "unofficial";
   /**
-   * true = eco de un mensaje enviado por el propio número (típico de
-   * gateways no oficiales: incluye lo enviado desde el teléfono). Se
-   * registra como saliente, sin unread ni turno del agente.
+   * true = eco de uma mensagem enviada pelo próprio número (típico de
+   * gateways não oficiais: inclui o que foi enviado a partir do telefone).
+   * É registrado como saída, sem unread nem turno do agente.
    */
   fromMe?: boolean;
   /** URL da mídia no gateway (servida ao navegador via /api/media/[id]). */
@@ -178,8 +178,8 @@ export async function ingestInboundMessage(input: {
 
   const waTimestamp = toDate(input.timestamp);
 
-  // Idempotencia dura: mismo wa_message_id → sin efectos adicionales.
-  // Cubre también el eco del gateway para envíos hechos desde el CRM.
+  // Idempotência dura: mesmo wa_message_id → sem efeitos adicionais.
+  // Cobre também o eco do gateway para envios feitos a partir do CRM.
   const inserted = await db
     .insert(schema.message)
     .values({
@@ -221,7 +221,7 @@ export async function ingestInboundMessage(input: {
             lastInboundAt: waTimestamp,
             lastMessageAt: waTimestamp,
             unreadCount: sql`${schema.conversation.unreadCount} + 1`,
-            channel, // sticky: responder por donde escribió el cliente
+            channel, // sticky: responder pelo canal por onde o cliente escreveu
             updatedAt: new Date(),
           }
     )

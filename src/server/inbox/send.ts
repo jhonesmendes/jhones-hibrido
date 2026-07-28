@@ -13,7 +13,7 @@ import { serializeMessage } from "@/server/inbox/ingest";
 import { BaileysSendError, sendText as sendBaileysText } from "@/server/baileys/sender";
 import { baileysMessageId } from "@/server/baileys/inbound";
 
-/** Error tipado del envío; `code` mapea a HTTP en la capa de API. */
+/** Erro tipado do envio; `code` mapeia para HTTP na camada de API. */
 export class SendError extends Error {
   code:
     | "sandbox_violation"
@@ -34,10 +34,10 @@ export class SendError extends Error {
 type SendResult = { messageId: string };
 
 /**
- * Envía un mensaje de texto libre por WhatsApp.
+ * Envia uma mensagem de texto livre por WhatsApp.
  *
- * ASERCIÓN DURA (FR-031): una conversación de prueba del Laboratorio jamás
- * llega a la API real — se lanza ANTES de tocar credenciales o red.
+ * ASSERÇÃO DURA (FR-031): uma conversa de teste do Laboratório jamais
+ * chega à API real — é lançada ANTES de tocar credenciais ou rede.
  */
 export async function sendText(input: {
   conversationId: string;
@@ -71,7 +71,7 @@ export async function sendText(input: {
     );
   }
 
-  // Ruteo por canal: la conversación sigue el canal del último entrante.
+  // Roteamento por canal: a conversa segue o canal da última mensagem recebida.
   if (row.conversation.channel === "unofficial") {
     return sendViaUnofficial(input, row.contact.phone);
   }
@@ -134,9 +134,9 @@ export async function sendText(input: {
 }
 
 /**
- * Envío por el canal NO oficial (gateway). Sin ventana de 24h — el
- * gateway se comporta como un WhatsApp normal. El guard de sandbox ya
- * corrió antes en sendText().
+ * Envio pelo canal NÃO oficial (gateway). Sem janela de 24h — o
+ * gateway se comporta como um WhatsApp normal. O guard de sandbox já
+ * rodou antes em sendText().
  */
 async function sendViaUnofficial(
   input: {
@@ -205,11 +205,11 @@ async function sendViaUnofficial(
     });
     return { messageId: message.id };
   }
-  // El propio eco del socket llegó antes que nosotros (carrera benigna).
+  // O próprio eco do socket chegou antes de nós (corrida benigna).
   return { messageId: waMessageId };
 }
 
-/** Llama a Graph /messages y traduce errores de Meta a SendError. */
+/** Chama Graph /messages e traduz erros da Meta para SendError. */
 export async function callGraphSend(
   credentials: Credentials,
   payload: unknown

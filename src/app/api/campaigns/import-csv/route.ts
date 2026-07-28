@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 const bodySchema = z.object({ csvText: z.string().min(1) });
 
-/** Previsualización de un CSV de destinatarios: no persiste nada. */
+/** Pré-visualização de um CSV de destinatários: não persiste nada. */
 export const POST = withAuth(async (_session, req: Request) => {
   const body = await parseBody(req, bodySchema);
   if (!body.ok) return body.response;

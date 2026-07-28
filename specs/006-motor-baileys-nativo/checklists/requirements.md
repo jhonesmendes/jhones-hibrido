@@ -1,4 +1,4 @@
-# Specification Quality Checklist: Motor WhatsApp no oficial nativo (Baileys)
+# Specification Quality Checklist: Motor WhatsApp não oficial nativo (Baileys)
 
 **Purpose**: Validate specification completeness and quality before proceeding to planning
 **Created**: 2026-07-27
@@ -31,7 +31,7 @@
 
 ## Notes
 
-- Recorte de alcance explícito: sin media en esta iteración (ver spec.md →
-  Assumptions) — decisión de tamaño de entrega, no ocultamiento.
-- El pareo real vía QR es intrínsecamente no automatizable en este entorno —
-  marcado como verificación humana obligatoria, no como "pendiente" vago.
+- Corte de escopo explícito: sem mídia nesta iteração (ver spec.md →
+  Assumptions) — decisão de tamanho de entrega, não ocultamento.
+- O pareamento real via QR é intrinsecamente não automatizável neste ambiente —
+  marcado como verificação humana obrigatória, não como "pendente" vago.

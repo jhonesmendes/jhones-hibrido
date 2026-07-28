@@ -31,9 +31,9 @@
 
 ## Notes
 
-- El dueño fijó el stack y varias decisiones técnicas (canal de eventos del servidor,
-  adaptador de IA, contenedores) en el brief; la spec las expresa como comportamiento
-  observable y restricciones, y el detalle técnico se resuelve en el plan
-  (research.md, decisiones DV-VC-n).
-- 0 marcadores [NEEDS CLARIFICATION]: el brief del dueño resolvió las ambigüedades de
-  alcance (modo agencia, límites v1, seguridad de instancia pública).
+- O dono fixou o stack e várias decisões técnicas (canal de eventos do servidor,
+  adaptador de IA, contêineres) no brief; a spec as expressa como comportamento
+  observável e restrições, e o detalhe técnico é resolvido no plan
+  (research.md, decisões DV-VC-n).
+- 0 marcadores [NEEDS CLARIFICATION]: o brief do dono resolveu as ambiguidades de
+  escopo (modo agência, limites v1, segurança de instância pública).

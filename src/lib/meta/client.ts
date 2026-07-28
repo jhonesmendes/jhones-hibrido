@@ -1,9 +1,9 @@
 import { getEnv } from "@/lib/env";
 
 /**
- * Cliente propio de la Graph API de Meta (WhatsApp Cloud API).
- * Única frontera de salida hacia Meta (Constitución II): todo request pasa
- * por graphRequest. En self-test, META_GRAPH_BASE_URL apunta al wa-mock.
+ * Cliente próprio da Graph API da Meta (WhatsApp Cloud API).
+ * Única fronteira de saída para a Meta (Constituição II): toda request passa
+ * por graphRequest. No self-test, META_GRAPH_BASE_URL aponta para o wa-mock.
  */
 
 export class MetaApiError extends Error {
@@ -24,7 +24,7 @@ export class MetaApiError extends Error {
     this.details = opts.details;
   }
 
-  /** Token vencido/revocado → la conexión requiere re-autenticación. */
+  /** Token vencido/revogado → a conexão requer reautenticação. */
   get isAuthError(): boolean {
     return (
       this.status === 401 || this.code === 190 || this.type === "OAuthException"
@@ -66,7 +66,7 @@ export async function graphRequest<T>(
   try {
     json = text ? JSON.parse(text) : null;
   } catch {
-    // respuesta no-JSON: se conserva el texto crudo en details
+    // resposta não-JSON: o texto bruto é preservado em details
   }
 
   if (!res.ok) {
@@ -83,10 +83,10 @@ export async function graphRequest<T>(
 }
 
 /**
- * Normaliza el destinatario para el envío. Números móviles de México llegan
- * de Meta como `521` + 10 dígitos (13 en total); enviar con ese `1` extra
- * produce el error 131030 — se envía como `52` + 10 dígitos.
- * El wa_id almacenado NO se modifica; esto aplica solo al enviar.
+ * Normaliza o destinatário para o envio. Números móveis do México chegam
+ * da Meta como `521` + 10 dígitos (13 no total); enviar com esse `1` extra
+ * produz o erro 131030 — envia-se como `52` + 10 dígitos.
+ * O wa_id armazenado NÃO é modificado; isso se aplica só ao enviar.
  */
 export function normalizeRecipient(waId: string): string {
   if (/^521\d{10}$/.test(waId)) {

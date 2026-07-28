@@ -23,7 +23,7 @@ export function ContactPanel({
   onClose,
 }: {
   conversation: ConversationDto;
-  /** Aumenta con cada evento SSE relevante: dispara un refetch en vivo. */
+  /** Aumenta a cada evento SSE relevante: dispara um refetch ao vivo. */
   refreshKey?: number;
   onPatchConversation: (patch: {
     aiEnabled?: boolean;
@@ -38,8 +38,8 @@ export function ContactPanel({
   const [stages, setStages] = useState<StageDto[]>([]);
   const [currentStageId, setCurrentStageId] = useState<string | null>(null);
   const [leadId, setLeadId] = useState<string | null>(null);
-  // Estado global del agente: sin esto, el toggle "Respondiendo" mentiría
-  // cuando el agente aún no se ha configurado/encendido.
+  // Estado global do agente: sem isso, o toggle "Respondendo" mentiria
+  // quando o agente ainda não tiver sido configurado/ativado.
   const [agentEnabled, setAgentEnabled] = useState(false);
   const [aiConfigured, setAiConfigured] = useState(false);
 
@@ -49,7 +49,7 @@ export function ContactPanel({
   const aiActive =
     agentReady && conversation.aiEnabled && !conversation.handoffAt;
 
-  // Carga inicial (incluye notas): se re-ejecuta al cambiar de contacto.
+  // Carregamento inicial (inclui notas): reexecuta ao trocar de contato.
   const refetch = useCallback(async () => {
     const [detail, stagesRes, agentRes] = await Promise.all([
       fetch(`/api/contacts/${contactId}`).then((r) => (r.ok ? r.json() : null)),
@@ -67,8 +67,8 @@ export function ContactPanel({
     setNotesLoaded(true);
   }, [contactId]);
 
-  // Refetch en vivo (etapa/lead + estado del agente) SIN tocar las notas, para
-  // no pisar lo que el operador esté escribiendo. Lo dispara el SSE.
+  // Refetch ao vivo (etapa/lead + estado do agente) SEM tocar nas notas, para
+  // não sobrescrever o que o operador estiver digitando. Disparado pelo SSE.
   const refreshLive = useCallback(async () => {
     const [detail, agentRes] = await Promise.all([
       fetch(`/api/contacts/${contactId}`).then((r) => (r.ok ? r.json() : null)),
@@ -90,7 +90,7 @@ export function ContactPanel({
   }, [refetch]);
 
   useEffect(() => {
-    if (!notesLoaded) return; // la carga inicial ya trae el estado fresco
+    if (!notesLoaded) return; // o carregamento inicial já traz o estado atualizado
     void refreshLive();
   }, [refreshKey, notesLoaded, refreshLive]);
 
@@ -133,7 +133,7 @@ export function ContactPanel({
       </header>
 
       <div className="flex-1 overflow-y-auto">
-        {/* Contacto */}
+        {/* Contato */}
         <section className="border-b p-4">
           <div className="flex items-center gap-3">
             <ContactAvatar
@@ -234,7 +234,7 @@ export function ContactPanel({
               </div>
             )}
           </div>
-          {/* Canal de salida (modelo híbrido oficial / no oficial) */}
+          {/* Canal de saída (modelo híbrido oficial / não oficial) */}
           <div className="mt-3 rounded-md border bg-secondary/50 px-3 py-2.5">
             <p className="text-[13px] font-medium">Canal de envio</p>
             <p className="text-[11px] text-text-3">

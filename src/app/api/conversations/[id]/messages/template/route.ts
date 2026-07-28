@@ -1,6 +1,12 @@
 import { z } from "zod";
 import { apiError, parseBody, withAuth } from "@/lib/api";
+import {
+  requireChannelAccess,
+  requireConversationAccess,
+  requirePermission,
+} from "@/lib/auth/require-permission";
 import { SendError } from "@/server/inbox/send";
+import { getConversation } from "@/server/inbox/queries";
 import {
   sendTemplate,
   TemplateError,
@@ -20,6 +26,12 @@ export const POST = withAuth(async (session, req: Request, ctx: Params) => {
   const { id } = await ctx.params;
   const body = await parseBody(req, bodySchema);
   if (!body.ok) return body.response;
+
+  const row = await getConversation(session.organizationId, id);
+  if (!row) return apiError(404, "not_found", "Conversa não encontrada");
+  await requireConversationAccess(session, row.conversation.assignedTo);
+  await requirePermission(session, "conversations:reply");
+  await requireChannelAccess(session, "official", "send");
 
   try {
     const result = await sendTemplate({

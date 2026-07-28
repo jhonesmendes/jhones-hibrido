@@ -11,12 +11,12 @@ import { matchesHandoffIntent } from "@/server/ai/handoff";
 import { buildAgentSystemPrompt } from "@/server/ai/prompts";
 
 /**
- * Turno del agente (FR-021..FR-025).
+ * Turno do agente (FR-021..FR-025).
  *
- * Coalesce + lock in-process por conversación: ráfagas de mensajes → UNA
- * respuesta; nunca dos turnos simultáneos; lo que llega durante un turno
- * re-encola exactamente un turno más. Suficiente para el monolito de una
- * instancia (sin colas externas — Constitución II).
+ * Coalesce + lock in-process por conversa: rajadas de mensagens → UMA
+ * resposta; nunca dois turnos simultâneos; o que chega durante um turno
+ * reenfileira exatamente mais um turno. Suficiente para o monólito de uma
+ * instância (sem filas externas — Constituição II).
  */
 
 type CoalesceEntry = {
@@ -36,7 +36,7 @@ function coalesceMap(): Map<string, CoalesceEntry> {
   return globalForAgent.__agentCoalesce;
 }
 
-/** Punto de entrada con debounce (mensajes entrantes reales). */
+/** Ponto de entrada com debounce (mensagens recebidas reais). */
 export function scheduleAgentTurn(conversationId: string): void {
   const map = coalesceMap();
   const entry = map.get(conversationId) ?? {
@@ -47,7 +47,7 @@ export function scheduleAgentTurn(conversationId: string): void {
   map.set(conversationId, entry);
 
   if (entry.running) {
-    entry.pending = true; // se re-encola al terminar el turno actual
+    entry.pending = true; // reenfileira ao terminar o turno atual
     return;
   }
   if (entry.timer) clearTimeout(entry.timer);
@@ -66,7 +66,7 @@ async function executeTurn(conversationId: string): Promise<void> {
   try {
     await runAgentTurn(conversationId);
   } catch (err) {
-    console.error("[agente] turno falló:", err);
+    console.error("[agente] turno falhou:", err);
   } finally {
     entry.running = false;
     if (entry.pending) {
@@ -79,8 +79,8 @@ async function executeTurn(conversationId: string): Promise<void> {
 }
 
 /**
- * Ejecuta UN turno del agente ahora (el Laboratorio lo llama directo, con
- * debounce 0 y sin pasar por el coalesce).
+ * Executa UM turno do agente agora (o Laboratório o chama diretamente, com
+ * debounce 0 e sem passar pelo coalesce).
  */
 export async function runAgentTurn(conversationId: string): Promise<void> {
   if (!isAiConfigured()) return;
@@ -95,7 +95,7 @@ export async function runAgentTurn(conversationId: string): Promise<void> {
   if (!conversation) return;
   const organizationId = conversation.organizationId;
 
-  // Condiciones de silencio: handoff activo o IA apagada en la conversación.
+  // Condições de silêncio: handoff ativo ou IA desligada na conversa.
   if (conversation.handoffAt || !conversation.aiEnabled) return;
 
   const profileRows = await db
@@ -105,8 +105,8 @@ export async function runAgentTurn(conversationId: string): Promise<void> {
     .limit(1);
   const profile = profileRows[0];
   if (!profile) return;
-  // El toggle global aplica a conversaciones reales; el Laboratorio evalúa el
-  // comportamiento configurado aunque el agente aún no esté encendido.
+  // O toggle global se aplica a conversas reais; o Laboratório avalia o
+  // comportamento configurado mesmo que o agente ainda não esteja ligado.
   if (!conversation.isTest && !profile.enabled) return;
 
   const history = await db
@@ -119,13 +119,13 @@ export async function runAgentTurn(conversationId: string): Promise<void> {
   const lastInbound = [...history].reverse().find((m) => m.direction === "in");
   if (!lastInbound) return;
 
-  // Ventana cerrada: el agente JAMÁS envía texto libre → handoff 'ventana'.
+  // Janela fechada: o agente JAMAIS envia texto livre → handoff 'ventana'.
   if (!conversation.isTest && !isWindowOpen(conversation.lastInboundAt)) {
     await applyHandoff(conversationId, organizationId, "ventana");
     return;
   }
 
-  // Patrón de respaldo ANTES del LLM (FR-022).
+  // Padrão de respaldo ANTES do LLM (FR-022).
   if (lastInbound.text && matchesHandoffIntent(lastInbound.text)) {
     await applyHandoff(conversationId, organizationId, "cliente");
     return;
@@ -158,8 +158,8 @@ export async function runAgentTurn(conversationId: string): Promise<void> {
   const result = await chatJson(AgentAction, messages);
   if (!result.ok) {
     if (result.error === "not_configured") return;
-    // Fallo persistente del proveedor o salida imposible → escalar (FR-022).
-    console.error(`[agente] fallo del proveedor (raw): ${result.detail}`);
+    // Falha persistente do provedor ou saída impossível → escalar (FR-022).
+    console.error(`[agente] falha do provedor (raw): ${result.detail}`);
     await applyHandoff(conversationId, organizationId, "error");
     return;
   }
@@ -206,7 +206,7 @@ export async function runAgentTurn(conversationId: string): Promise<void> {
 
 type Conversation = typeof schema.conversation.$inferSelect;
 
-/** Entrega la respuesta: envío real o persistencia sandbox (is_test). */
+/** Entrega a resposta: envio real ou persistência sandbox (is_test). */
 async function deliverReply(
   conversation: Conversation,
   text: string
@@ -231,7 +231,7 @@ async function deliverReply(
   }
 }
 
-/** Mensaje saliente del sandbox: se persiste, JAMÁS toca la API (FR-031). */
+/** Mensagem enviada do sandbox: é persistida, JAMAIS toca a API (FR-031). */
 async function persistTestOutbound(
   conversation: Conversation,
   text: string

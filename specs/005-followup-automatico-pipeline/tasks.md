@@ -9,85 +9,85 @@ description: "Task list for Sprint 3: follow-up automático de pipeline"
 
 **Prerequisites**: plan.md, data-model.md, spec.md
 
-**Tests**: unitarios para la lógica pura de elegibilidad (quién debe recibir
-recordatorio / quién debe expirar); el resto vía self-test E2E en vivo.
+**Tests**: unitários para a lógica pura de elegibilidade (quem deve receber
+lembrete / quem deve expirar); o restante via self-test E2E ao vivo.
 
 ## Phase 1: Setup — Schema
 
-- [X] T001 Agregar tablas `pipelineFollowup` y `followupSend` en
-  `src/lib/db/schema.ts` (ver data-model.md) + prefijos `pfu`/`fus` en
+- [X] T001 Adicionar as tabelas `pipelineFollowup` e `followupSend` em
+  `src/lib/db/schema.ts` (ver data-model.md) + prefixos `pfu`/`fus` em
   `src/lib/db/ids.ts`.
-- [X] T002 `pnpm db:generate` → migración nueva; aplicar con `pnpm db:migrate`.
-- [X] T003 Agregar `FOLLOWUP_SCHEDULER_INTERVAL_MS` a `src/lib/env.ts` (default
-  razonable para prod, p. ej. 5 min) y documentar en `.env.example`.
+- [X] T002 `pnpm db:generate` → nova migração; aplicar com `pnpm db:migrate`.
+- [X] T003 Adicionar `FOLLOWUP_SCHEDULER_INTERVAL_MS` a `src/lib/env.ts` (default
+  razoável para prod, ex. 5 min) e documentar em `.env.example`.
 
 **Checkpoint**: schema migrado.
 
 ---
 
-## Phase 2: User Story 1 - Configurar el follow-up (Priority: P1) 🎯 MVP
+## Phase 2: User Story 1 - Configurar o follow-up (Priority: P1) 🎯 MVP
 
 - [X] T010 [US1] `src/server/pipeline/followup.ts`: `getFollowupConfig(orgId)`
-  (devuelve default si no existe fila), `saveFollowupConfig(orgId, input)`
-  (valida `enabled ⇒ triggerStageId && message`, 422 si falta), `serializeFollowup`.
+  (devolve default se não existir linha), `saveFollowupConfig(orgId, input)`
+  (valida `enabled ⇒ triggerStageId && message`, 422 se faltar), `serializeFollowup`.
 - [X] T011 [US1] `src/app/api/pipeline/followup/route.ts`: GET/PUT.
-- [X] T012 [US1] `src/components/pipeline/followup-manager.tsx`: modal con
-  toggle habilitado, selects de etapa gatillo/éxito/expiración (poblados desde
-  `stages` ya cargadas en `PipelineClient`), input de intervalo (número + unidad),
-  textarea de mensaje, checkbox "requiere documento".
-- [X] T013 [US1] Agregar botón "Follow-up automático" en `pipeline-client.tsx`
-  (junto a "Gerenciar etapas") que abre el modal.
+- [X] T012 [US1] `src/components/pipeline/followup-manager.tsx`: modal com
+  toggle habilitado, selects de etapa gatilho/sucesso/expiração (populados a partir de
+  `stages` já carregadas em `PipelineClient`), input de intervalo (número + unidade),
+  textarea de mensagem, checkbox "requer documento".
+- [X] T013 [US1] Adicionar botão "Follow-up automático" em `pipeline-client.tsx`
+  (junto a "Gerenciar etapas") que abre o modal.
 
-**Checkpoint**: configuración persistente y verificable en vivo.
+**Checkpoint**: configuração persistente e verificável ao vivo.
 
 ---
 
 ## Phase 3: User Story 2 - Disparo automático (Priority: P1)
 
 - [X] T020 [US2] `src/server/pipeline/followup-scheduler.ts`:
-  `runFollowupCycle()` — para cada organización con `enabled=true`: query de
-  leads elegibles en `triggerStageId` (ver data-model.md → Lógica de
-  elegibilidad, paso 1), `sendText(...)` por cada uno, inserta `followup_send`
-  (`sent` o `failed`), captura errores por lead sin abortar el ciclo (FR-009).
-- [X] T021 [US2] `startFollowupScheduler()` en el mismo archivo — `setInterval`
-  module-level con guardia anti-doble-registro vía `globalThis` (mismo patrón que
+  `runFollowupCycle()` — para cada organização com `enabled=true`: query de
+  leads elegíveis em `triggerStageId` (ver data-model.md → Lógica de
+  elegibilidade, passo 1), `sendText(...)` para cada um, insere `followup_send`
+  (`sent` ou `failed`), captura erros por lead sem abortar o ciclo (FR-009).
+- [X] T021 [US2] `startFollowupScheduler()` no mesmo arquivo — `setInterval`
+  module-level com guarda anti-registro-duplo via `globalThis` (mesmo padrão de
   `src/server/ai/pipeline.ts`).
-- [X] T022 [US2] Enganchar `startFollowupScheduler()` en
+- [X] T022 [US2] Encaixar `startFollowupScheduler()` em
   `src/instrumentation-node.ts` (junto a `cleanupOrphanRuns`).
-- [X] T023 [US2] [P] Tests unitarios de la función pura de elegibilidad (extraída
-  para poder testear sin BD) en `tests/unit/followup-eligibility.test.ts`: lead
-  inactivo más del intervalo → elegible; lead con recordatorio ya enviado desde su
-  última actividad → no elegible; lead que respondió después del recordatorio →
-  vuelve a ser elegible tras un nuevo período de inactividad.
+- [X] T023 [US2] [P] Testes unitários da função pura de elegibilidade (extraída
+  para poder testar sem BD) em `tests/unit/followup-eligibility.test.ts`: lead
+  inativo por mais tempo que o intervalo → elegível; lead com lembrete já enviado desde sua
+  última atividade → não elegível; lead que respondeu depois do lembrete →
+  volta a ser elegível após um novo período de inatividade.
 
-**Checkpoint**: recordatorio se dispara solo, sin duplicados.
+**Checkpoint**: lembrete dispara sozinho, sem duplicados.
 
 ---
 
-## Phase 4: User Story 3 - Documento mueve a éxito (Priority: P2)
+## Phase 4: User Story 3 - Documento move para sucesso (Priority: P2)
 
 - [X] T030 [US3] `src/server/pipeline/followup-document.ts`:
-  `onInboundMedia(organizationId, contactId)` — si `requiresDocument` y el lead
-  del contacto está en `triggerStageId`: mueve a `successStageId`, cancela
-  `followup_send` activo de ese lead.
-- [X] T031 [US3] Enganchar `onInboundMedia` en `ingestInboundMessage`
-  (`src/server/inbox/ingest.ts`) cuando `MEDIA_TYPES.has(input.type)` y
-  `!fromMe` (reutiliza el set ya definido para `hasServableMedia`).
+  `onInboundMedia(organizationId, contactId)` — se `requiresDocument` e o lead
+  do contato estiver em `triggerStageId`: move para `successStageId`, cancela
+  `followup_send` ativo desse lead.
+- [X] T031 [US3] Encaixar `onInboundMedia` em `ingestInboundMessage`
+  (`src/server/inbox/ingest.ts`) quando `MEDIA_TYPES.has(input.type)` e
+  `!fromMe` (reaproveita o set já definido para `hasServableMedia`).
 
-**Checkpoint**: documento mueve la tarjeta sin esperar al scheduler (SC-004).
+**Checkpoint**: documento move o cartão sem esperar o scheduler (SC-004).
 
 ---
 
-## Phase 5: User Story 4 - Expiración automática (Priority: P3)
+## Phase 5: User Story 4 - Expiração automática (Priority: P3)
 
-- [X] T040 [US4] Extender `runFollowupCycle()` (T020) con el paso 2 de
-  elegibilidad (expirar leads sin respuesta tras el plazo de gracia, ver
+- [X] T040 [US4] Estender `runFollowupCycle()` (T020) com o passo 2 de
+  elegibilidade (expirar leads sem resposta após o prazo de carência, ver
   data-model.md).
-- [X] T041 [US4] [P] Test unitario: lead con recordatorio vencido y sin actividad
-  nueva → expira; lead que respondió antes de vencer → no expira; sin
-  `expiredStageId` configurado → no mueve nada, no falla.
+- [X] T041 [US4] [P] Teste unitário: lead com lembrete vencido e sem atividade
+  nova → expira; lead que respondeu antes de vencer → não expira; sem
+  `expiredStageId` configurado → não move nada, não falha.
 
-**Checkpoint**: las 4 historias completas.
+**Checkpoint**: as 4 histórias completas.
 
 ---
 
@@ -95,54 +95,54 @@ recordatorio / quién debe expirar); el resto vía self-test E2E en vivo.
 
 - [X] T050 [P] Gate técnico completo: `pnpm typecheck && pnpm lint && pnpm build
   && pnpm test`.
-- [X] T051 Self-test E2E en vivo (Principio IX): configurar follow-up con
-  intervalo muy corto (segundos, vía override de test) para poder observar el
-  ciclo completo en una corrida razonable — recordatorio disparado, documento
-  simulado moviendo a éxito, expiración de un lead sin respuesta. Camino infeliz:
-  intentar habilitar sin etapa gatillo/mensaje.
+- [X] T051 Self-test E2E ao vivo (Princípio IX): configurar follow-up com
+  intervalo bem curto (segundos, via override de teste) para poder observar o
+  ciclo completo numa execução razoável — lembrete disparado, documento
+  simulado movendo para sucesso, expiração de um lead sem resposta. Caminho infeliz:
+  tentar habilitar sem etapa gatilho/mensagem.
 
 ## Dependencies & Execution Order
 
-- Setup (T001-T003) bloquea todo lo demás.
-- US1 (T010-T013) es prerrequisito de datos para US2/US3/US4 (necesitan una
-  configuración guardada para tener algo que evaluar).
-- US2 (T020-T023) y US3 (T030-T031) son independientes entre sí una vez que existe
-  la config — pueden implementarse en cualquier orden.
-- US4 (T040-T041) extiende el mismo `runFollowupCycle` de US2 — depende de T020.
-- Polish depende de las 4 historias completas.
+- Setup (T001-T003) bloqueia todo o resto.
+- US1 (T010-T013) é pré-requisito de dados para US2/US3/US4 (precisam de uma
+  configuração salva para ter algo a avaliar).
+- US2 (T020-T023) e US3 (T030-T031) são independentes entre si uma vez que existe
+  a config — podem ser implementadas em qualquer ordem.
+- US4 (T040-T041) estende o mesmo `runFollowupCycle` de US2 — depende de T020.
+- Polish depende das 4 histórias completas.
 
 ## Notes
 
-- El scheduler para el self-test E2E necesita un intervalo de revisión corto para
-  observar el ciclo sin esperar minutos reales — usar
-  `FOLLOWUP_SCHEDULER_INTERVAL_MS` bajo (p. ej. 2-3s) solo en el `.env` de
-  desarrollo del self-test, nunca como default de producción.
-- Reutiliza `sendText`, `lead.lastActivityAt`, el patrón `setInterval` +
-  `globalThis` del turno del agente, y el mismo `MEDIA_TYPES` de
-  `server/inbox/ingest.ts` — cero lógica duplicada.
+- O scheduler para o self-test E2E precisa de um intervalo de verificação curto
+  para observar o ciclo sem esperar minutos reais — usar
+  `FOLLOWUP_SCHEDULER_INTERVAL_MS` baixo (ex. 2-3s) apenas no `.env` de
+  desenvolvimento do self-test, nunca como default de produção.
+- Reaproveita `sendText`, `lead.lastActivityAt`, o padrão `setInterval` +
+  `globalThis` do turno do agente, e o mesmo `MEDIA_TYPES` de
+  `server/inbox/ingest.ts` — zero lógica duplicada.
 
-## Resultado del self-test E2E (2026-07-26)
+## Resultado do self-test E2E (2026-07-26)
 
-Ejecutado con Playwright real contra `pnpm dev` + Postgres local + wa-mock,
-`FOLLOWUP_SCHEDULER_INTERVAL_MS=3000` solo para esta corrida. 12/12
-aserciones en verde:
+Executado com Playwright real contra `pnpm dev` + Postgres local + wa-mock,
+`FOLLOWUP_SCHEDULER_INTERVAL_MS=3000` apenas para esta execução. 12/12
+asserções em verde:
 
-- **Edge case**: habilitar sin etapa gatillo/mensaje → 422.
-- **US1**: configurado y guardado desde la UI real; persiste al recargar.
-- **US3**: documento entrante movió el lead a la etapa de éxito en el mismo
-  ciclo de ingesta (sin esperar al scheduler, SC-004 confirmado).
-- **US2**: recordatorio disparado solo por el scheduler sobre un lead
-  backdateado 2h inactivo; cero duplicados en el ciclo siguiente (SC-003).
-- **US4**: backdateando de forma consistente `lead.lastActivityAt` y
-  `followup_send.sentAt` (mismo intervalo relativo, ambos más atrás en el
-  tiempo) para simular el plazo de gracia vencido, el lead expiró solo a la
+- **Edge case**: habilitar sem etapa gatilho/mensagem → 422.
+- **US1**: configurado e salvo a partir da UI real; persiste ao recarregar.
+- **US3**: documento recebido moveu o lead para a etapa de sucesso no mesmo
+  ciclo de ingestão (sem esperar o scheduler, SC-004 confirmado).
+- **US2**: lembrete disparado sozinho pelo scheduler sobre um lead
+  com data retroativa de 2h inativo; zero duplicados no ciclo seguinte (SC-003).
+- **US4**: retroagindo de forma consistente `lead.lastActivityAt` e
+  `followup_send.sentAt` (mesmo intervalo relativo, ambos mais atrás no
+  tempo) para simular o prazo de carência vencido, o lead expirou sozinho para a
   etapa configurada.
 
-Nota de depuración real encontrada durante el self-test: backdatear SOLO
-`sentAt` sin mover también `lastActivityAt` invierte la cronología e
-introduce un falso "el cliente respondió después" — hay que backdatear
-ambos timestamps de forma consistente al simular tiempo transcurrido para
+Nota de depuração real encontrada durante o self-test: retroagir SOMENTE
+`sentAt` sem mover também `lastActivityAt` inverte a cronologia e
+introduz um falso "o cliente respondeu depois" — é preciso retroagir
+ambos os timestamps de forma consistente ao simular tempo decorrido para
 esta feature.
 
-Gate técnico: typecheck + lint + build + test (115/115, incluye 14 tests
-nuevos de elegibilidad) en verde.
+Gate técnico: typecheck + lint + build + test (115/115, inclui 14 testes
+novos de elegibilidade) em verde.

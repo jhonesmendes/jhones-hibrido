@@ -24,7 +24,7 @@ export async function POST(req: Request) {
   const body = await parseBody(req, bodySchema);
   if (!body.ok) return body.response;
 
-  // Mantener coherente el estado del "panel de Meta" simulado (para el sync).
+  // Manter coerente o estado do "painel da Meta" simulado (para o sync).
   const state = getWaMockState();
   const tpl = state.templates.find(
     (t) => t.name === body.data.name && t.language === body.data.language

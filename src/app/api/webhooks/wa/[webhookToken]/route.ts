@@ -9,10 +9,10 @@ import { processMessagesValue } from "@/server/inbox/ingest";
 import { processTemplateStatusValue } from "@/server/whatsapp/template-events";
 
 /**
- * Webhook público de WhatsApp (contrato webhook.md).
- * Capa 1: el segmento [webhookToken] debe coincidir (si no → 404 sin efectos).
- * Capa 2: firma x-hub-signature-256 solo si META_APP_SECRET está configurado.
- * El POST siempre responde 200 tras validar; el procesamiento va en after().
+ * Webhook público do WhatsApp (contrato webhook.md).
+ * Camada 1: o segmento [webhookToken] deve coincidir (senão → 404 sem efeitos).
+ * Camada 2: assinatura x-hub-signature-256 somente se META_APP_SECRET estiver configurado.
+ * O POST sempre responde 200 após validar; o processamento vai em after().
  */
 export const dynamic = "force-dynamic";
 
@@ -53,7 +53,7 @@ export async function POST(req: Request, { params }: Params) {
   try {
     payload = JSON.parse(rawBody) as WebhookPayload;
   } catch {
-    // body ilegible: 200 igualmente (Meta reintenta y termina desactivando)
+    // body ilegível: 200 mesmo assim (Meta tenta de novo e acaba desativando)
     return Response.json({ received: true });
   }
 
@@ -61,7 +61,7 @@ export async function POST(req: Request, { params }: Params) {
     try {
       await processPayload(payload);
     } catch (err) {
-      console.error("[webhook] error procesando payload:", err);
+      console.error("[webhook] erro ao processar payload:", err);
     }
   });
 
@@ -77,7 +77,7 @@ async function processPayload(payload: WebhookPayload): Promise<void> {
       } else if (change.field === "message_template_status_update") {
         await processTemplateStatusValue(entry.id ?? null, change.value);
       }
-      // otros fields: ignorar sin error
+      // outros fields: ignorar sem erro
     }
   }
 }

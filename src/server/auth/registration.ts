@@ -2,9 +2,9 @@ import { count } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 
 /**
- * Registro público cerrado tras la primera organización (FR-060), salvo la
- * variable de escape ALLOW_SIGNUP=true. Las cuentas de equipo las crea el
- * propietario (bypass interno del gate).
+ * Registro público fechado após a primeira organização (FR-060), exceto pela
+ * variável de escape ALLOW_SIGNUP=true. As contas de equipe são criadas pelo
+ * proprietário (bypass interno do gate).
  */
 export async function isPublicSignupAllowed(): Promise<boolean> {
   if (process.env.ALLOW_SIGNUP === "true") return true;

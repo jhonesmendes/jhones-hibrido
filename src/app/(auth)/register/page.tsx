@@ -1,16 +1,29 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { signUp } from "@/lib/auth/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
+const ROLE_LABEL: Record<string, string> = {
+  admin: "Administrador",
+  agent: "Agente",
+};
+
 export default function RegisterPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const token = searchParams.get("token");
+
+  if (token) return <InviteRegisterForm token={token} />;
+  return <PublicRegisterForm onDone={() => { router.push("/inbox"); router.refresh(); }} />;
+}
+
+function PublicRegisterForm({ onDone }: { onDone: () => void }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -26,7 +39,7 @@ export default function RegisterPage() {
     if (err) {
       if (err.status === 403) {
         setError(
-          "O cadastro está fechado: esta instância já tem a sua organização. Peça acesso ao proprietário."
+          "O cadastro está fechado: esta instância já tem a sua organização. Peça um convite ao proprietário."
         );
       } else if (err.status === 429) {
         setError("Muitas tentativas. Aguarde alguns minutos.");
@@ -35,8 +48,7 @@ export default function RegisterPage() {
       }
       return;
     }
-    router.push("/inbox");
-    router.refresh();
+    onDone();
   }
 
   return (
@@ -92,6 +104,154 @@ export default function RegisterPage() {
               Entrar
             </Link>
           </p>
+        </form>
+      </CardContent>
+    </Card>
+  );
+}
+
+type InviteCheck =
+  | { status: "loading" }
+  | { status: "invalid"; message: string }
+  | { status: "valid"; email: string | null; role: string };
+
+function InviteRegisterForm({ token }: { token: string }) {
+  const router = useRouter();
+  const [check, setCheck] = useState<InviteCheck>({ status: "loading" });
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/auth/invite?token=${encodeURIComponent(token)}`)
+      .then(async (res) => {
+        const data = (await res.json().catch(() => null)) as
+          | { email: string | null; role: string }
+          | { error?: { message?: string } }
+          | null;
+        if (cancelled) return;
+        if (!res.ok) {
+          const message =
+            (data as { error?: { message?: string } } | null)?.error?.message ??
+            "Convite inválido";
+          setCheck({ status: "invalid", message });
+          return;
+        }
+        const valid = data as { email: string | null; role: string };
+        setCheck({ status: "valid", email: valid.email, role: valid.role });
+        if (valid.email) setEmail(valid.email);
+      })
+      .catch(() => {
+        if (!cancelled) setCheck({ status: "invalid", message: "Convite inválido" });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+    const res = await fetch("/api/auth/accept-invite", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ token, name, email, password }),
+    }).catch(() => null);
+    setLoading(false);
+    if (!res?.ok) {
+      const data = (await res?.json().catch(() => null)) as {
+        error?: { message?: string };
+      } | null;
+      setError(data?.error?.message ?? "Não foi possível criar a conta");
+      return;
+    }
+    router.push("/inbox");
+    router.refresh();
+  }
+
+  if (check.status === "loading") {
+    return (
+      <Card>
+        <CardContent className="py-8 text-center text-sm text-muted-foreground">
+          Verificando convite…
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (check.status === "invalid") {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Convite inválido</CardTitle>
+          <CardDescription>{check.message}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <p className="text-center text-sm text-muted-foreground">
+            Peça um novo link a quem administra esta instância, ou{" "}
+            <Link href="/login" className="text-primary hover:underline">
+              entre na sua conta
+            </Link>
+            .
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Aceitar convite</CardTitle>
+        <CardDescription>
+          Você foi convidado como {ROLE_LABEL[check.role] ?? check.role}.
+          Defina seu nome e senha para começar.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={onSubmit} className="space-y-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="invite-name">Seu nome</Label>
+            <Input
+              id="invite-name"
+              required
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="invite-email">E-mail</Label>
+            <Input
+              id="invite-email"
+              type="email"
+              autoComplete="email"
+              required
+              readOnly={!!check.email}
+              disabled={!!check.email}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="invite-password">Senha</Label>
+            <Input
+              id="invite-password"
+              type="password"
+              autoComplete="new-password"
+              required
+              minLength={8}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </div>
+          {error && <p className="text-sm text-destructive">{error}</p>}
+          <Button type="submit" className="w-full" disabled={loading}>
+            {loading ? "Criando…" : "Criar conta"}
+          </Button>
         </form>
       </CardContent>
     </Card>

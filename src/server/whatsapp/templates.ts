@@ -13,7 +13,7 @@ import { callGraphSend, SendError } from "@/server/inbox/send";
 import { serializeMessage } from "@/server/inbox/ingest";
 import type { WebhookValue } from "@/server/inbox/webhook";
 
-/** Errores tipados del servicio de plantillas → HTTP en la capa de API. */
+/** Erros tipados do serviço de modelos → HTTP na camada de API. */
 export class TemplateError extends Error {
   code:
     | "not_connected"
@@ -45,7 +45,7 @@ export function templateErrorStatus(err: TemplateError): number {
 
 const VARIABLE_REGEX = /\{\{\s*(\d+)\s*\}\}/g;
 
-/** Cuenta variables {{n}} y valida el acotamiento v1: máximo UNA y debe ser {{1}}. */
+/** Conta variáveis {{n}} e valida a limitação v1: no máximo UMA e deve ser {{1}}. */
 export function countVariables(body: string): number {
   const matches = [...body.matchAll(VARIABLE_REGEX)];
   return matches.length;
@@ -80,7 +80,7 @@ export function serializeTemplate(t: TemplateRow) {
   };
 }
 
-/** Crea la plantilla y la manda a aprobación de Meta (FR-050). */
+/** Cria o modelo e o envia para aprovação da Meta (FR-050). */
 export async function createTemplate(
   organizationId: string,
   input: { name: string; language: string; category: string; body: string }
@@ -119,7 +119,7 @@ export async function createTemplate(
               type: "BODY",
               text: input.body,
               ...(hasVariable
-                ? { example: { body_text: [["ejemplo"]] } }
+                ? { example: { body_text: [["exemplo"]] } }
                 : {}),
             },
           ],
@@ -186,9 +186,9 @@ function mapMetaStatus(
 }
 
 /**
- * Sincroniza estados desde Graph (`GET {waba}/message_templates`). Cubre el
- * modo agencia: los webhooks de plantillas NO siguen el override de callback,
- * así que el pull es la vía universal (DV-VC-04/DV-VC-15).
+ * Sincroniza estados a partir do Graph (`GET {waba}/message_templates`).
+ * Cobre o modo agência: os webhooks de modelos NÃO seguem o override de
+ * callback, então o pull é a via universal (DV-VC-04/DV-VC-15).
  */
 export async function syncTemplates(organizationId: string): Promise<number> {
   const creds = await getCredentialsByOrg(organizationId);
@@ -244,7 +244,7 @@ export async function syncTemplates(organizationId: string): Promise<number> {
   return updated;
 }
 
-/** Evento webhook `message_template_status_update` (modo directo, FR-050). */
+/** Evento webhook `message_template_status_update` (modo direto, FR-050). */
 export async function applyTemplateStatusEvent(
   wabaId: string | null,
   value: WebhookValue
@@ -275,7 +275,7 @@ export async function applyTemplateStatusEvent(
     );
 }
 
-/** Envía una plantilla APROBADA a una conversación (ventana cerrada, FR-051). */
+/** Envia um modelo APROVADO a uma conversa (janela fechada, FR-051). */
 export async function sendTemplate(input: {
   organizationId: string;
   conversationId: string;
@@ -323,7 +323,7 @@ export async function sendTemplate(input: {
   const row = rows[0];
   if (!row) throw new TemplateError("not_found", "Conversa não encontrada");
   if (row.conversation.isTest) {
-    // Aserción dura del sandbox (FR-031)
+    // Asserção rígida do sandbox (FR-031)
     throw new SendError(
       "sandbox_violation",
       "Conversa de teste do Laboratório: o envio real é proibido"

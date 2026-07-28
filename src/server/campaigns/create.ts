@@ -80,7 +80,7 @@ export async function createCampaign(
         "Só é possível criar uma campanha oficial com um modelo aprovado"
       );
     }
-    // Acotamiento v1 del proyecto: como máximo la variable {{1}}.
+    // Limitação v1 do projeto: no máximo a variável {{1}}.
     templateVariableKey = /\{\{\s*1\s*\}\}/.test(template.body) ? "1" : null;
   } else {
     if (!input.riskAcknowledged) {
@@ -129,9 +129,9 @@ export async function createCampaign(
       templateId: input.channel === "official" ? input.templateId : null,
       messageTemplate:
         input.channel === "unofficial" ? input.messageTemplate : null,
-      // Oficial: intervalo corto por defecto (cortesía con la Graph API,
-      // no hay guardrail duro como en el no oficial). No oficial: el que
-      // eligió el operador (FR-006, nunca fijo).
+      // Oficial: intervalo curto por padrão (cortesia com a Graph API,
+      // não há guardrail rígido como no não oficial). Não oficial: o que
+      // o operador escolheu (FR-006, nunca fixo).
       sendIntervalMs:
         input.channel === "unofficial" ? input.sendIntervalMs : 1000,
       status: "draft",
@@ -167,7 +167,7 @@ export async function createCampaign(
   };
 }
 
-/** Nombres de variables detectadas en un mensaje no oficial (para la UI del CSV). */
+/** Nomes das variáveis detectadas em uma mensagem não oficial (para a UI do CSV). */
 export function detectMessageVariables(messageTemplate: string): string[] {
   return extractVariables(messageTemplate);
 }

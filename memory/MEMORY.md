@@ -9,3 +9,5 @@
 - [Motor Baileys nativo (Sprint 4)](sprint4_baileys_native_engine.md) — substituiu Evolution/WPPConnect/WAHA por engine in-process; auth-state cifrado, allowBuilds, serverExternalPackages
 - [Direção do projeto: produto multi-cliente](project_direction_multitenant_client_product.md) — vira produto sob encomenda, feature flags por cliente via painel super-admin é passo FUTURO, não agora
 - [Deploy do dono: docker compose direto, sem CI](deploy_workflow_docker_compose.md) — `docker compose build app && up -d app` no próprio ambiente do dono; sempre verificar `docker inspect --format '{{.Created}}'` antes de assumir que um fix já está no ar
+- [Varredura de tradução pt-BR](pt_br_translation_sweep.md) — workflow de 12 agentes traduziu src/+specs/+CLAUDE.md; regra "não tocar tests/" causou 1 bug real (tenant.test.ts); testTimeout subiu por causa do peso da árvore do Baileys
+- [Controle de acesso e segurança (Sprint 007)](sprint007_access_control.md) — roles owner/admin/agent, permissões por membro, emenda de constituição p/ SMTP opcional (v2.1.0); MVP (US1+US2) verificado ao vivo via API sem navegador disponível

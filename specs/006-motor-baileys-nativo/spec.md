@@ -1,4 +1,4 @@
-# Feature Specification: Motor WhatsApp no oficial nativo (Baileys)
+# Feature Specification: Motor WhatsApp não oficial nativo (Baileys)
 
 **Feature Branch**: `006-motor-baileys-nativo`
 
@@ -6,181 +6,181 @@
 
 **Status**: Draft
 
-**Input**: User description: "La aplicación está usando Evolution, WPPConnect y WAHA — herramientas de terceros. Vamos a cambiar esto para que sea interno, sin terceros: el propio Vocero será el motor completo de la API no oficial. La pantalla de conexión tiene que rehacerse para atender el propio motor. Así evitamos delay o problemas de traba."
+**Input**: User description: "A aplicação está usando Evolution, WPPConnect e WAHA — ferramentas de terceiros. Vamos mudar isso para que seja interno, sem terceiros: o próprio Vocero será o motor completo da API não oficial. A tela de conexão precisa ser refeita para atender o próprio motor. Assim evitamos delay ou problemas de travamento."
 
 ## User Scenarios & Testing *(mandatory)*
 
-### User Story 1 - Conectar el número no oficial sin un gateway externo (Priority: P1)
+### User Story 1 - Conectar o número não oficial sem um gateway externo (Priority: P1)
 
-Como operador, quiero conectar mi número de WhatsApp no oficial escaneando un QR
-directamente en Vocero, sin instalar ni configurar un gateway externo (Evolution,
-WPPConnect o WAHA), para tener un solo sistema del que depender.
+Como operador, quero conectar meu número de WhatsApp não oficial escaneando um QR
+diretamente no Vocero, sem instalar nem configurar um gateway externo (Evolution,
+WPPConnect ou WAHA), para ter um único sistema do qual depender.
 
-**Why this priority**: Es la puerta de entrada a todo lo demás — sin conexión no
-hay canal no oficial que usar.
+**Why this priority**: É a porta de entrada para tudo o mais — sem conexão não
+há canal não oficial para usar.
 
-**Independent Test**: Abrir Configurações → Canal não oficial, iniciar la
-conexión, ver el QR generado por el propio Vocero, escanearlo con un WhatsApp
-real, y verificar que el estado pasa a "Conectado" con el número mostrado, sin
-requerir ninguna URL/instancia/API key de terceros.
+**Independent Test**: Abrir Configurações → Canal não oficial, iniciar a
+conexão, ver o QR gerado pelo próprio Vocero, escaneá-lo com um WhatsApp
+real, e verificar que o estado passa para "Conectado" com o número exibido, sem
+exigir nenhuma URL/instância/API key de terceiros.
 
 **Acceptance Scenarios**:
 
-1. **Given** ningún canal no oficial conectado, **When** el operador abre la
-   pantalla de conexión, **Then** ve un botón para iniciar la conexión — sin
-   campos de proveedor, URL de gateway, instancia o API key.
-2. **Given** la conexión iniciada, **When** el motor genera el QR, **Then** la UI
-   lo muestra en vivo (sin recargar la página) en pocos segundos.
-3. **Given** el QR escaneado con un WhatsApp real, **When** el pareo se
-   completa, **Then** el estado pasa a "Conectado" y muestra el número, en vivo.
-4. **Given** un canal ya conectado, **When** el operador elige desconectar,
-   **Then** la sesión se cierra y se borra de forma que reconectar exige un QR
-   nuevo (no queda una sesión fantasma).
+1. **Given** nenhum canal não oficial conectado, **When** o operador abre a
+   tela de conexão, **Then** ele vê um botão para iniciar a conexão — sem
+   campos de provedor, URL de gateway, instância ou API key.
+2. **Given** a conexão iniciada, **When** o motor gera o QR, **Then** a UI
+   o exibe ao vivo (sem recarregar a página) em poucos segundos.
+3. **Given** o QR escaneado com um WhatsApp real, **When** o pareamento é
+   concluído, **Then** o estado passa para "Conectado" e mostra o número, ao vivo.
+4. **Given** um canal já conectado, **When** o operador escolhe desconectar,
+   **Then** a sessão é encerrada e apagada de forma que reconectar exige um QR
+   novo (não fica uma sessão fantasma).
 
 ---
 
-### User Story 2 - Enviar y recibir mensajes de texto por el motor nativo (Priority: P1)
+### User Story 2 - Enviar e receber mensagens de texto pelo motor nativo (Priority: P1)
 
-Como negocio con el canal no oficial conectado, quiero que enviar y recibir
-mensajes de texto por WhatsApp funcione exactamente igual que antes (misma
-bandeja, mismo pipeline, mismos leads), pero sin pasar por un servidor gateway
-intermedio.
+Como negócio com o canal não oficial conectado, quero que enviar e receber
+mensagens de texto por WhatsApp funcione exatamente como antes (mesma
+caixa de entrada, mesmo pipeline, mesmos leads), mas sem passar por um servidor gateway
+intermediário.
 
-**Why this priority**: Es el propósito del canal — sin esto, conectar (US1) no
-sirve de nada.
+**Why this priority**: É o propósito do canal — sem isso, conectar (US1) não
+serve para nada.
 
-**Independent Test**: Con el canal conectado, enviar un mensaje de texto desde
-la bandeja a un número real y verificar que llega al WhatsApp del destinatario;
-responder desde ese WhatsApp real y verificar que el mensaje aparece en la
-bandeja de Vocero en tiempo real, con el contacto/conversación/lead creados
-igual que hoy.
+**Independent Test**: Com o canal conectado, enviar uma mensagem de texto a partir
+da caixa de entrada para um número real e verificar que chega ao WhatsApp do destinatário;
+responder a partir desse WhatsApp real e verificar que a mensagem aparece na
+caixa de entrada do Vocero em tempo real, com o contato/conversa/lead criados
+igual a hoje.
 
 **Acceptance Scenarios**:
 
-1. **Given** una conversación cuyo canal activo es "no oficial", **When** el
-   operador envía un mensaje de texto, **Then** sale por el motor nativo — sin
-   llamar a ningún servicio externo.
-2. **Given** un mensaje de texto entrante de un contacto por el número no
-   oficial, **When** el motor lo recibe, **Then** se ingesta con el mismo
-   pipeline idempotente que ya existe (contacto, conversación, lead, turno del
-   agente si aplica) — igual que si viniera de cualquier otro canal.
-3. **Given** una conversación de prueba del Laboratorio (`is_test`), **When**
-   se intenta enviar por este canal, **Then** el envío real sigue prohibido
-   (mismo guardrail de sandbox ya existente).
-4. **Given** el canal no está conectado, **When** se intenta enviar, **Then**
-   el sistema lo rechaza con un mensaje claro (mismo comportamiento que hoy
-   ante "canal no conectado").
+1. **Given** uma conversa cujo canal ativo é "não oficial", **When** o
+   operador envia uma mensagem de texto, **Then** ela sai pelo motor nativo — sem
+   chamar nenhum serviço externo.
+2. **Given** uma mensagem de texto recebida de um contato pelo número não
+   oficial, **When** o motor a recebe, **Then** ela é ingerida com o mesmo
+   pipeline idempotente já existente (contato, conversa, lead, turno do
+   agente se aplicável) — igual a se viesse de qualquer outro canal.
+3. **Given** uma conversa de teste do Laboratório (`is_test`), **When**
+   se tenta enviar por esse canal, **Then** o envio real continua proibido
+   (mesmo guardrail de sandbox já existente).
+4. **Given** o canal não está conectado, **When** se tenta enviar, **Then**
+   o sistema rejeita com uma mensagem clara (mesmo comportamento de hoje
+   diante de "canal não conectado").
 
 ---
 
-### User Story 3 - El motor se reconecta solo al reiniciar el servidor (Priority: P2)
+### User Story 3 - O motor reconecta sozinho ao reiniciar o servidor (Priority: P2)
 
-Como negocio que ya conectó su número, quiero que un reinicio del servidor (un
-deploy, por ejemplo) no me obligue a escanear el QR de nuevo, para no depender
-de que alguien esté mirando la pantalla cada vez que la app se reinicia.
+Como negócio que já conectou seu número, quero que um reinício do servidor (um
+deploy, por exemplo) não me obrigue a escanear o QR de novo, para não depender
+de alguém ficar olhando a tela toda vez que o app reiniciar.
 
-**Why this priority**: Sin esto, cada deploy rompería la conexión — inaceptable
-para el uso real de un negocio, pero no bloquea demostrar US1/US2 primero.
+**Why this priority**: Sem isso, cada deploy quebraria a conexão — inaceitável
+para o uso real de um negócio, mas não bloqueia demonstrar US1/US2 primeiro.
 
-**Independent Test**: Con el canal conectado, reiniciar el proceso del servidor
-y verificar que, sin intervención manual, el estado vuelve a "Conectado" (o
-"Conectando…" brevemente) sin pedir un QR nuevo.
+**Independent Test**: Com o canal conectado, reiniciar o processo do servidor
+e verificar que, sem intervenção manual, o estado volta a "Conectado" (ou
+"Conectando…" brevemente) sem pedir um QR novo.
 
 **Acceptance Scenarios**:
 
-1. **Given** una organización con sesión ya pareada, **When** el servidor
-   arranca, **Then** el motor intenta restablecer esa sesión automáticamente.
-2. **Given** la sesión ya no es válida en WhatsApp (el operador la cerró desde
-   el celular), **When** el servidor intenta restablecerla, **Then** el estado
-   queda "Desconectado" con claridad (no se queda "conectando" para siempre).
+1. **Given** uma organização com sessão já pareada, **When** o servidor
+   inicia, **Then** o motor tenta restabelecer essa sessão automaticamente.
+2. **Given** a sessão já não é válida no WhatsApp (o operador a encerrou pelo
+   celular), **When** o servidor tenta restabelecê-la, **Then** o estado
+   fica "Desconectado" com clareza (não fica "conectando" para sempre).
 
 ### Edge Cases
 
-- Dos organizaciones distintas conectan números distintos al mismo tiempo: cada
-  una tiene su propia sesión y socket, sin cruzarse (multi-tenant real).
-- El operador cierra la pestaña mientras el QR está en pantalla: el motor sigue
-  esperando el pareo del lado del servidor; al volver a abrir la pantalla, ve el
-  mismo QR vigente o uno nuevo si venció.
-- Mensajes de grupos o de difusión (broadcast) entrantes: se ignoran (este
-  producto es 1 negocio → sus contactos, no grupos — mismo alcance que ya
-  aplican los adaptadores actuales).
-- Mensaje de medios (imagen, audio, documento) entrante: se descarga, descifra
-  y guarda (ver Assumptions) — se previsualiza igual que el canal oficial.
-- Fallo de red hacia los servidores de WhatsApp durante el envío: se reporta
-  como fallo de envío normal (mismo tipo de error ya manejado), no cuelga el
-  proceso ni al resto de las organizaciones.
+- Duas organizações distintas conectam números distintos ao mesmo tempo: cada
+  uma tem sua própria sessão e socket, sem se cruzarem (multi-tenant real).
+- O operador fecha a aba enquanto o QR está na tela: o motor continua
+  esperando o pareamento do lado do servidor; ao reabrir a tela, vê o
+  mesmo QR vigente ou um novo se tiver vencido.
+- Mensagens de grupos ou de difusão (broadcast) recebidas: são ignoradas (este
+  produto é 1 negócio → seus contatos, não grupos — mesmo escopo já aplicado
+  pelos adaptadores atuais).
+- Mensagem de mídia (imagem, áudio, documento) recebida: é baixada, decifrada
+  e salva (ver Assumptions) — é pré-visualizada igual ao canal oficial.
+- Falha de rede com os servidores do WhatsApp durante o envio: é reportada
+  como falha de envio normal (mesmo tipo de erro já tratado), não trava o
+  processo nem o restante das organizações.
 
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
 
-- **FR-001**: El sistema MUST permitir iniciar la conexión del canal no
-  oficial sin pedir URL de gateway, proveedor, instancia ni API key de
-  terceros — solo la acción de conectar.
-- **FR-002**: El sistema MUST generar el código QR de pareo por sí mismo
-  (conexión directa al protocolo de WhatsApp) y mostrarlo en la UI en vivo.
-- **FR-003**: El estado de conexión (desconectado/conectando/conectado + número)
-  MUST reflejarse en la UI en tiempo real, sin que el operador tenga que
-  recargar la página.
-- **FR-004**: El sistema MUST persistir la sesión pareada de forma que
-  sobreviva a un reinicio del proceso, cifrada en reposo (mismo estándar que
-  el resto de credenciales del proyecto).
-- **FR-005**: El envío y la recepción de mensajes de texto por el canal no
-  oficial MUST funcionar sin depender de ningún servidor o servicio externo —
-  todo dentro del propio proceso de Vocero.
-- **FR-006**: La recepción de mensajes MUST reutilizar el mismo pipeline de
-  ingesta idempotente ya existente (contacto/conversación/lead/agente), sin
-  duplicar esa lógica.
-- **FR-007**: El guardrail de sandbox (conversaciones `is_test` jamás tocan un
-  canal real) MUST seguir aplicando sin excepción.
-- **FR-008**: El sistema MUST intentar restablecer automáticamente, al
-  arrancar el proceso, la sesión de cada organización que ya estaba conectada.
-- **FR-009**: Desconectar MUST cerrar la sesión de forma completa (no deja
-  reconectar sin un QR nuevo).
-- **FR-010**: Todo el código de los adaptadores de terceros (Evolution,
-  WPPConnect, WAHA) y su webhook público MUST eliminarse del proyecto — no
-  queda como opción alternativa ni como fallback.
+- **FR-001**: O sistema MUST permitir iniciar a conexão do canal não
+  oficial sem pedir URL de gateway, provedor, instância nem API key de
+  terceiros — apenas a ação de conectar.
+- **FR-002**: O sistema MUST gerar o código QR de pareamento por si mesmo
+  (conexão direta ao protocolo do WhatsApp) e exibi-lo na UI ao vivo.
+- **FR-003**: O estado de conexão (desconectado/conectando/conectado + número)
+  MUST refletir-se na UI em tempo real, sem que o operador precise
+  recarregar a página.
+- **FR-004**: O sistema MUST persistir a sessão pareada de forma que
+  sobreviva a um reinício do processo, cifrada em repouso (mesmo padrão de
+  todas as demais credenciais do projeto).
+- **FR-005**: O envio e o recebimento de mensagens de texto pelo canal não
+  oficial MUST funcionar sem depender de nenhum servidor ou serviço externo —
+  tudo dentro do próprio processo do Vocero.
+- **FR-006**: O recebimento de mensagens MUST reaproveitar o mesmo pipeline de
+  ingestão idempotente já existente (contato/conversa/lead/agente), sem
+  duplicar essa lógica.
+- **FR-007**: O guardrail de sandbox (conversas `is_test` nunca tocam um
+  canal real) MUST continuar valendo sem exceção.
+- **FR-008**: O sistema MUST tentar restabelecer automaticamente, ao
+  iniciar o processo, a sessão de cada organização que já estava conectada.
+- **FR-009**: Desconectar MUST encerrar a sessão por completo (não deixa
+  reconectar sem um QR novo).
+- **FR-010**: Todo o código dos adaptadores de terceiros (Evolution,
+  WPPConnect, WAHA) e seu webhook público MUST ser eliminado do projeto — não
+  fica como opção alternativa nem como fallback.
 
 ### Key Entities
 
-- **Sesión del canal no oficial** (reemplaza al "canal" actual): una por
-  organización; credenciales de pareo con WhatsApp cifradas en reposo, número
+- **Sessão do canal não oficial** (substitui o "canal" atual): uma por
+  organização; credenciais de pareamento com o WhatsApp cifradas em repouso, número
   conectado, estado.
 
 ## Success Criteria *(mandatory)*
 
 ### Measurable Outcomes
 
-- **SC-001**: Un operador puede llegar de "sin canal no oficial" a "conectado
-  y enviando mensajes" sin instalar ni configurar ningún software adicional
-  fuera de Vocero.
-- **SC-002**: El estado de conexión en la UI refleja la realidad dentro de 1-2
-  segundos de un cambio real (conectado/desconectado/QR nuevo) — no minutos.
-- **SC-003**: Un reinicio del servidor no exige volver a escanear el QR para
-  una sesión que seguía válida en WhatsApp.
-- **SC-004**: Cero llamadas de red salientes hacia un gateway de terceros
-  (Evolution/WPPConnect/WAHA) en todo el código del canal no oficial.
+- **SC-001**: Um operador consegue ir de "sem canal não oficial" a "conectado
+  e enviando mensagens" sem instalar nem configurar nenhum software adicional
+  fora do Vocero.
+- **SC-002**: O estado de conexão na UI reflete a realidade dentro de 1-2
+  segundos de uma mudança real (conectado/desconectado/QR novo) — não minutos.
+- **SC-003**: Um reinício do servidor não exige escanear o QR novamente para
+  uma sessão que continuava válida no WhatsApp.
+- **SC-004**: Zero chamadas de rede de saída a um gateway de terceiros
+  (Evolution/WPPConnect/WAHA) em todo o código do canal não oficial.
 
 ## Assumptions
 
-- **Descarga de media (revisado tras el self-test con WhatsApp real)**: la
-  media entrante (imagen/audio/video/documento/sticker) por el canal no
-  oficial se descifra vía Baileys al ingestar y se guarda en Postgres
-  (tabla `message_media`, base64 — autohospedado, sin S3/R2 por la
-  constitución de soberanía) en vez de solo el tipo/caption sin
-  previsualización. `/api/media/[id]` sirve esos bytes igual que ya servía
-  la URL del CDN de Meta para el canal oficial. Media saliente (enviar
-  imagen/audio desde el composer) sigue fuera de alcance — el composer solo
-  envía texto.
-- **Reemplazo completo, sin período de convivencia**: no se mantiene Evolution/
-  WPPConnect/WAHA como alternativa ni como fallback — la instrucción del dueño
-  fue explícita ("sin terceros", "motor completo"). No hay datos de producción
-  reales que migrar (instancia de desarrollo).
-- **Verificación humana obligatoria e insustituible**: escanear el QR con un
-  WhatsApp real y confirmar el intercambio de mensajes de verdad NO puede
-  automatizarse en este entorno (no hay un "mock" posible para el protocolo
-  real de WhatsApp, a diferencia de la Cloud API oficial que sí tiene wa-mock).
-  Todo lo demás (persistencia de sesión, ciclo de vida de conexión, ruteo de
-  envío/recepción hacia el pipeline existente) se verifica con pruebas
-  automatizadas; el pareo real queda marcado como pendiente de verificación
-  humana (Principio V/IX).
+- **Download de mídia (revisado após o self-test com WhatsApp real)**: a
+  mídia recebida (imagem/áudio/vídeo/documento/sticker) pelo canal não
+  oficial é decifrada via Baileys ao ser ingerida e é salva no Postgres
+  (tabela `message_media`, base64 — self-hosted, sem S3/R2 pela
+  constituição de soberania) em vez de apenas o tipo/caption sem
+  pré-visualização. `/api/media/[id]` serve esses bytes igual a como já servia
+  a URL do CDN da Meta para o canal oficial. Mídia de saída (enviar
+  imagem/áudio a partir do composer) continua fora de escopo — o composer só
+  envia texto.
+- **Substituição completa, sem período de convivência**: não se mantém Evolution/
+  WPPConnect/WAHA como alternativa nem como fallback — a instrução do dono
+  foi explícita ("sem terceiros", "motor completo"). Não há dados de produção
+  reais para migrar (instância de desenvolvimento).
+- **Verificação humana obrigatória e insubstituível**: escanear o QR com um
+  WhatsApp real e confirmar a troca de mensagens de verdade NÃO pode ser
+  automatizado neste ambiente (não há um "mock" possível para o protocolo
+  real do WhatsApp, diferente da Cloud API oficial que tem wa-mock).
+  Tudo o mais (persistência de sessão, ciclo de vida de conexão, roteamento de
+  envio/recebimento para o pipeline existente) é verificado com testes
+  automatizados; o pareamento real fica marcado como pendente de verificação
+  humana (Princípio V/IX).

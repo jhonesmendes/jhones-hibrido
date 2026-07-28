@@ -1,11 +1,11 @@
 import { z } from "zod";
 
 /**
- * Validación central del entorno.
+ * Validação central do ambiente.
  *
- * Lazy + memoizada: se evalúa en el primer uso en runtime, nunca al importar.
- * Durante `next build` no hay secretos (la imagen se construye sin ellos), así
- * que en esa fase se aceptan placeholders — los valores reales llegan al boot.
+ * Lazy + memoizada: é avaliada no primeiro uso em runtime, nunca ao importar.
+ * Durante o `next build` não há segredos (a imagem é construída sem eles),
+ * então nessa fase placeholders são aceitos — os valores reais chegam no boot.
  */
 
 const envSchema = z.object({
@@ -16,7 +16,7 @@ const envSchema = z.object({
     .string()
     .refine((v) => Buffer.from(v, "base64").length === 32, {
       message:
-        "ENCRYPTION_KEY debe ser 32 bytes en base64 (genera con: openssl rand -base64 32)",
+        "ENCRYPTION_KEY deve ter 32 bytes em base64 (gere com: openssl rand -base64 32)",
     }),
   META_WEBHOOK_VERIFY_TOKEN: z.string().min(8),
   META_APP_SECRET: z.string().optional(),
@@ -52,8 +52,8 @@ let cached: Env | null = null;
 export function getEnv(): Env {
   if (cached) return cached;
   const isBuild = process.env.NEXT_PHASE === "phase-production-build";
-  // Los strings vacíos cuentan como ausentes: los compose/paneles suelen
-  // inyectar VAR="" para opcionales y eso debe activar los defaults.
+  // Strings vazias contam como ausentes: os compose/painéis costumam
+  // injetar VAR="" para opcionais e isso deve ativar os valores padrão.
   const source = isBuild
     ? { ...BUILD_PLACEHOLDERS, ...stripEmpty(process.env) }
     : stripEmpty(process.env);
@@ -63,8 +63,8 @@ export function getEnv(): Env {
       .map((i) => `${i.path.join(".")}: ${i.message}`)
       .join("\n  ");
     throw new Error(
-      `Variables de entorno inválidas o faltantes:\n  ${missing}\n` +
-        "Revisa .env.example para la guía de cada variable."
+      `Variáveis de ambiente inválidas ou faltando:\n  ${missing}\n` +
+        "Consulte o .env.example para o guia de cada variável."
     );
   }
   cached = parsed.data;
@@ -79,7 +79,7 @@ function stripEmpty(env: NodeJS.ProcessEnv): Record<string, string> {
   return out;
 }
 
-/** true si el entorno de pruebas interno (mocks) está habilitado y NO es producción. */
+/** true se o ambiente de testes interno (mocks) está habilitado e NÃO é produção. */
 export function isMockEnabled(): boolean {
   return (
     process.env.WA_MOCK_ENABLED === "true" &&
@@ -87,7 +87,7 @@ export function isMockEnabled(): boolean {
   );
 }
 
-/** true si hay proveedor de IA configurado (token presente y no vacío). */
+/** true se há provedor de IA configurado (token presente e não vazio). */
 export function isAiConfigured(): boolean {
   const token = process.env.OPENROUTER_API_TOKEN;
   return typeof token === "string" && token.trim().length > 0;

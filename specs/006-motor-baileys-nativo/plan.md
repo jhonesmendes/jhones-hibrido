@@ -1,4 +1,4 @@
-# Implementation Plan: Motor WhatsApp no oficial nativo (Baileys)
+# Implementation Plan: Motor WhatsApp não oficial nativo (Baileys)
 
 **Branch**: `006-motor-baileys-nativo` | **Date**: 2026-07-27 | **Spec**: [spec.md](spec.md)
 
@@ -6,82 +6,82 @@
 
 ## Summary
 
-Reemplaza por completo la capa de adaptadores de gateway (`src/lib/unofficial/*`,
-webhook público, columnas de proveedor/URL/API-key) por un motor propio que habla
-el protocolo de WhatsApp Web directamente (`@whiskeysockets/baileys`), corriendo
-in-process. Sin webhook: los eventos de mensajes/conexión llegan por callbacks del
-socket dentro del mismo proceso. La sesión pareada (credenciales + claves de
-Signal) se persiste cifrada en Postgres — mismo estándar de cifrado que el resto
-del proyecto — para sobrevivir reinicios (US3). El estado de conexión se expone
-por el mismo bus SSE ya usado por bandeja/Laboratorio/Campañas, eliminando el
-polling actual de 5s.
+Substitui por completo a camada de adaptadores de gateway (`src/lib/unofficial/*`,
+webhook público, colunas de provedor/URL/API-key) por um motor próprio que fala
+o protocolo do WhatsApp Web diretamente (`@whiskeysockets/baileys`), rodando
+in-process. Sem webhook: os eventos de mensagens/conexão chegam por callbacks do
+socket dentro do mesmo processo. A sessão pareada (credenciais + chaves de
+Signal) é persistida cifrada no Postgres — mesmo padrão de cifragem do restante
+do projeto — para sobreviver a reinicializações (US3). O estado de conexão é exposto
+pelo mesmo bus SSE já usado pela caixa de entrada/Laboratório/Campanhas, eliminando o
+polling atual de 5s.
 
 ## Technical Context
 
-**Language/Version**: TypeScript 5.7, Node.js (runtime `nodejs` explícito en las
-rutas afectadas — Baileys usa APIs de Node no disponibles en edge).
+**Language/Version**: TypeScript 5.7, Node.js (runtime `nodejs` explícito nas
+rotas afetadas — Baileys usa APIs do Node não disponíveis no edge).
 
-**Primary Dependencies**: `@whiskeysockets/baileys` (nueva — conexión directa,
-sin servidor intermedio) + `qrcode` (nueva — solo para convertir el string de QR
-en una imagen PNG que ya sabemos mostrar). Sin dependencias de red hacia
-terceros: Baileys conecta directo a los servidores de WhatsApp.
+**Primary Dependencies**: `@whiskeysockets/baileys` (nova — conexão direta,
+sem servidor intermediário) + `qrcode` (nova — só para converter a string do QR
+numa imagem PNG que já sabemos exibir). Sem dependências de rede para
+terceiros: o Baileys conecta direto aos servidores do WhatsApp.
 
-**Storage**: PostgreSQL vía Drizzle. La tabla `unofficial_channel` se reescribe
-(migración): fuera `provider`/`baseUrl`/`instanceName`/`apiKey*`/`webhookToken`;
-dentro `authStateCipher/Iv/Tag` (blob JSON cifrado con las credenciales +
-almacén de claves de Baileys).
+**Storage**: PostgreSQL via Drizzle. A tabela `unofficial_channel` é reescrita
+(migração): fora `provider`/`baseUrl`/`instanceName`/`apiKey*`/`webhookToken`;
+dentro `authStateCipher/Iv/Tag` (blob JSON cifrado com as credenciais +
+armazém de chaves do Baileys).
 
-**Testing**: Vitest para la lógica de normalización de mensajes entrantes/estado
-(pura, sin socket real). El pareo real (QR + WhatsApp real) NO es automatizable
-— ver spec.md → Assumptions; queda como verificación humana explícita.
+**Testing**: Vitest para a lógica de normalização de mensagens recebidas/estado
+(pura, sem socket real). O pareamento real (QR + WhatsApp real) NÃO é automatizável
+— ver spec.md → Assumptions; fica como verificação humana explícita.
 
-**Target Platform**: Node self-hosted, proceso único de larga duración (mismo
-supuesto que Campañas/Follow-up: nada de esto funciona en serverless).
+**Target Platform**: Node self-hosted, processo único de longa duração (mesma
+suposição de Campanhas/Follow-up: nada disso funciona em serverless).
 
-**Constraints**: Un socket activo por organización conectada, viviendo en memoria
-del proceso (`Map` module-level) — se reconstruye al reiniciar desde la sesión
-persistida (US3). Sin S3/almacenamiento de objetos (Principio II) — por eso
-media queda fuera de esta iteración (necesitaría persistir bytes o reintentar
-descarga bajo demanda contra un socket que podría no seguir vivo).
+**Constraints**: Um socket ativo por organização conectada, vivendo em memória
+do processo (`Map` module-level) — é reconstruído ao reiniciar a partir da sessão
+persistida (US3). Sem S3/armazenamento de objetos (Princípio II) — por isso
+mídia fica fora desta iteração (precisaria persistir bytes ou tentar novamente a
+descarga sob demanda contra um socket que poderia não continuar ativo).
 
-**Scale/Scope**: una sesión por organización — mismo supuesto de "un negocio por
-instancia" ya vigente en todo el proyecto.
+**Scale/Scope**: uma sessão por organização — mesma suposição de "um negócio por
+instância" já vigente em todo o projeto.
 
 ## Constitution Check
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-- **I. Seguridad de Datos**: la sesión de WhatsApp (equivalente a un secreto de
-  autenticación) se cifra en reposo con el mismo `lib/crypto` AES-256-GCM que ya
-  protege el token de Meta y las API keys de gateway. PASS.
-- **II. Soberanía (v2.0.0)**: elimina una dependencia externa real (los procesos
-  gateway Evolution/WPPConnect/WAHA) — Baileys es una librería que conecta
-  directo a WhatsApp, sin servidor intermedio propio. Más soberano que el estado
-  actual, no menos. Ya nombrado explícitamente en el texto de la constitución
-  ("conexión directa tipo WhatsApp Web (Baileys)"). PASS.
-- **III. Multi-tenancy**: un socket + una sesión por `organizationId`, `Map`
-  keyed por organización, columnas con `organization_id` NOT NULL + `scoped()`.
+- **I. Segurança de Dados**: a sessão do WhatsApp (equivalente a um segredo de
+  autenticação) é cifrada em repouso com o mesmo `lib/crypto` AES-256-GCM que já
+  protege o token da Meta e as API keys de gateway. PASS.
+- **II. Soberania (v2.0.0)**: elimina uma dependência externa real (os processos
+  gateway Evolution/WPPConnect/WAHA) — Baileys é uma biblioteca que conecta
+  direto ao WhatsApp, sem servidor intermediário próprio. Mais soberano que o estado
+  atual, não menos. Já mencionado explicitamente no texto da constituição
+  ("conexão direta tipo WhatsApp Web (Baileys)"). PASS.
+- **III. Multi-tenancy**: um socket + uma sessão por `organizationId`, `Map`
+  indexado por organização, colunas com `organization_id` NOT NULL + `scoped()`.
   PASS.
-- **IV. Idempotencia**: reutiliza `ingestInboundMessage` tal cual (ya idempotente
-  por `wa_message_id` único) — el motor solo normaliza y llama esa función, no
-  reimplementa idempotencia. PASS.
-- **V. Calidad Verificable**: gate típecheck+lint+build+test. El pareo real con
-  un teléfono queda marcado explícitamente como verificación humana (no
-  automatizable) — no se reporta como "hecho" sin esa marca. PASS.
-- **VI. Specs Antes de Código**: este plan y spec preceden la implementación.
+- **IV. Idempotência**: reaproveita `ingestInboundMessage` tal como está (já idempotente
+  por `wa_message_id` único) — o motor só normaliza e chama essa função, não
+  reimplementa idempotência. PASS.
+- **V. Qualidade Verificável**: gate typecheck+lint+build+test. O pareamento real com
+  um telefone fica marcado explicitamente como verificação humana (não
+  automatizável) — não é reportado como "feito" sem essa marca. PASS.
+- **VI. Specs Antes do Código**: este plano e spec precedem a implementação.
   PASS.
-- **VII. Trazabilidad**: recorte de alcance (sin media) y la imposibilidad de
-  automatizar el pareo real documentados en spec.md → Assumptions. PASS.
-- **VIII. Foco Vertical**: sigue siendo el mismo canal de conversaciones/leads de
-  WhatsApp — cambia CÓMO se conecta, no QUÉ hace. PASS.
-- **IX. Verificación en Vivo**: todo lo automatizable (persistencia de sesión,
-  ciclo de vida connect/disconnect, normalización de mensajes, ruteo de envío)
-  se verifica con pruebas reales antes de "Hecho". El pareo QR↔teléfono real es
-  la única pieza que el propio Principio IX reconoce como delegable a
-  verificación humana ("aprobación de un tercero" / lo intrínsecamente no
-  verificable por herramientas — acá, un WhatsApp real ajeno al entorno).
+- **VII. Rastreabilidade**: corte de escopo (sem mídia) e a impossibilidade de
+  automatizar o pareamento real documentados em spec.md → Assumptions. PASS.
+- **VIII. Foco Vertical**: continua sendo o mesmo canal de conversas/leads de
+  WhatsApp — muda COMO se conecta, não O QUE faz. PASS.
+- **IX. Verificação ao Vivo**: tudo o que é automatizável (persistência de sessão,
+  ciclo de vida connect/disconnect, normalização de mensagens, roteamento de envio)
+  é verificado com testes reais antes de "Feito". O pareamento QR↔telefone real é
+  a única parte que o próprio Princípio IX reconhece como delegável à
+  verificação humana ("aprovação de terceiro" / o intrinsecamente não
+  verificável por ferramentas — aqui, um WhatsApp real alheio ao ambiente).
 
-Sin violaciones — no aplica Complexity Tracking.
+Sem violações — não se aplica Complexity Tracking.
 
 ## Project Structure
 
@@ -103,30 +103,30 @@ specs/006-motor-baileys-nativo/
 src/
 ├── lib/db/schema.ts                     # unofficial_channel reescrita
 ├── server/baileys/
-│   ├── auth-state.ts                    # AuthenticationState persistido en BD, cifrado
+│   ├── auth-state.ts                    # AuthenticationState persistido no BD, cifrado
 │   ├── manager.ts                       # connect/disconnect/getLiveStatus, Map in-process
-│   ├── inbound.ts                       # normaliza mensajes del socket → ingestInboundMessage
+│   ├── inbound.ts                       # normaliza mensagens do socket → ingestInboundMessage
 │   └── sender.ts                        # sendText(organizationId, phone, text)
 ├── server/unofficial/                   # ELIMINADO (channel.ts, ingest.ts)
 ├── lib/unofficial/                      # ELIMINADO (adapters de gateway)
-├── app/api/webhooks/unofficial/         # ELIMINADO (ya no hay webhook)
+├── app/api/webhooks/unofficial/         # ELIMINADO (já não há webhook)
 ├── app/api/settings/channels/           # reescrita: POST connect, DELETE disconnect
-│   └── route.ts                         # (sin GET status por polling — ver SSE)
-├── app/api/media/[id]/route.ts          # deshabilitado para canal no oficial en
-│                                          esta iteración (ver Assumptions)
-├── server/inbox/send.ts                 # sendViaUnofficial → llama a server/baileys/sender
+│   └── route.ts                         # (sem GET status por polling — ver SSE)
+├── app/api/media/[id]/route.ts          # desabilitado para canal não oficial
+│                                          nesta iteração (ver Assumptions)
+├── server/inbox/send.ts                 # sendViaUnofficial → chama server/baileys/sender
 ├── server/events/bus.ts                 # + evento "channel.status"
-├── instrumentation.ts                   # + reconectar sesiones ya pareadas al arrancar
+├── instrumentation.ts                   # + reconectar sessões já pareadas ao iniciar
 └── components/settings/
-    └── channels-client.tsx              # reescrita: sin campos de gateway, QR/estado vía SSE
+    └── channels-client.tsx              # reescrita: sem campos de gateway, QR/estado via SSE
 ```
 
-**Structure Decision**: nuevo dominio `src/server/baileys/` reemplaza
-`src/lib/unofficial/` + `src/server/unofficial/` por completo (FR-010) —
-consistente con el patrón `src/server/<dominio>/` ya usado en el proyecto. El
-webhook público desaparece: el motor corre in-process, los eventos llegan por
-callbacks directos del socket.
+**Structure Decision**: novo domínio `src/server/baileys/` substitui por completo
+`src/lib/unofficial/` + `src/server/unofficial/` (FR-010) —
+consistente com o padrão `src/server/<domínio>/` já usado no projeto. O
+webhook público desaparece: o motor roda in-process, os eventos chegam por
+callbacks diretos do socket.
 
 ## Complexity Tracking
 
-*(vacío — no hay violaciones que justificar)*
+*(vazio — não há violações a justificar)*

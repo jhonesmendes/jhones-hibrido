@@ -1,4 +1,5 @@
 import { apiError, withAuth } from "@/lib/api";
+import { requirePermission } from "@/lib/auth/require-permission";
 import { CampaignSendError, campaignSendErrorStatus, startCampaign } from "@/server/campaigns/send";
 
 export const dynamic = "force-dynamic";
@@ -7,6 +8,7 @@ type Params = { params: Promise<{ id: string }> };
 
 export const POST = withAuth(async (session, _req: Request, ctx: Params) => {
   const { id } = await ctx.params;
+  await requirePermission(session, "campaigns:send");
   try {
     await startCampaign(session.organizationId, id);
     return Response.json({ started: true });

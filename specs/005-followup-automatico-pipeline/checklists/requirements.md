@@ -31,6 +31,6 @@
 
 ## Notes
 
-- El plazo de gracia de expiración = mismo intervalo del recordatorio es la única
-  decisión de producto tomada sin confirmación explícita — documentada en
-  Assumptions para revisión (Principio VII).
+- O prazo de carência de expiração = mesmo intervalo do lembrete é a única
+  decisão de produto tomada sem confirmação explícita — documentada em
+  Assumptions para revisão (Princípio VII).

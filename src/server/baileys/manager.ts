@@ -17,10 +17,10 @@ import { syncContactNames } from "@/server/baileys/contacts";
 import { applyStatusUpdate } from "@/server/inbox/status";
 
 /**
- * Motor WhatsApp no oficial nativo — un socket Baileys en memoria por
- * organización (mismo patrón `globalThis` que Campañas/Follow-up, para
- * sobrevivir HMR en dev). Conexión directa al protocolo, sin gateway ni
- * webhook: los eventos llegan por callbacks del propio socket.
+ * Motor WhatsApp não oficial nativo — um socket Baileys em memória por
+ * organização (mesmo padrão `globalThis` que Campanhas/Follow-up, para
+ * sobreviver ao HMR em dev). Conexão direta com o protocolo, sem gateway nem
+ * webhook: os eventos chegam por callbacks do próprio socket.
  */
 
 type LiveStatus = {
@@ -126,7 +126,7 @@ export async function connect(organizationId: string): Promise<void> {
             phoneNumber: null,
           });
         } else {
-          // Corte de red/reinicio del lado de WhatsApp: reintenta la sesión.
+          // Corte de rede/reinício do lado do WhatsApp: reinicia a sessão.
           await setStatus(organizationId, {
             status: "connecting",
             qrCode: null,
@@ -153,9 +153,9 @@ export async function connect(organizationId: string): Promise<void> {
   sock.ev.on("contacts.upsert", onContacts);
   sock.ev.on("contacts.update", onContacts);
 
-  // Confirma la entrega real (o el fallo real) de lo que enviamos — sin
-  // esto, un mensaje "sent" en la UI podía nunca haber llegado de verdad
-  // (ver ACK_STATUS abajo) y nadie se enteraba.
+  // Confirma a entrega real (ou a falha real) do que enviamos — sem isso,
+  // uma mensagem "sent" na UI podia nunca ter chegado de verdade (ver
+  // ACK_STATUS abaixo) e ninguém ficava sabendo.
   sock.ev.on("messages.update", (updates) => {
     for (const { key, update } of updates) {
       if (!key.id || !key.fromMe || typeof update.status !== "number") continue;
@@ -173,8 +173,8 @@ export async function connect(organizationId: string): Promise<void> {
 }
 
 /** `proto.WebMessageInfo.Status`: ERROR=0, PENDING=1, SERVER_ACK=2,
- * DELIVERY_ACK=3, READ=4, PLAYED=5. PENDING no mapea — ya insertamos el
- * mensaje como "sent" al crearlo, y `applyStatusUpdate` nunca degrada. */
+ * DELIVERY_ACK=3, READ=4, PLAYED=5. PENDING não é mapeado — já inserimos a
+ * mensagem como "sent" ao criá-la, e `applyStatusUpdate` nunca degrada. */
 const ACK_STATUS: Record<number, "sent" | "delivered" | "read" | "failed"> = {
   0: "failed",
   2: "sent",
@@ -189,7 +189,7 @@ export async function disconnect(organizationId: string): Promise<void> {
     try {
       await sock.logout();
     } catch {
-      // ya puede estar desconectado del lado de WhatsApp
+      // já pode estar desconectado do lado do WhatsApp
     }
     sockets().delete(organizationId);
   }
@@ -226,7 +226,7 @@ export async function getLiveStatus(
   };
 }
 
-/** Reconecta toda organización con una sesión ya pareada (US3, al arrancar). */
+/** Reconecta toda organização com uma sessão já pareada (US3, ao iniciar). */
 export async function reconnectAllOnBoot(): Promise<void> {
   const organizationIds = await listPairedOrganizations();
   for (const organizationId of organizationIds) {

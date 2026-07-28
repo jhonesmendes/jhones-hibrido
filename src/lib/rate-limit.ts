@@ -1,10 +1,10 @@
 /**
- * Limitación de tasa in-process por clave (IP) con ventana deslizante
- * (FR-062). Suficiente para el monolito de una instancia; sin Redis
- * (Constitución II).
+ * Limitação de taxa in-process por chave (IP) com janela deslizante
+ * (FR-062). Suficiente para o monolito de uma instância; sem Redis
+ * (Constituição II).
  */
 
-type Bucket = number[]; // timestamps (ms) de los intentos
+type Bucket = number[]; // timestamps (ms) das tentativas
 
 const globalForRl = globalThis as unknown as {
   __voceroRateLimit?: Map<string, Bucket>;
@@ -37,10 +37,10 @@ export function checkRateLimit(
   return { allowed: true, remaining: opts.max - bucket.length };
 }
 
-/** Solo para tests. */
+/** Apenas para testes. */
 export function resetRateLimit(): void {
   store().clear();
 }
 
-/** 10 intentos / 10 minutos por IP en login y registro (FR-062). */
+/** 10 tentativas / 10 minutos por IP em login e registro (FR-062). */
 export const AUTH_RATE_LIMIT = { windowMs: 10 * 60 * 1000, max: 10 };

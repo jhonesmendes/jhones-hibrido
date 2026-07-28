@@ -3,7 +3,7 @@ import type { schema } from "@/lib/db";
 type AgentProfile = typeof schema.agentProfile.$inferSelect;
 type KbEntry = typeof schema.kbEntry.$inferSelect;
 
-/** Marcador del prompt del juez: el ai-mock lo usa para despachar veredictos. */
+/** Marcador do prompt do juiz: o ai-mock o usa para despachar veredictos. */
 export const JUDGE_MARKER = "[JUEZ]";
 
 export function renderKb(entries: KbEntry[]): string {
@@ -19,8 +19,8 @@ export function renderKb(entries: KbEntry[]): string {
 }
 
 /**
- * System prompt del agente (v1: inyecta el KB completo — el límite se
- * documenta con el contador de tamaño en la UI).
+ * System prompt do agente (v1: injeta o KB completo — o limite é
+ * documentado com o contador de tamanho na UI).
  */
 export function buildAgentSystemPrompt(input: {
   profile: AgentProfile;
@@ -57,7 +57,7 @@ export function buildAgentSystemPrompt(input: {
     .join("\n\n");
 }
 
-/** Prompt del juez del Laboratorio: UNA llamada por conversación (FR-032). */
+/** Prompt do juiz do Laboratório: UMA chamada por conversa (FR-032). */
 export function buildJudgePrompt(input: {
   persona: string;
   transcript: { role: "cliente" | "agente"; text: string }[];

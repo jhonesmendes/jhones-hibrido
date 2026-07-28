@@ -1,118 +1,118 @@
-# Data Model: Motor WhatsApp no oficial nativo (Baileys)
+# Data Model: Motor WhatsApp não oficial nativo (Baileys)
 
-## Entidad
+## Entidade
 
-### `unofficial_channel` (reescrita — 1 fila por organización)
+### `unofficial_channel` (reescrita — 1 linha por organização)
 
 | Campo | Tipo | Notas |
 |---|---|---|
-| `id` | text PK | prefijo `uch_` (ya existe) |
+| `id` | text PK | prefixo `uch_` (já existe) |
 | `organizationId` | text NOT NULL UNIQUE FK → organization | scoped, singleton |
-| `authStateCipher/Iv/Tag` | text NOT NULL (3 columnas) | JSON `{ creds, keys }` completo de Baileys, cifrado AES-256-GCM (mismo `lib/crypto` que el token de Meta) |
-| `displayPhoneNumber` | text NULL | número mostrado tras el pareo |
+| `authStateCipher/Iv/Tag` | text NOT NULL (3 colunas) | JSON `{ creds, keys }` completo do Baileys, cifrado AES-256-GCM (mesmo `lib/crypto` do token da Meta) |
+| `displayPhoneNumber` | text NULL | número exibido depois do pareamento |
 | `status` | enum `disconnected` \| `connecting` \| `connected` NOT NULL default `disconnected` | |
 | `createdAt` / `updatedAt` | timestamp | |
 
-Se elimina: `provider`, `baseUrl`, `instanceName`, `apiKeyCipher/Iv/Tag`,
-`webhookToken` (ya no hay proveedor que elegir ni webhook que enrutar).
+É eliminado: `provider`, `baseUrl`, `instanceName`, `apiKeyCipher/Iv/Tag`,
+`webhookToken` (já não há provedor a escolher nem webhook a rotear).
 
 ## Motor (`src/server/baileys/`)
 
 ### `auth-state.ts`
 
-Implementa el contrato `AuthenticationState` que Baileys espera
+Implementa o contrato `AuthenticationState` que o Baileys espera
 (`{ creds: AuthenticationCreds, keys: SignalKeyStore }`):
 
-- `loadAuthState(organizationId)`: lee la fila cifrada (o `null` si nunca se
-  conectó), descifra, deserializa `{ creds, keys }`. Si no existe, genera
-  `creds` nuevas (`initAuthCreds()` de Baileys) y `keys = {}`.
-- El `SignalKeyStore` se implementa como un objeto en memoria que mantiene TODO
-  el mapa `keys` (get/set síncronos sobre el objeto) + una función
-  `persist(organizationId)` que cifra y hace upsert del blob completo en BD.
-  Se llama a `persist()` en cada `creds.update` del socket y tras cada
-  `keys.set(...)` (Baileys llama esto con frecuencia durante el pareo; se
-  persiste el blob completo cada vez — volumen bajo, un negocio chico, sin
-  necesidad de optimizar con debounce en esta iteración).
+- `loadAuthState(organizationId)`: lê a linha cifrada (ou `null` se nunca se
+  conectou), descifra, deserializa `{ creds, keys }`. Se não existir, gera
+  `creds` novas (`initAuthCreds()` do Baileys) e `keys = {}`.
+- O `SignalKeyStore` é implementado como um objeto em memória que mantém TODO
+  o mapa `keys` (get/set síncronos sobre o objeto) + uma função
+  `persist(organizationId)` que cifra e faz upsert do blob completo no BD.
+  `persist()` é chamado a cada `creds.update` do socket e depois de cada
+  `keys.set(...)` (o Baileys chama isso com frequência durante o pareamento; o
+  blob completo é persistido a cada vez — volume baixo, um negócio pequeno, sem
+  necessidade de otimizar com debounce nesta iteração).
 
 ### `manager.ts`
 
-Estado module-level (mismo patrón `globalThis` que Campañas/Follow-up para
-sobrevivir HMR en dev):
+Estado module-level (mesmo padrão `globalThis` de Campanhas/Follow-up para
+sobreviver a HMR em dev):
 
 - `activeSockets: Map<organizationId, WASocket>`
 - `liveStatus: Map<organizationId, { status, qr: string | null, phoneNumber: string | null }>`
 
-Funciones:
+Funções:
 
-- `connect(organizationId)`: si ya hay un socket activo, no-op. Carga el
-  `AuthenticationState` (auth-state.ts), crea el socket
-  (`makeWASocket({ auth: state, ... })`), engancha:
-  - `connection.update` → si trae `qr`, genera PNG (`qrcode.toDataURL`),
-    actualiza `liveStatus` y publica `channel.status` por SSE; si
-    `connection === "open"`, marca `connected` + guarda `displayPhoneNumber`
-    (de `sock.user.id`) en BD; si `connection === "close"`, decide
-    reconectar (si no fue un logout explícito) o marcar `disconnected`.
-  - `creds.update` → `persist()` del auth state.
-  - `messages.upsert` → por cada mensaje nuevo, delega a `inbound.ts`.
-- `disconnect(organizationId)`: `sock.logout()`, borra el socket del `Map`,
-  borra la fila de `unofficial_channel` (fuerza QR nuevo la próxima vez, FR-009).
-- `getLiveStatus(organizationId)`: lee `liveStatus` (fallback a BD si no hay
-  socket activo — p. ej. tras un restart antes de que `connect()` corra).
-- `reconnectAllOnBoot()`: lee todas las organizaciones con una fila en
-  `unofficial_channel` (sesión pareada existente) y llama `connect()` para
-  cada una — enganchado desde `instrumentation.ts` (US3).
+- `connect(organizationId)`: se já houver um socket ativo, é no-op. Carrega o
+  `AuthenticationState` (auth-state.ts), cria o socket
+  (`makeWASocket({ auth: state, ... })`), enlaça:
+  - `connection.update` → se trouxer `qr`, gera PNG (`qrcode.toDataURL`),
+    atualiza `liveStatus` e publica `channel.status` por SSE; se
+    `connection === "open"`, marca `connected` + salva `displayPhoneNumber`
+    (de `sock.user.id`) no BD; se `connection === "close"`, decide
+    reconectar (se não foi um logout explícito) ou marcar `disconnected`.
+  - `creds.update` → `persist()` do auth state.
+  - `messages.upsert` → para cada mensagem nova, delega a `inbound.ts`.
+- `disconnect(organizationId)`: `sock.logout()`, remove o socket do `Map`,
+  apaga a linha de `unofficial_channel` (força QR novo na próxima vez, FR-009).
+- `getLiveStatus(organizationId)`: lê `liveStatus` (fallback ao BD se não houver
+  socket ativo — ex. depois de um restart antes de `connect()` rodar).
+- `reconnectAllOnBoot()`: lê todas as organizações com uma linha em
+  `unofficial_channel` (sessão pareada existente) e chama `connect()` para
+  cada uma — encaixado desde `instrumentation.ts` (US3).
 
 ### `inbound.ts`
 
 `handleIncomingMessages(organizationId, messages: WAMessage[])`:
 
-- Filtra: ignora mensajes de grupos/broadcast (`remoteJid` termina en `@g.us`
-  o es `status@broadcast`), ignora mensajes sin `message` (notificaciones de
+- Filtra: ignora mensagens de grupos/broadcast (`remoteJid` termina em `@g.us`
+  ou é `status@broadcast`), ignora mensagens sem `message` (notificações de
   protocolo).
-- Normaliza: `from` = dígitos del JID, `type` = texto si
-  `message.conversation`/`extendedTextMessage`, si no el tipo de media
-  (`imageMessage` → `"image"`, etc. — mismo mapeo que ya existía en los
-  adaptadores viejos, se traslada tal cual), `text` = cuerpo o caption,
-  `fromMe` = `key.fromMe`, `waMessageId` = `unof:baileys:<key.id>` (mismo
-  prefijo con namespace que ya usaba `unofficialMessageId`, adaptado).
-- Llama `ingestInboundMessage(...)` (reuso directo, FR-006) con
-  `channel: "unofficial"`, `mediaUrl: null` (sin media esta iteración).
+- Normaliza: `from` = dígitos do JID, `type` = texto se
+  `message.conversation`/`extendedTextMessage`, senão o tipo de mídia
+  (`imageMessage` → `"image"`, etc. — mesmo mapeamento que já existia nos
+  adaptadores antigos, transportado tal como está), `text` = corpo ou caption,
+  `fromMe` = `key.fromMe`, `waMessageId` = `unof:baileys:<key.id>` (mesmo
+  prefixo com namespace já usado por `unofficialMessageId`, adaptado).
+- Chama `ingestInboundMessage(...)` (reuso direto, FR-006) com
+  `channel: "unofficial"`, `mediaUrl: null` (sem mídia nesta iteração).
 
 ### `sender.ts`
 
 `sendText(organizationId, phone, text): Promise<string>`:
 
-- Toma el socket activo del `manager` (lanza un error tipado si no hay
-  conexión — mismo `SendError` ya usado por `sendViaUnofficial`).
-- `sock.sendMessage(phone + "@s.whatsapp.net", { text })`, devuelve
+- Pega o socket ativo do `manager` (lança um erro tipado se não houver
+  conexão — mesmo `SendError` já usado por `sendViaUnofficial`).
+- `sock.sendMessage(phone + "@s.whatsapp.net", { text })`, devolve
   `res.key.id`.
 
-## Cambios en código existente
+## Mudanças no código existente
 
-- `src/server/inbox/send.ts` → `sendViaUnofficial` deja de llamar
-  `getAdapter(...).sendText(...)` y llama a `server/baileys/sender.ts`
-  directamente. El resto de la función (guardrail de sandbox, inserción del
-  mensaje, publish SSE) no cambia.
-- `src/server/events/bus.ts` → nuevo tipo `{ type: "channel.status"; data:
+- `src/server/inbox/send.ts` → `sendViaUnofficial` deixa de chamar
+  `getAdapter(...).sendText(...)` e chama `server/baileys/sender.ts`
+  diretamente. O resto da função (guardrail de sandbox, inserção da
+  mensagem, publish SSE) não muda.
+- `src/server/events/bus.ts` → novo tipo `{ type: "channel.status"; data:
   { status: string; qrCode: string | null; phoneNumber: string | null } }`.
 - `src/components/use-events.ts` → handler `onChannelStatus`.
-- `src/instrumentation.ts` → tras `startFollowupScheduler()`, llama
+- `src/instrumentation.ts` → depois de `startFollowupScheduler()`, chama
   `reconnectAllOnBoot()`.
 
 ## Contratos de API (reescritos)
 
 ### `POST /api/settings/channels`
 
-Body vacío. Dispara `connect(organizationId)` (fire-and-forget, como el resto
-del trabajo en segundo plano del proyecto) y responde de inmediato — el QR
-llega por SSE.
+Body vazio. Dispara `connect(organizationId)` (fire-and-forget, como o resto
+do trabalho em segundo plano do projeto) e responde imediatamente — o QR
+chega por SSE.
 
 ### `DELETE /api/settings/channels`
 
-Llama `disconnect(organizationId)`.
+Chama `disconnect(organizationId)`.
 
 ### `GET /api/settings/channels`
 
-Devuelve el estado actual (`getLiveStatus`, con fallback a BD) — se usa solo
-para la carga inicial de la pantalla; las actualizaciones en vivo llegan por
-SSE (`channel.status`), no por polling.
+Devolve o estado atual (`getLiveStatus`, com fallback ao BD) — é usado apenas
+para o carregamento inicial da tela; as atualizações ao vivo chegam por
+SSE (`channel.status`), não por polling.

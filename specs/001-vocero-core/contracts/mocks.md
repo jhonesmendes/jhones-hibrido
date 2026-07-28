@@ -1,48 +1,48 @@
-# Contrato: Entorno de pruebas interno (wa-mock + ai-mock)
+# Contrato: Ambiente de testes interno (wa-mock + ai-mock)
 
-Ambos gated por `WA_MOCK_ENABLED=true` **y** `NODE_ENV !== 'production'` → si no,
-**404 incondicional** (unit test). No aparecen en `.env.example`.
+Ambos controlados por `WA_MOCK_ENABLED=true` **e** `NODE_ENV !== 'production'` → se não,
+**404 incondicional** (unit test). Não aparecem em `.env.example`.
 
-## wa-mock — harness de Cloud API
+## wa-mock — harness da Cloud API
 
-Intercepción: `META_GRAPH_BASE_URL` apunta a `http://localhost:3000/api/dev/wa-mock/graph`
-(el cliente Graph usa esa base para TODAS las llamadas).
+Interceptação: `META_GRAPH_BASE_URL` aponta para `http://localhost:3000/api/dev/wa-mock/graph`
+(o cliente Graph usa essa base para TODAS as chamadas).
 
-- `POST /api/dev/wa-mock/inbound` — simula un mensaje entrante: `{ phoneNumberId, from,
-  name?, type?, text?, waMessageId?, timestamp? }`. Construye el payload real de Meta,
-  lo firma con `META_APP_SECRET` (si está configurado) y hace POST interno al webhook
-  público (URL con webhookToken). Overrides: `waMessageId` (test de dedup), `timestamp`
-  (test ventana 24h).
+- `POST /api/dev/wa-mock/inbound` — simula uma mensagem recebida: `{ phoneNumberId, from,
+  name?, type?, text?, waMessageId?, timestamp? }`. Constrói o payload real da Meta,
+  assina com `META_APP_SECRET` (se configurado) e faz POST interno ao webhook
+  público (URL com webhookToken). Overrides: `waMessageId` (teste de dedup), `timestamp`
+  (teste de janela de 24h).
 - `POST /api/dev/wa-mock/status` — simula status: `{ waMessageId, status }` → payload
-  `statuses` al webhook.
+  `statuses` ao webhook.
 - `POST /api/dev/wa-mock/template-status` — simula `message_template_status_update`:
   `{ name, language, event: 'APPROVED'|'REJECTED', reason? }`.
-- `ANY /api/dev/wa-mock/graph/*` — imita Graph API:
+- `ANY /api/dev/wa-mock/graph/*` — imita a Graph API:
   - `POST .../{phoneNumberId}/messages` → `200 { messages: [{ id: "wamid.mock..." }] }`
-    y registra en el **outbox** en memoria. Si el body es plantilla, registra
-    componentes.
-  - `GET .../{phoneNumberId}?fields=...` → valida el token de prueba: token con sufijo
-    mágico `-invalid` → `401 { error: { code: 190, ... } }` (test camino infeliz del
-    wizard); si no → `200 { display_phone_number, verified_name, id }`.
+    e registra no **outbox** em memória. Se o body for template, registra
+    os componentes.
+  - `GET .../{phoneNumberId}?fields=...` → valida o token de teste: token com sufixo
+    mágico `-invalid` → `401 { error: { code: 190, ... } }` (teste do caminho infeliz do
+    wizard); se não → `200 { display_phone_number, verified_name, id }`.
   - `POST .../{wabaId}/message_templates` → `200 { id: "tplmock..." , status: "PENDING" }`.
-- `GET /api/dev/wa-mock/outbox` — lista de envíos capturados (aserciones E2E).
-- `DELETE /api/dev/wa-mock/outbox` — limpia el estado del harness.
+- `GET /api/dev/wa-mock/outbox` — lista de envios capturados (asserções E2E).
+- `DELETE /api/dev/wa-mock/outbox` — limpa o estado do harness.
 
-## ai-mock — proveedor LLM determinista
+## ai-mock — provedor LLM determinístico
 
-`POST /api/dev/ai-mock/chat/completions` (OpenAI-compatible; en self-test
-`OPENROUTER_BASE_URL=http://localhost:3000/api/dev/ai-mock`). Decide por contenido del
-último mensaje `user`:
+`POST /api/dev/ai-mock/chat/completions` (compatível com OpenAI; no self-test
+`OPENROUTER_BASE_URL=http://localhost:3000/api/dev/ai-mock`). Decide pelo conteúdo do
+último mensagem `user`:
 
-- Contiene marcador de JUEZ (el prompt del juez incluye `[JUEZ]`): veredicto fijo —
-  persona `fuera_de_kb` → `rojo` con 1 hallazgo `fuera_de_kb` + sugerencia
-  `{pregunta, respuesta}`; resto → `verde` sin hallazgos.
-- "quiero hablar con un humano" (u otra frase de la persona `pide_humano`) →
+- Contém o marcador de JUIZ (o prompt do juiz inclui `[JUEZ]`): veredito fixo —
+  persona `fuera_de_kb` → `rojo` com 1 achado `fuera_de_kb` + sugestão
+  `{pregunta, respuesta}`; resto → `verde` sem achados.
+- "quiero hablar con un humano" (ou outra frase da persona `pide_humano`) →
   `{"action":"handoff"}`.
-- Intención de compra ("lo compro", "quiero comprar", persona compradora) →
+- Intenção de compra ("lo compro", "quiero comprar", persona compradora) →
   `{"action":"move_stage","stage":"Interesado","reply":"..."}`.
-- Cualquier otro caso → `{"action":"reply","text":"Respuesta de prueba sobre: <eco>"}`.
+- Qualquer outro caso → `{"action":"reply","text":"Resposta de teste sobre: <eco>"}`.
 
-Respuesta con shape OpenRouter: `{ choices: [{ message: { content: "<json>" } }] }`.
-El ai-mock NUNCA es fallback en runtime: solo se usa si `OPENROUTER_BASE_URL` apunta a
-él explícitamente (entorno de test/dev).
+Resposta com shape OpenRouter: `{ choices: [{ message: { content: "<json>" } }] }`.
+O ai-mock NUNCA é fallback em runtime: só é usado se `OPENROUTER_BASE_URL` apontar para
+ele explicitamente (ambiente de teste/dev).

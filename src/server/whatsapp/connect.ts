@@ -9,8 +9,8 @@ export type ConnectionCheck =
   | { ok: false; code: "invalid_token" | "meta_unavailable" | "meta_error"; message: string };
 
 /**
- * Valida token↔número contra la Graph API SIN persistir nada (FR-040):
- * un GET del número con el token debe devolver su display_phone_number.
+ * Valida token↔número contra a Graph API SEM persistir nada (FR-040):
+ * um GET do número com o token deve devolver seu display_phone_number.
  */
 export async function testConnection(
   phoneNumberId: string,
@@ -61,9 +61,9 @@ export async function testConnection(
 }
 
 /**
- * Suscribe la app a la WABA tras guardar (necesario para recibir webhooks en
- * modo directo). Best-effort: en modo agencia el override lo configura el
- * backend de la agencia y esta llamada puede no aplicar.
+ * Inscreve o app na WABA após salvar (necessário para receber webhooks em
+ * modo direto). Best-effort: no modo agência o override é configurado pelo
+ * backend da agência e esta chamada pode não se aplicar.
  */
 export async function subscribeAppToWaba(
   wabaId: string,
@@ -76,7 +76,7 @@ export async function subscribeAppToWaba(
     });
   } catch (err) {
     console.warn(
-      "[connect] subscribed_apps falló (esperado en modo agencia):",
+      "[connect] subscribed_apps falhou (esperado no modo agência):",
       err instanceof Error ? err.message : err
     );
   }

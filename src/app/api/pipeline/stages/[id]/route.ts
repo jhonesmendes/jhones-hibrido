@@ -62,7 +62,7 @@ export const DELETE = withAuth(async (session, req: Request, ctx: Params) => {
     return apiError(
       409,
       "anchor_stage",
-      'Las etapas ancla ("ganado" y "perdido") no se pueden eliminar'
+      'As etapas âncora ("ganho" e "perdido") não podem ser excluídas'
     );
   }
 

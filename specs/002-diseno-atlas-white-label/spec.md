@@ -1,4 +1,4 @@
-# Feature Specification: Rediseño "Atlas" + White-label (002-diseno-atlas-white-label)
+# Feature Specification: Redesign "Atlas" + White-label (002-diseno-atlas-white-label)
 
 **Feature Branch**: `002-diseno-atlas-white-label`
 
@@ -6,103 +6,103 @@
 
 **Status**: Draft
 
-**Input**: Adoptar el sistema de diseño del handoff "Atlas — Bandeja unificada"
-(prototipo hi-fi generado con Claude Design; referencia local, no committeada) en
-toda la app, y hacer el CRM white-label: nombre y color de acento configurables
-desde Configuración.
+**Input**: Adotar o sistema de design do handoff "Atlas — Caixa de entrada unificada"
+(protótipo hi-fi gerado com Claude Design; referência local, não commitada) em
+todo o app, e tornar o CRM white-label: nome e cor de acento configuráveis
+a partir de Configurações.
 
 ## Contexto
 
-- Referencia de diseño: handoff hi-fi con tokens exactos (modo claro, estética
-  Linear/Notion, neutros fríos, un solo acento azul acero apagado `#3f5972`,
-  tipografía Geist, radios 7/10/14, sombras suaves). Se RECREA con el stack del
-  repo (Tailwind + variables CSS); no se copia el código del prototipo.
-- Vocero es genérico: cada instancia lo opera un negocio distinto → la marca
-  visible (nombre + acento) debe ser suya, no "Vocero".
+- Referência de design: handoff hi-fi com tokens exatos (modo claro, estética
+  Linear/Notion, neutros frios, um único acento azul aço apagado `#3f5972`,
+  tipografia Geist, raios 7/10/14, sombras suaves). É RECRIADO com o stack do
+  repositório (Tailwind + variáveis CSS); o código do protótipo não é copiado.
+- Vocero é genérico: cada instância é operada por um negócio diferente → a marca
+  visível (nome + acento) deve ser dele, não "Vocero".
 
 ## User Stories
 
-### US1 — Sistema de diseño Atlas en toda la app (P1)
+### US1 — Sistema de design Atlas em todo o app (P1)
 
-Como usuario del CRM, toda la interfaz (bandeja, pipeline, contactos, agente,
-laboratorio, configuración, login) usa el tema claro sobrio del handoff: mismos
-tokens de color/tipografía/radios/sombras, nav lateral estilo Atlas (brand
-arriba, items con tinte de acento al activo, usuario abajo) y componentes
-consistentes (píldoras, badges, tarjetas, inputs con halo de acento al focus).
+Como usuário do CRM, toda a interface (caixa de entrada, pipeline, contatos, agente,
+laboratório, configurações, login) usa o tema claro sóbrio do handoff: mesmos
+tokens de cor/tipografia/raios/sombras, nav lateral estilo Atlas (brand
+em cima, itens com tinta de acento no ativo, usuário embaixo) e componentes
+consistentes (pílulas, badges, cartões, inputs com halo de acento no focus).
 
-**Aceptación**:
-1. Tokens globales portados a variables CSS + Tailwind (valores EXACTOS de la
-   sección Design Tokens del handoff; el acento vía variables para poder
-   cambiarlo en runtime).
-2. Nav izquierda 224px según handoff: brand (cuadro 30px con inicial + nombre
-   del CRM + subtítulo), items con badge de no-leídos en Bandeja, Ajustes y
-   usuario al fondo.
-3. Tipografía Geist (self-hosted vía next/font — sin CDN en runtime,
-   Constitución II) con fallbacks del handoff.
-4. Login/registro y todas las páginas re-tematizadas (adiós tema oscuro).
+**Aceitação**:
+1. Tokens globais portados para variáveis CSS + Tailwind (valores EXATOS da
+   seção Design Tokens do handoff; o acento via variáveis para poder
+   mudá-lo em runtime).
+2. Nav esquerda 224px conforme o handoff: brand (quadro 30px com inicial + nome
+   do CRM + subtítulo), itens com badge de não lidos na Caixa de entrada, Ajustes e
+   usuário no rodapé.
+3. Tipografia Geist (self-hosted via next/font — sem CDN em runtime,
+   Constituição II) com fallbacks do handoff.
+4. Login/registro e todas as páginas retematizadas (adeus tema escuro).
 
-### US2 — Bandeja rediseñada (P1)
+### US2 — Caixa de entrada redesenhada (P1)
 
-Como operador, la bandeja replica la pantalla del handoff: lista de 360px
-(buscador con ⌘K visual, filtros píldora Todas/No leídas, filas con presencia,
-preview con "Tú:", badge de no leídos, tag del negocio/etapa), hilo con fondo
-`#f4f5f7`, separador de día, burbujas (entrante blanca / saliente `#f2f5f8` con
-doble check de acento), composer con chips de plantillas aprobadas y botón
-enviar de acento, y **panel de detalles colapsable** (contacto + etapa con
-stepper del pipeline + notas + toggle IA + handoff).
+Como operador, a caixa de entrada replica a tela do handoff: lista de 360px
+(busca com ⌘K visual, filtros pílula Todas/Não lidas, linhas com presença,
+preview com "Você:", badge de não lidos, tag do negócio/etapa), conversa com fundo
+`#f4f5f7`, separador de dia, balões (recebido branco / enviado `#f2f5f8` com
+duplo check de acento), composer com chips de modelos aprovados e botão
+enviar de acento, e **painel de detalhes colapsável** (contato + etapa com
+stepper do pipeline + notas + toggle IA + handoff).
 
-**Aceptación**:
-1. Layout 4 columnas: nav 224 · lista 360 · hilo flex-1 · panel 320 colapsable
-   (transición 0.22s, botón para reabrir en el header del chat).
-2. Burbujas agrupadas por emisor consecutivo; hora dentro de la burbuja; doble
-   check con color de acento según estado (read).
-3. Stepper vertical de etapas del pipeline en el panel (hecho/actual/pendiente
-   según la etapa del lead), reemplaza al badge estático.
-4. Filtros: "Todas" y "No leídas" con conteos (Vocero no tiene asignación de
-   agentes en v1 — se omite "Sin asignar/Mías").
-5. Búsqueda por nombre/teléfono/preview.
-6. Toda la funcionalidad existente se conserva (SSE, ventana 24h, plantillas,
-   IA, marcar leído).
+**Aceitação**:
+1. Layout de 4 colunas: nav 224 · lista 360 · conversa flex-1 · painel 320 colapsável
+   (transição 0.22s, botão para reabrir no cabeçalho do chat).
+2. Balões agrupados por remetente consecutivo; hora dentro do balão; duplo
+   check com cor de acento conforme o estado (lido).
+3. Stepper vertical de etapas do pipeline no painel (feito/atual/pendente
+   conforme a etapa do lead), substitui o badge estático.
+4. Filtros: "Todas" e "Não lidas" com contagens (o Vocero não tem atribuição de
+   agentes na v1 — "Sem atribuição/Minhas" é omitido).
+5. Busca por nome/telefone/preview.
+6. Toda a funcionalidade existente é mantida (SSE, janela de 24h, modelos,
+   IA, marcar como lido).
 
-### US3 — White-label desde Configuración (P1)
+### US3 — White-label a partir de Configurações (P1)
 
-Como negocio/agencia, en Configuración → Marca defino el **nombre del CRM** y
-el **color de acento**, y toda la UI los refleja al instante (brand de la nav,
-título del documento, acentos, botones, badges).
+Como negócio/agência, em Configurações → Marca eu defino o **nome do CRM** e
+a **cor de acento**, e toda a UI os reflete instantaneamente (brand da nav,
+título do documento, acentos, botões, badges).
 
-**Aceptación**:
-1. Nueva pestaña Configuración → Marca: input de nombre (default "Vocero") y
-   selector de acento con las 4 opciones sobrias del handoff (Azul acero,
-   Grafito, Verde apagado, Ciruela) + opción de color personalizado (color
-   picker) del que se derivan hover/soft/tint/text automáticamente.
-2. Persistencia por organización en BD (`organization.metadata` o tabla
-   propia); GET público a la sesión; aplicado como variables CSS en el layout
-   (SSR, sin flash).
-3. El nombre aparece en: brand de la nav, `<title>`, página de login (que es
-   pública: usa el nombre de la única org de la instancia).
-4. Sin configurar → defaults (nombre "Vocero", acento azul acero `#3f5972`).
+**Aceitação**:
+1. Nova aba Configurações → Marca: input de nome (padrão "Vocero") e
+   seletor de acento com as 4 opções sóbrias do handoff (Azul aço,
+   Grafite, Verde apagado, Ameixa) + opção de cor personalizada (color
+   picker) da qual se derivam hover/soft/tint/text automaticamente.
+2. Persistência por organização no BD (`organization.metadata` ou tabela
+   própria); GET público na sessão; aplicado como variáveis CSS no layout
+   (SSR, sem flash).
+3. O nome aparece em: brand da nav, `<title>`, página de login (que é
+   pública: usa o nome da única org da instância).
+4. Sem configuração → padrões (nome "Vocero", acento azul aço `#3f5972`).
 
 ## Edge cases
 
-- Acento personalizado con contraste insuficiente sobre blanco → derivar
-  `--accent-text` oscurecido y validar que el texto blanco sobre el acento
-  cumpla contraste razonable (si muy claro, oscurecer el acento base).
-- Nombre vacío → vuelve al default. Longitud máx 30.
-- Panel colapsado persiste en localStorage.
-- `prefers-reduced-motion` → transiciones ~0ms.
+- Acento personalizado com contraste insuficiente sobre branco → derivar
+  `--accent-text` escurecido e validar que o texto branco sobre o acento
+  cumpra contraste razoável (se muito claro, escurecer o acento base).
+- Nome vazio → volta ao padrão. Comprimento máx 30.
+- Painel colapsado persiste em localStorage.
+- `prefers-reduced-motion` → transições ~0ms.
 
 ## Success Criteria
 
-- **SC-1**: Comparación visual con el handoff: la bandeja replica layout,
-  tokens y estados (revisión con capturas, juicio humano final).
-- **SC-2**: Cambiar nombre+acento en Configuración se refleja en toda la UI sin
-  recargar a mano y persiste tras recargar.
-- **SC-3**: Los E2E funcionales de 001 siguen verdes (sin regresión de
-  comportamiento).
-- **SC-4**: Sin dependencias runtime nuevas (fuente self-hosted; Constitución II).
+- **SC-1**: Comparação visual com o handoff: a caixa de entrada replica layout,
+  tokens e estados (revisão com capturas, julgamento humano final).
+- **SC-2**: Mudar nome+acento em Configurações se reflete em toda a UI sem
+  recarregar manualmente e persiste após recarregar.
+- **SC-3**: Os E2E funcionais de 001 seguem verdes (sem regressão de
+  comportamento).
+- **SC-4**: Sem novas dependências de runtime (fonte self-hosted; Constituição II).
 
 ## Out of Scope
 
-Modo oscuro, asignación de conversaciones a agentes ("Sin asignar/Mías"),
-negocios/deals con valor monetario (el panel muestra contacto+lead reales de
-Vocero), logo por imagen (v1: inicial sobre acento), densidad configurable.
+Modo escuro, atribuição de conversas a agentes ("Sem atribuição/Minhas"),
+negócios/deals com valor monetário (o painel mostra contato+lead reais do
+Vocero), logo por imagem (v1: inicial sobre acento), densidade configurável.

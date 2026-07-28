@@ -7,8 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 /**
- * Selector de plantilla aprobada para conversaciones con ventana cerrada
- * (FR-005/FR-051). Sin plantillas aprobadas muestra el estado vacío.
+ * Seletor de modelo aprovado para conversas com janela fechada
+ * (FR-005/FR-051). Sem modelos aprovados, mostra o estado vazio.
  */
 export function TemplateSender({
   conversationId,

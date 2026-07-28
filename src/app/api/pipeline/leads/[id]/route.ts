@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { apiError, parseBody, withAuth } from "@/lib/api";
+import { requirePermission } from "@/lib/auth/require-permission";
 import { getDb, schema } from "@/lib/db";
 import { scoped } from "@/lib/db/tenant";
 import { publish } from "@/server/events/bus";
@@ -16,6 +17,7 @@ const patchSchema = z.object({
 
 export const PATCH = withAuth(async (session, req: Request, ctx: Params) => {
   const { id } = await ctx.params;
+  await requirePermission(session, "pipeline:move");
   const body = await parseBody(req, patchSchema);
   if (!body.ok) return body.response;
 
@@ -50,8 +52,8 @@ export const PATCH = withAuth(async (session, req: Request, ctx: Params) => {
     .returning();
   if (!updated[0]) return apiError(404, "not_found", "Lead não encontrado");
 
-  // Notifica a la bandeja para que la etapa se refleje en vivo (panel de
-  // detalles y punto de etapa de la lista) sin recargar.
+  // Notifica a caixa de entrada para que a etapa seja refletida em tempo real
+  // (painel de detalhes e indicador de etapa da lista) sem recarregar.
   const convRows = await db
     .select({ id: schema.conversation.id })
     .from(schema.conversation)

@@ -1,9 +1,9 @@
 import { EventEmitter } from "node:events";
 
 /**
- * Bus de eventos in-process por organización (contrato sse.md).
- * Publicar SIEMPRE después del commit de BD. Una instancia = un proceso,
- * así que un EventEmitter es suficiente (sin colas externas — Constitución II).
+ * Bus de eventos in-process por organização (contrato sse.md).
+ * Publicar SEMPRE depois do commit no BD. Uma instância = um processo,
+ * então um EventEmitter é suficiente (sem filas externas — Constituição II).
  */
 
 export type SseEvent =

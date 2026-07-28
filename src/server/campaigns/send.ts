@@ -35,8 +35,8 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/** Dispara la campaña: valida, marca "sending" y arranca el loop en segundo
- * plano (no espera a que termine — FR-007/data-model.md). */
+/** Dispara a campanha: valida, marca como "sending" e inicia o loop em segundo
+ * plano (não espera terminar — FR-007/data-model.md). */
 export async function startCampaign(
   organizationId: string,
   campaignId: string
@@ -51,7 +51,7 @@ export async function startCampaign(
     );
   }
 
-  // FR-012: revalida el requisito del canal ANTES de arrancar, no a mitad del loop.
+  // FR-012: revalida o requisito do canal ANTES de iniciar, não no meio do loop.
   if (campaign.channel === "official") {
     if (!campaign.templateId) {
       throw new CampaignSendError("not_ready", "Campanha sem modelo associado");
@@ -190,8 +190,8 @@ async function runCampaign(
       });
     }
 
-    // Guardarraíl duro (Constitución IX v2.0.0): intervalo SIEMPRE configurable,
-    // nunca fijo — se lee de la propia campaña, no de una constante.
+    // Guardrail rígido (Constituição IX v2.0.0): intervalo SEMPRE configurável,
+    // nunca fixo — é lido da própria campanha, não de uma constante.
     if (campaign.sendIntervalMs > 0) await sleep(campaign.sendIntervalMs);
   }
 }

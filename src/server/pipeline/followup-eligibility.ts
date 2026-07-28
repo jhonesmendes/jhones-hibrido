@@ -1,8 +1,8 @@
 /**
- * Lógica pura de elegibilidad del follow-up — separada del acceso a datos
- * para poder testearla sin BD. La resolución de "el cliente respondió" ya
- * se resuelve ANTES de llamar a estas funciones (ver followup-scheduler.ts):
- * acá `lastSend` siempre representa el estado vigente, nunca uno ya resuelto.
+ * Lógica pura de elegibilidade do follow-up — separada do acesso a dados
+ * para poder testá-la sem BD. A resolução de "o cliente respondeu" já é
+ * feita ANTES de chamar essas funções (ver followup-scheduler.ts):
+ * aqui `lastSend` sempre representa o estado vigente, nunca um já resolvido.
  */
 
 export type EligibilityLead = {
@@ -19,8 +19,8 @@ export function intervalToMs(value: number, unit: "hours" | "days"): number {
   return unit === "days" ? value * 24 * hourMs : value * hourMs;
 }
 
-/** true si el lead lleva más del intervalo sin actividad y no tiene un
- * recordatorio ya activo esperando resolución. */
+/** true se o lead está há mais tempo que o intervalo sem atividade e não tem um
+ * lembrete já ativo aguardando resolução. */
 export function isEligibleForReminder(
   lead: EligibilityLead,
   lastSend: EligibilitySend,
@@ -34,7 +34,7 @@ export function isEligibleForReminder(
   return true;
 }
 
-/** true si el recordatorio activo superó el plazo de gracia sin resolverse. */
+/** true se o lembrete ativo superou o prazo de carência sem ser resolvido. */
 export function isEligibleForExpiry(
   lastSend: EligibilitySend,
   graceMs: number,
@@ -45,8 +45,8 @@ export function isEligibleForExpiry(
   return sinceSendMs >= graceMs;
 }
 
-/** true si el cliente respondió después de que se le envió el recordatorio
- * activo — ese recordatorio deja de contar (se resuelve sin expirar). */
+/** true se o cliente respondeu depois que o lembrete ativo foi enviado —
+ * esse lembrete deixa de contar (é resolvido sem expirar). */
 export function respondedAfterSend(
   lead: EligibilityLead,
   lastSend: EligibilitySend

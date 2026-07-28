@@ -5,6 +5,10 @@ import { getAuth, runInternalSignup } from "@/lib/auth";
 import { getDb, schema } from "@/lib/db";
 import { newId } from "@/lib/db/ids";
 import { scoped } from "@/lib/db/tenant";
+import { PERMISSIONS } from "@/lib/auth/permissions";
+import { resolveChannelAccess, resolvePermissions } from "@/lib/auth/require-permission";
+
+const ALL_PERMISSIONS = Object.keys(PERMISSIONS) as (keyof typeof PERMISSIONS)[];
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +18,7 @@ export const GET = withAuth(async (session) => {
     .select({
       id: schema.member.id,
       role: schema.member.role,
+      isActive: schema.member.isActive,
       createdAt: schema.member.createdAt,
       name: schema.user.name,
       email: schema.user.email,
@@ -21,15 +26,30 @@ export const GET = withAuth(async (session) => {
     .from(schema.member)
     .innerJoin(schema.user, eq(schema.member.userId, schema.user.id))
     .where(scoped(schema.member.organizationId, session.organizationId));
-  return Response.json({
-    members: members.map((m) => ({
-      id: m.id,
-      role: m.role,
-      name: m.name,
-      email: m.email,
-      createdAt: m.createdAt.toISOString(),
-    })),
-  });
+
+  const detailed = await Promise.all(
+    members.map(async (m) => {
+      const [permissions, official, unofficial] = await Promise.all([
+        resolvePermissions(m.id, m.role),
+        resolveChannelAccess(m.id, m.role, "official"),
+        resolveChannelAccess(m.id, m.role, "unofficial"),
+      ]);
+      return {
+        id: m.id,
+        role: m.role,
+        isActive: m.isActive,
+        name: m.name,
+        email: m.email,
+        createdAt: m.createdAt.toISOString(),
+        permissions: Object.fromEntries(
+          ALL_PERMISSIONS.map((p) => [p, permissions.has(p)])
+        ),
+        channels: { official, unofficial },
+      };
+    })
+  );
+
+  return Response.json({ members: detailed });
 });
 
 const createSchema = z.object({
@@ -75,7 +95,7 @@ export const POST = withAuth(async (session, req: Request) => {
       id: newId("organization"),
       organizationId: session.organizationId,
       userId: newUserId,
-      role: "member",
+      role: "agent",
     })
     .onConflictDoNothing();
 

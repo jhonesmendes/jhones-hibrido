@@ -1,4 +1,4 @@
-# Data Model: Campañas de disparo en masa
+# Data Model: Campanhas de disparo em massa
 
 ## Entidades
 
@@ -6,18 +6,18 @@
 
 | Campo | Tipo | Notas |
 |---|---|---|
-| `id` | text PK | prefijo `camp_` |
+| `id` | text PK | prefixo `camp_` |
 | `organizationId` | text NOT NULL FK → organization | scoped |
 | `name` | text NOT NULL | |
 | `channel` | enum `official` \| `unofficial` NOT NULL | |
-| `templateId` | text NULL FK → template | solo canal oficial |
-| `messageTemplate` | text NULL | solo canal no oficial; cuerpo con `{{variable}}` |
-| `sendIntervalMs` | integer NOT NULL default 5000 | editable siempre; guardrail duro en no oficial |
+| `templateId` | text NULL FK → template | somente canal oficial |
+| `messageTemplate` | text NULL | somente canal não oficial; corpo com `{{variavel}}` |
+| `sendIntervalMs` | integer NOT NULL default 5000 | sempre editável; guardrail rígido no não oficial |
 | `status` | enum `draft` \| `sending` \| `sent` \| `cancelled` NOT NULL default `draft` | |
 | `total` | integer NOT NULL default 0 | |
-| `sent` | integer NOT NULL default 0 | incluye fallidos ya procesados (ver `failed`) |
+| `sent` | integer NOT NULL default 0 | inclui falhados já processados (ver `failed`) |
 | `failed` | integer NOT NULL default 0 | |
-| `cancelRequested` | boolean NOT NULL default false | el loop la revisa entre cada envío |
+| `cancelRequested` | boolean NOT NULL default false | o loop verifica isso entre cada envio |
 | `startedAt` / `completedAt` | timestamp NULL | |
 | `createdAt` | timestamp NOT NULL default now() | |
 
@@ -27,78 +27,78 @@
 
 | Campo | Tipo | Notas |
 |---|---|---|
-| `id` | text PK | prefijo `crc_` |
+| `id` | text PK | prefixo `crc_` |
 | `campaignId` | text NOT NULL FK → campaign (cascade) | |
-| `organizationId` | text NOT NULL | scoped, denormalizado para queries directas |
-| `phone` | text NOT NULL | tal como viene del CSV, normalizado |
-| `variables` | jsonb NULL | `{"1": "valor"}` (oficial) o `{"nome": "...", ...}` (no oficial) |
-| `contactId` | text NULL FK → contact | se completa al procesar |
+| `organizationId` | text NOT NULL | scoped, desnormalizado para queries diretas |
+| `phone` | text NOT NULL | tal como vem do CSV, normalizado |
+| `variables` | jsonb NULL | `{"1": "valor"}` (oficial) ou `{"nome": "...", ...}` (não oficial) |
+| `contactId` | text NULL FK → contact | preenchido ao processar |
 | `conversationId` | text NULL FK → conversation | idem |
-| `messageId` | text NULL FK → message | mensaje real enviado, si tuvo éxito |
+| `messageId` | text NULL FK → message | mensagem real enviada, se bem-sucedida |
 | `status` | enum `pending` \| `sent` \| `failed` NOT NULL default `pending` | |
-| `error` | text NULL | motivo si `failed` |
+| `error` | text NULL | motivo se `failed` |
 | `createdAt` | timestamp NOT NULL default now() | |
 
 Índice: `(campaignId, status)`.
 
-**Por qué no reutilizar solo `message`**: un destinatario puede fallar ANTES de que
-exista un mensaje (p. ej. teléfono inválido, plantilla rechazada a mitad de camino)
-— necesita su propio estado independiente del mensaje.
+**Por que não reutilizar apenas `message`**: um destinatário pode falhar ANTES
+que exista uma mensagem (ex.: telefone inválido, modelo rejeitado no meio do
+caminho) — precisa de seu próprio status independente da mensagem.
 
 ## Contratos de API
 
-Todas las rutas bajo `withAuth`, scoped por `session.organizationId`, mismos
-patrones de error (`apiError`) que el resto del proyecto.
+Todas as rotas sob `withAuth`, scoped por `session.organizationId`, mesmos
+padrões de erro (`apiError`) que o resto do projeto.
 
 ### `POST /api/campaigns/import-csv`
 
-Body: `{ csvText: string }` (el archivo se lee en el cliente con `FileReader`, se
-manda como texto — sin subir binarios, sin storage nuevo).
+Body: `{ csvText: string }` (o arquivo é lido no cliente com `FileReader`, é
+enviado como texto — sem upload de binários, sem storage novo).
 
-Respuesta: `{ validRows: {phone, variables}[], invalidRows: {line, reason}[],
-detectedVariables: string[] }`. No persiste nada — es solo previsualización.
+Resposta: `{ validRows: {phone, variables}[], invalidRows: {line, reason}[],
+detectedVariables: string[] }`. Nada é persistido — é apenas pré-visualização.
 
 ### `POST /api/campaigns`
 
 Body: `{ name, channel: "official", templateId, csvText } | { name, channel:
 "unofficial", messageTemplate, sendIntervalMs, riskAcknowledged: true, csvText }`.
 
-- Valida plantilla aprobada (oficial) o canal conectado (no oficial).
-- `riskAcknowledged` MUST ser `true` para no oficial (FR-005) — 422 si falta.
-- Parsea el CSV (mismo parser que `import-csv`), crea la campaña en `draft` + sus
-  `campaign_recipient` en una transacción.
+- Valida modelo aprovado (oficial) ou canal conectado (não oficial).
+- `riskAcknowledged` MUST ser `true` para não oficial (FR-005) — 422 se faltar.
+- Faz o parsing do CSV (mesmo parser de `import-csv`), cria a campanha em
+  `draft` + seus `campaign_recipient` em uma transação.
 
-Respuesta: `{ campaign }` (201).
+Resposta: `{ campaign }` (201).
 
 ### `GET /api/campaigns`
 
-Lista campañas de la organización, más recientes primero (FR-013).
+Lista campanhas da organização, mais recentes primeiro (FR-013).
 
 ### `GET /api/campaigns/[id]`
 
-Detalle + lista de destinatarios (para la tabla del detalle).
+Detalhe + lista de destinatários (para a tabela do detalhe).
 
 ### `POST /api/campaigns/[id]/send`
 
-- 409 si la campaña no está en `draft` (FR-011).
-- Marca `status = "sending"`, `startedAt = now()`, devuelve 200 de inmediato, y
-  dispara el loop en segundo plano (no bloquea la respuesta HTTP) — mismo patrón
-  in-process que el turno del agente (`src/server/ai/pipeline.ts`).
-- El loop: por cada destinatario pendiente → `getOrCreateContact` +
-  `getOrCreateConversation` (fijando `channel` de la conversación al canal de la
-  campaña) → según canal, `sendTemplate(...)` o (tras fijar
-  `conversation.channel = "unofficial"`) `sendText(...)` → actualiza el
-  `campaign_recipient` y los contadores de la campaña → publica `campaign.run` por
-  SSE → espera `sendIntervalMs` → revisa `cancelRequested` antes del siguiente.
-- Al terminar (o cancelar), fija `status` final y `completedAt`.
+- 409 se a campanha não estiver em `draft` (FR-011).
+- Marca `status = "sending"`, `startedAt = now()`, retorna 200 imediatamente, e
+  dispara o loop em segundo plano (não bloqueia a resposta HTTP) — mesmo padrão
+  in-process do turno do agente (`src/server/ai/pipeline.ts`).
+- O loop: para cada destinatário pendente → `getOrCreateContact` +
+  `getOrCreateConversation` (fixando o `channel` da conversa para o canal da
+  campanha) → conforme o canal, `sendTemplate(...)` ou (após fixar
+  `conversation.channel = "unofficial"`) `sendText(...)` → atualiza o
+  `campaign_recipient` e os contadores da campanha → publica `campaign.run` via
+  SSE → aguarda `sendIntervalMs` → verifica `cancelRequested` antes do próximo.
+- Ao terminar (ou cancelar), fixa o `status` final e `completedAt`.
 
 ### `POST /api/campaigns/[id]/cancel`
 
-- 409 si la campaña no está en `sending`.
-- Fija `cancelRequested = true`; el propio loop la detecta y cierra
+- 409 se a campanha não estiver em `sending`.
+- Fixa `cancelRequested = true`; o próprio loop detecta isso e encerra
   (FR-010/SC-003).
 
-## Evento SSE nuevo
+## Evento SSE novo
 
 `{ type: "campaign.run"; data: { campaignId, status, total, sent, failed } }` —
-agregado a `SseEvent` en `src/server/events/bus.ts`, mismo patrón que `lab.run`.
+adicionado a `SseEvent` em `src/server/events/bus.ts`, mesmo padrão que `lab.run`.

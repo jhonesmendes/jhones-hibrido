@@ -1,7 +1,7 @@
 /**
- * White-label: nombre del CRM + acento por organización.
- * Presets sobrios del sistema Atlas; para un color personalizado se derivan
- * hover/soft/tint/text y se garantiza contraste con texto blanco.
+ * White-label: nome do CRM + acento por organização.
+ * Presets sóbrios do sistema Atlas; para uma cor personalizada, derivam-se
+ * hover/soft/tint/text e garante-se contraste com texto branco.
  */
 
 export type AccentSet = {
@@ -14,27 +14,27 @@ export type AccentSet = {
 
 export type Branding = {
   name: string;
-  accent: string; // hex del acento base elegido
+  accent: string; // hex do acento base escolhido
 };
 
 export const DEFAULT_BRANDING: Branding = { name: "Vocero", accent: "#3f5972" };
 
-/** Presets del handoff (valores exactos). */
+/** Presets do handoff (valores exatos). */
 export const ACCENT_PRESETS: Record<string, { label: string; set: AccentSet }> = {
   "#3f5972": {
-    label: "Azul acero",
+    label: "Azul aço",
     set: { accent: "#3f5972", hover: "#334a60", soft: "#dde5ee", tint: "#f3f6f9", text: "#2b4056" },
   },
   "#4b5563": {
-    label: "Grafito",
+    label: "Grafite",
     set: { accent: "#4b5563", hover: "#3b4350", soft: "#e2e5ea", tint: "#f4f5f7", text: "#333a45" },
   },
   "#3f6b66": {
-    label: "Verde apagado",
+    label: "Verde desbotado",
     set: { accent: "#3f6b66", hover: "#335752", soft: "#dcebe8", tint: "#f2f8f6", text: "#2b4a46" },
   },
   "#5f5470": {
-    label: "Ciruela",
+    label: "Ameixa",
     set: { accent: "#5f5470", hover: "#4d4459", soft: "#e6e1ec", tint: "#f6f4f8", text: "#443c52" },
   },
 };
@@ -59,7 +59,7 @@ function rgbToHex({ r, g, b }: Rgb): string {
   return `#${c(r)}${c(g)}${c(b)}`;
 }
 
-/** Mezcla `color` hacia `target` en proporción t (0..1). */
+/** Mistura `color` em direção a `target` na proporção t (0..1). */
 function mix(color: Rgb, target: Rgb, t: number): Rgb {
   return {
     r: color.r + (target.r - color.r) * t,
@@ -71,7 +71,7 @@ function mix(color: Rgb, target: Rgb, t: number): Rgb {
 const WHITE: Rgb = { r: 255, g: 255, b: 255 };
 const BLACK: Rgb = { r: 0, g: 0, b: 0 };
 
-/** Luminancia relativa (WCAG). */
+/** Luminância relativa (WCAG). */
 function luminance({ r, g, b }: Rgb): number {
   const f = (v: number) => {
     const s = v / 255;
@@ -81,9 +81,9 @@ function luminance({ r, g, b }: Rgb): number {
 }
 
 /**
- * Set completo para cualquier acento: preset exacto si existe; si no, se
- * deriva. Un base demasiado claro (texto blanco ilegible encima) se oscurece
- * hasta contraste ≥ 3:1 con blanco.
+ * Conjunto completo para qualquer acento: preset exato se existir; senão, se
+ * deriva. Uma base clara demais (texto branco ilegível sobre ela) é escurecida
+ * até contraste ≥ 3:1 com branco.
  */
 export function resolveAccentSet(accentHex: string): AccentSet {
   const preset = ACCENT_PRESETS[accentHex.toLowerCase()];
@@ -91,7 +91,7 @@ export function resolveAccentSet(accentHex: string): AccentSet {
   if (!isValidHex(accentHex)) return ACCENT_PRESETS["#3f5972"]!.set;
 
   let base = hexToRgb(accentHex.toLowerCase());
-  // contraste con blanco = (1.05) / (L + 0.05); exigir ≥ 3
+  // contraste com branco = (1.05) / (L + 0.05); exigir ≥ 3
   while (1.05 / (luminance(base) + 0.05) < 3 && luminance(base) > 0.005) {
     base = mix(base, BLACK, 0.12);
   }
@@ -121,7 +121,7 @@ export function resolveDarkAccentSet(accentHex: string): AccentSet {
   };
 }
 
-/** CSS de variables para inyectar en el <head> (SSR, sin flash). */
+/** CSS de variáveis para injetar no <head> (SSR, sem flash). */
 export function accentCssVariables(accentHex: string): string {
   const s = resolveAccentSet(accentHex);
   const d = resolveDarkAccentSet(accentHex);

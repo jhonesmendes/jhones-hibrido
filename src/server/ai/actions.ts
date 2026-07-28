@@ -1,9 +1,9 @@
 import { z } from "zod";
 
 /**
- * Acción tipada del agente: exactamente UNA por turno (FR-021).
- * El servidor valida cada acción contra sus allowlists (etapas de la org);
- * lo que no valida se degrada, nunca se ejecuta a ciegas.
+ * Ação tipada do agente: exatamente UMA por turno (FR-021).
+ * O servidor valida cada ação contra suas allowlists (etapas da org);
+ * o que não valida é degradado, nunca é executado às cegas.
  */
 export const AgentAction = z.discriminatedUnion("action", [
   z.object({ action: z.literal("none") }),
@@ -28,8 +28,8 @@ export const AgentAction = z.discriminatedUnion("action", [
 export type AgentActionType = z.infer<typeof AgentAction>;
 
 /**
- * Resuelve el nombre de etapa devuelto por el modelo contra las etapas reales
- * de la organización (exacto → lower-case). Sin match: degradar a reply/none.
+ * Resolve o nome de etapa retornado pelo modelo contra as etapas reais
+ * da organização (exato → lower-case). Sem match: degradar para reply/none.
  */
 export function resolveStage(
   requested: string,
@@ -41,7 +41,7 @@ export function resolveStage(
   return stages.find((s) => s.name.toLowerCase() === lower) ?? null;
 }
 
-/** Degrada una move_stage sin etapa válida (FR-021 / contrato ai.md). */
+/** Degrada um move_stage sem etapa válida (FR-021 / contrato ai.md). */
 export function degradeAction(action: AgentActionType): AgentActionType {
   if (action.action === "move_stage") {
     return action.reply

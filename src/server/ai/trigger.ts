@@ -2,9 +2,9 @@ import { scheduleAgentTurn } from "@/server/ai/pipeline";
 import { isAiConfigured } from "@/lib/env";
 
 /**
- * Punto de enganche del turno del agente tras la ingesta de un mensaje
- * entrante REAL (las conversaciones del Laboratorio invocan el pipeline
- * directamente, sin debounce).
+ * Ponto de gancho do turno do agente após a ingestão de uma mensagem
+ * recebida REAL (as conversas do Laboratório invocam o pipeline
+ * diretamente, sem debounce).
  */
 export async function maybeRunAgentTurn(
   conversationId: string

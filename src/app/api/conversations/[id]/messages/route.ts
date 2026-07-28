@@ -1,5 +1,10 @@
 import { z } from "zod";
 import { apiError, parseBody, withAuth } from "@/lib/api";
+import {
+  requireChannelAccess,
+  requireConversationAccess,
+  requirePermission,
+} from "@/lib/auth/require-permission";
 import { getConversation, listMessages } from "@/server/inbox/queries";
 import { serializeMessage } from "@/server/inbox/ingest";
 import { SendError, sendText } from "@/server/inbox/send";
@@ -12,6 +17,8 @@ export const GET = withAuth(async (session, req: Request, ctx: Params) => {
   const { id } = await ctx.params;
   const row = await getConversation(session.organizationId, id);
   if (!row) return apiError(404, "not_found", "Conversa não encontrada");
+  await requireConversationAccess(session, row.conversation.assignedTo);
+  await requireChannelAccess(session, row.conversation.channel, "view");
 
   const url = new URL(req.url);
   const sinceParam = url.searchParams.get("since");
@@ -40,6 +47,12 @@ export const POST = withAuth(async (session, req: Request, ctx: Params) => {
   const { id } = await ctx.params;
   const body = await parseBody(req, sendSchema);
   if (!body.ok) return body.response;
+
+  const row = await getConversation(session.organizationId, id);
+  if (!row) return apiError(404, "not_found", "Conversa não encontrada");
+  await requireConversationAccess(session, row.conversation.assignedTo);
+  await requirePermission(session, "conversations:reply");
+  await requireChannelAccess(session, row.conversation.channel, "send");
 
   try {
     const result = await sendText({

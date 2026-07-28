@@ -3,9 +3,9 @@ import { getDb, schema } from "@/lib/db";
 import { newId } from "@/lib/db/ids";
 
 /**
- * Actividad de lead al recibir un mensaje (US2): si el contacto no tiene lead,
- * se crea en la primera etapa del pipeline; si lo tiene, se actualiza su
- * última actividad.
+ * Atividade de lead ao receber uma mensagem (US2): se o contato não tem lead,
+ * ele é criado na primeira etapa do pipeline; se já tem, sua última
+ * atividade é atualizada.
  */
 export async function onLeadActivity(
   organizationId: string,
@@ -39,7 +39,7 @@ export async function onLeadActivity(
     )
     .orderBy(asc(schema.pipelineStage.position))
     .limit(1);
-  if (!firstStage[0]) return; // pipeline sin etapas abiertas: no hay dónde crear
+  if (!firstStage[0]) return; // pipeline sem etapas abertas: não há onde criar
 
   const maxPos = await db
     .select({ max: sql<number>`coalesce(max(${schema.lead.position}), -1)` })

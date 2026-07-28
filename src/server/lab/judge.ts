@@ -2,7 +2,7 @@ import { z } from "zod";
 import { chatJson } from "@/lib/ai";
 import { buildJudgePrompt } from "@/server/ai/prompts";
 
-/** Veredicto estructurado del juez (FR-032, contrato ai.md). */
+/** Veredito estruturado do juiz (FR-032, contrato ai.md). */
 export const Verdict = z.object({
   veredicto: z.enum(["verde", "amarillo", "rojo"]),
   hallazgos: z.array(
@@ -23,9 +23,9 @@ export type JudgeOutcome =
   | { status: "judge_failed"; detail: string };
 
 /**
- * UNA llamada del juez por conversación. Los reintentos viven dentro de
- * chatJson; si aun así la salida es inválida, el caso queda judge_failed —
- * visible en el reporte y excluido del score. La corrida continúa.
+ * UMA chamada do juiz por conversa. As novas tentativas vivem dentro de
+ * chatJson; se ainda assim a saída for inválida, o caso fica judge_failed —
+ * visível no relatório e excluído do score. A execução continua.
  */
 export async function judgeCase(input: {
   personaKey: string;
@@ -48,10 +48,10 @@ export async function judgeCase(input: {
     { judge: true }
   );
   if (!result.ok) {
-    // Diagnóstico operativo: el caso queda visible como judge_failed y aquí
-    // queda el porqué (incluye el raw= truncado del proveedor).
+    // Diagnóstico operacional: o caso fica visível como judge_failed e aqui
+    // fica o motivo (inclui o raw= truncado do provedor).
     console.error(
-      `[lab] juez falló para ${input.personaKey}: ${result.error} — ${result.detail}`
+      `[lab] juiz falhou para ${input.personaKey}: ${result.error} — ${result.detail}`
     );
     return { status: "judge_failed", detail: result.detail };
   }
@@ -59,8 +59,8 @@ export async function judgeCase(input: {
 }
 
 /**
- * Score 0-100: % ponderado de conversaciones verdes (FR-033).
- * verde = 1 · amarillo = 0.5 · rojo = 0. judge_failed fuera del denominador.
+ * Score 0-100: % ponderado de conversas verdes (FR-033).
+ * verde = 1 · amarillo = 0.5 · rojo = 0. judge_failed fora do denominador.
  */
 export function computeScore(
   cases: { status: string; veredicto: string | null }[]

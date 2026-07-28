@@ -2,8 +2,8 @@ import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 
 /**
- * Limpieza al arranque (FR-034): corridas del Laboratorio que quedaron
- * "running" tras un reinicio → fallidas. Solo corre en el runtime Node.
+ * Limpeza na inicialização (FR-034): execuções do Laboratório que ficaram
+ * "running" após um reinício → falhas. Roda apenas no runtime Node.
  */
 export async function cleanupOrphanRuns(): Promise<void> {
   try {
@@ -12,18 +12,18 @@ export async function cleanupOrphanRuns(): Promise<void> {
       .update(schema.agentTestRun)
       .set({
         status: "failed",
-        error: "Interrumpida por un reinicio del servidor",
+        error: "Interrompida por um reinício do servidor",
         finishedAt: new Date(),
       })
       .where(eq(schema.agentTestRun.status, "running"))
       .returning({ id: schema.agentTestRun.id });
     if (updated.length > 0) {
       console.log(
-        `[boot] ${updated.length} corrida(s) del Laboratorio huérfana(s) marcada(s) como fallida(s)`
+        `[boot] ${updated.length} execução(ões) órfã(s) do Laboratório marcada(s) como falha(s)`
       );
     }
   } catch (err) {
-    // La BD puede no estar lista aún (migraciones corren antes del server).
-    console.error("[boot] limpieza de corridas huérfanas falló:", err);
+    // O BD pode ainda não estar pronto (migrações rodam antes do servidor).
+    console.error("[boot] limpeza de execuções órfãs falhou:", err);
   }
 }

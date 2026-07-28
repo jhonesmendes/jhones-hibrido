@@ -1,16 +1,17 @@
-# Contrato: Acciones del agente y juez del Laboratorio
+# Contrato: Ações do agente e juiz do Laboratório
 
-## Adaptador LLM (frontera única)
+## Adaptador LLM (fronteira única)
 
-`lib/ai`: cliente `fetch` OpenRouter-compatible. Env: `OPENROUTER_API_TOKEN` (opcional —
-sin él, agente/Laboratorio deshabilitados con estado vacío), `OPENROUTER_BASE_URL`
+`lib/ai`: cliente `fetch` compatível com OpenRouter. Env: `OPENROUTER_API_TOKEN` (opcional —
+sem ele, agente/Laboratório desabilitados com estado vazio), `OPENROUTER_BASE_URL`
 (default `https://openrouter.ai/api`), `OPENROUTER_MODEL`, `OPENROUTER_JUDGE_MODEL`
-(default = `OPENROUTER_MODEL`). API: `chatJson<T>(schema, messages, opts)` → parsea con
-extracción robusta (bloque ```json, primer `{...}` balanceado), valida con Zod,
-reintenta ante fallo de red/parseo/validación (2 reintentos, backoff corto). Un hipo del
-proveedor NUNCA propaga excepción al turno: agota reintentos → resultado `error` tipado.
+(default = `OPENROUTER_MODEL`). API: `chatJson<T>(schema, messages, opts)` → faz parse com
+extração robusta (bloco ```json, primeiro `{...}` balanceado), valida com Zod,
+tenta novamente diante de falha de rede/parse/validação (2 retentativas, backoff curto). Um
+soluço do provedor NUNCA propaga exceção ao turno: esgota as retentativas → resultado
+`error` tipado.
 
-## Acción del agente (una por turno)
+## Ação do agente (uma por turno)
 
 ```ts
 const AgentAction = z.discriminatedUnion('action', [
@@ -25,21 +26,21 @@ const AgentAction = z.discriminatedUnion('action', [
 ])
 ```
 
-- `move_stage.stage` se resuelve contra nombres de etapas de la org (fuzzy exacto →
-  lower-case); sin match → se degrada a `reply` si trae texto, o `none`.
-- Regex de respaldo de handoff (se evalúa sobre el mensaje del cliente ANTES del LLM):
+- `move_stage.stage` é resolvido contra os nomes das etapas da org (fuzzy exato →
+  lower-case); sem match → degrada para `reply` se trouxer texto, ou `none`.
+- Regex de respaldo do handoff (avaliado sobre a mensagem do cliente ANTES do LLM):
   `/(hablar|comunicar|contactar)[\s\S]{0,40}?(asesor|humano|persona|alguien)|un asesor|atenci[oó]n humana/i`
-  — "somos 4 personas" NO matchea (unit test).
-- Disparadores de turno: ingesta de mensaje entrante en conversación con IA activa
-  (global + conversación + sin handoff). Debounce (coalesce) 6s producción / 0 en
-  Laboratorio; lock in-process por `conversation_id`; los mensajes que llegan durante el
-  turno se re-encolan.
-- Ventana cerrada o error persistente del proveedor → handoff automático
-  (`handoff_reason: 'ventana' | 'error'`), sin enviar texto libre.
+  — "somos 4 pessoas" NÃO combina (unit test).
+- Disparadores de turno: ingestão de mensagem recebida em conversa com IA ativa
+  (global + conversa + sem handoff). Debounce (coalesce) 6s produção / 0 no
+  Laboratório; lock in-process por `conversation_id`; as mensagens que chegam durante o
+  turno são reenfileiradas.
+- Janela fechada ou erro persistente do provedor → handoff automático
+  (`handoff_reason: 'ventana' | 'error'`), sem enviar texto livre.
 
-## Juez del Laboratorio (una llamada por conversación)
+## Juiz do Laboratório (uma chamada por conversa)
 
-Input: transcript completo + KB + comportamiento. Output (Zod):
+Input: transcript completo + KB + comportamento. Output (Zod):
 
 ```ts
 const Verdict = z.object({
@@ -52,12 +53,12 @@ const Verdict = z.object({
 })
 ```
 
-Juez inválido tras reintentos → caso `judge_failed` (excluido del score, visible en el
-reporte); la corrida continúa.
+Juiz inválido após retentativas → caso `judge_failed` (excluído do score, visível no
+relatório); a execução continua.
 
-## Personas guionadas (fijas, sin LLM)
+## Personas roteirizadas (fixas, sem LLM)
 
-6 claves: `comprador_decidido`, `pregunton_precios`, `cliente_enojado`, `fuera_de_kb`,
-`pide_humano`, `errores_modismos`. Cada una: 4–5 mensajes predefinidos; el runner envía
-mensaje → espera el turno del agente (pipeline real, debounce 0) → siguiente. Fin del
-guion o primer handoff → juez.
+6 chaves: `comprador_decidido`, `pregunton_precios`, `cliente_enojado`, `fuera_de_kb`,
+`pide_humano`, `errores_modismos`. Cada uma: 4–5 mensagens predefinidas; o runner envia
+mensagem → aguarda o turno do agente (pipeline real, debounce 0) → próxima. Fim do
+roteiro ou primeiro handoff → juiz.

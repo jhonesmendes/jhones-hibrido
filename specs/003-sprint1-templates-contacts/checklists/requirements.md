@@ -1,4 +1,4 @@
-# Specification Quality Checklist: Atajo de plantillas y alta manual de contacto
+# Specification Quality Checklist: Atalho de modelos e cadastro manual de contato
 
 **Purpose**: Validate specification completeness and quality before proceeding to planning
 **Created**: 2026-07-26
@@ -31,8 +31,9 @@
 
 ## Notes
 
-- Ambas historias reutilizan infraestructura ya existente (envío por canal, ingesta
-  idempotente de contacto/conversación); el alcance se mantiene deliberadamente chico.
-- La asunción sobre "alta manual de contacto" (sección Assumptions del spec) es la
-  única decisión de producto tomada sin confirmación explícita del dueño — documentada
-  para revisión, conforme al Principio VII de la constitución.
+- Ambas as histórias reutilizam infraestrutura já existente (envio por canal,
+  ingestão idempotente de contato/conversa); o escopo se mantém deliberadamente
+  pequeno.
+- A suposição sobre "cadastro manual de contato" (seção Assumptions do spec) é a
+  única decisão de produto tomada sem confirmação explícita do dono — documentada
+  para revisão, conforme o Princípio VII da constituição.

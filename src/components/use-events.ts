@@ -28,14 +28,14 @@ export type EventHandlers = {
     qrCode: string | null;
     phoneNumber: string | null;
   }) => void;
-  /** Se llama tras RECONECTAR (no en la conexión inicial): catch-up con refetch. */
+  /** É chamado após RECONECTAR (não na conexão inicial): catch-up com refetch. */
   onReconnect?: () => void;
 };
 
 /**
- * Suscripción SSE de la bandeja (contrato sse.md). EventSource reconecta
- * solo; el servidor no garantiza replay, así que al reconectar el consumidor
- * debe refetch con `since=` (onReconnect).
+ * Assinatura SSE da caixa de entrada (contrato sse.md). O EventSource
+ * reconecta sozinho; o servidor não garante replay, então ao reconectar o
+ * consumidor deve refazer o fetch com `since=` (onReconnect).
  */
 export function useEvents(handlers: EventHandlers): void {
   const handlersRef = useRef(handlers);

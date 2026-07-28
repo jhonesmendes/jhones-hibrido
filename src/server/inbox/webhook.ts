@@ -1,18 +1,18 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 /**
- * Autenticación en dos capas del webhook (contrato webhook.md / DV-VC-02).
- * Este módulo es puro (sin BD) para poder testearse unitariamente.
+ * Autenticação em duas camadas do webhook (contrato webhook.md / DV-VC-02).
+ * Este módulo é puro (sem BD) para poder ser testado unitariamente.
  */
 
-/** Comparación timing-safe de strings de longitud arbitraria. */
+/** Comparação timing-safe de strings de comprimento arbitrário. */
 export function safeEqual(a: string, b: string): boolean {
   const ha = createHmac("sha256", "cmp").update(a).digest();
   const hb = createHmac("sha256", "cmp").update(b).digest();
   return timingSafeEqual(ha, hb);
 }
 
-/** Capa 1: el segmento de la ruta debe coincidir con el verify token. */
+/** Camada 1: o segmento da rota deve coincidir com o verify token. */
 export function isValidWebhookToken(
   segment: string,
   verifyToken: string
@@ -21,8 +21,8 @@ export function isValidWebhookToken(
 }
 
 /**
- * Capa 2 (opcional): firma HMAC-SHA256 de Meta sobre el body CRUDO.
- * Devuelve true si no hay secreto configurado (capa desactivada).
+ * Camada 2 (opcional): assinatura HMAC-SHA256 da Meta sobre o body BRUTO.
+ * Retorna true se não houver segredo configurado (camada desativada).
  */
 export function isValidSignature(
   rawBody: string,
@@ -37,7 +37,7 @@ export function isValidSignature(
   return safeEqual(signatureHeader.slice("sha256=".length), expected);
 }
 
-/* ---------- Tipos del payload de Meta (subconjunto soportado) ---------- */
+/* ---------- Tipos do payload da Meta (subconjunto suportado) ---------- */
 
 export type WebhookMessage = {
   from: string;

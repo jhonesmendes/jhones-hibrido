@@ -11,10 +11,10 @@ import {
 } from "@/server/pipeline/followup-eligibility";
 
 /**
- * Ciclo de revisión del follow-up automático — corre en el mismo proceso
- * (Constitución II), disparado por un `setInterval` module-level (ver
- * `startFollowupScheduler`). Recorre TODAS las organizaciones habilitadas;
- * un fallo puntual en un lead no interrumpe el resto (FR-009).
+ * Ciclo de revisão do follow-up automático — roda no mesmo processo
+ * (Constituição II), disparado por um `setInterval` a nível de módulo (ver
+ * `startFollowupScheduler`). Percorre TODAS as organizações habilitadas;
+ * uma falha pontual em um lead não interrompe o restante (FR-009).
  */
 export async function runFollowupCycle(now: Date = new Date()): Promise<void> {
   const db = getDb();
@@ -51,8 +51,8 @@ export async function runFollowupCycle(now: Date = new Date()): Promise<void> {
         .limit(1);
       let lastSend = lastSendRows[0] ?? null;
 
-      // El cliente respondió después del último recordatorio activo: se
-      // resuelve (deja de contar) antes de evaluar elegibilidad.
+      // O cliente respondeu depois do último lembrete ativo: é resolvido
+      // (deixa de contar) antes de avaliar a elegibilidade.
       if (lastSend && respondedAfterSend(lead, lastSend)) {
         await db
           .update(schema.followupSend)
@@ -119,7 +119,7 @@ const globalForFollowup = globalThis as unknown as {
   __voceroFollowupTimer?: ReturnType<typeof setInterval>;
 };
 
-/** Arranca el scheduler una sola vez por proceso (Next recarga módulos en dev). */
+/** Inicia o scheduler uma única vez por processo (o Next recarrega módulos em dev). */
 export function startFollowupScheduler(): void {
   if (globalForFollowup.__voceroFollowupTimer) return;
   const intervalMs = getEnv().FOLLOWUP_SCHEDULER_INTERVAL_MS;

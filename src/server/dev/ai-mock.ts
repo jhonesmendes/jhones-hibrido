@@ -1,10 +1,10 @@
 import { JUDGE_MARKER } from "@/server/ai/prompts";
 
 /**
- * Proveedor LLM determinista para el self-test (contrato mocks.md).
- * Despacha por contenido del último mensaje `user` (o del system si es el
- * juez). JAMÁS es fallback en runtime: solo responde si OPENROUTER_BASE_URL
- * apunta explícitamente a él y el gate de mocks está activo.
+ * Provedor LLM determinístico para o self-test (contrato mocks.md).
+ * Despacha pelo conteúdo da última mensagem `user` (ou do system se for o
+ * juiz). JAMAIS é fallback em runtime: só responde se OPENROUTER_BASE_URL
+ * apontar explicitamente para ele e o gate de mocks estiver ativo.
  */
 
 type InMessage = { role: string; content: string };
@@ -14,9 +14,9 @@ export function aiMockCompletion(messages: InMessage[]): string {
   const lastUser =
     [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
 
-  // Juez del Laboratorio: veredicto determinista por persona. Para cerrar el
-  // loop del self-test, la persona fuera_de_kb pasa a verde si el CONOCIMIENTO
-  // configurado ya cubre garantías/devoluciones (sugerencia aplicada).
+  // Juiz do Laboratório: veredito determinístico por persona. Para fechar o
+  // loop do self-test, a persona fuera_de_kb passa a verde se o CONHECIMENTO
+  // configurado já cobrir garantias/devoluções (sugestão aplicada).
   if (system.includes(JUDGE_MARKER)) {
     const kbSection =
       lastUser
@@ -45,8 +45,8 @@ export function aiMockCompletion(messages: InMessage[]): string {
 
   const text = lastUser.toLowerCase();
 
-  // Persona pide_humano (el regex de respaldo captura la frase canónica; esta
-  // rama cubre variantes que llegan al modelo).
+  // Persona pide_humano (o regex de reserva captura a frase canônica; este
+  // ramo cobre variantes que chegam ao modelo).
   if (
     text.includes("humano") ||
     text.includes("asesor") ||
@@ -55,7 +55,7 @@ export function aiMockCompletion(messages: InMessage[]): string {
     return JSON.stringify({ action: "handoff", reason: "cliente" });
   }
 
-  // Intención de compra → mover a Interessado.
+  // Intenção de compra → mover para Interessado.
   if (
     text.includes("lo compro") ||
     text.includes("quiero comprar") ||

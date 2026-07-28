@@ -6,65 +6,66 @@
 
 ## Summary
 
-Vocero CRM es un monolito Next.js self-hosted que implementa: bandeja de WhatsApp en
-tiempo real (SSE), contactos + pipeline kanban, agente de IA con knowledge base y
-acciones tipadas, Laboratorio de auto-evaluación (6 personas guionadas + juez LLM),
-wizard de conexión del número (modo directo o modo agencia/Tech Provider), plantillas
-acotadas, multi-usuario mínimo e instalación en 15 minutos (Coolify o docker compose +
-Caddy). Los patrones difíciles (webhook firmado, ingesta idempotente, cifrado de tokens,
-coalesce+lock del agente, mock harness) se portan de un proyecto de referencia privado en
-producción, simplificados hacia menos código. Todo input externo se valida con Zod; el
-LLM se accede solo por un adaptador OpenRouter-compatible; el entorno de pruebas interno
-(wa-mock + ai-mock) permite el self-test E2E completo sin tocar la API real.
+Vocero CRM é um monolito Next.js self-hosted que implementa: caixa de entrada de WhatsApp
+em tempo real (SSE), contatos + pipeline kanban, agente de IA com knowledge base e
+ações tipadas, Laboratório de auto-avaliação (6 personas roteirizadas + juiz LLM),
+wizard de conexão do número (modo direto ou modo agência/Tech Provider), templates
+limitados, multiusuário mínimo e instalação em 15 minutos (Coolify ou docker compose +
+Caddy). Os padrões mais difíceis (webhook assinado, ingestão idempotente, criptografia de
+tokens, coalesce+lock do agente, mock harness) são portados de um projeto de referência
+privado em produção, simplificados para menos código. Todo input externo é validado com
+Zod; o LLM é acessado apenas por um adaptador compatível com OpenRouter; o ambiente de
+testes interno (wa-mock + ai-mock) permite o self-test E2E completo sem tocar a API real.
 
 ## Technical Context
 
-**Language/Version**: TypeScript estricto (`strict` + `noUncheckedIndexedAccess`), Node 22
+**Language/Version**: TypeScript estrito (`strict` + `noUncheckedIndexedAccess`), Node 22
 
 **Primary Dependencies**: Next.js 15 (App Router, output standalone) + React 19 ·
-Tailwind CSS + shadcn/ui · Drizzle ORM (migraciones versionadas) · Better Auth + plugin
-organization · Zod · nanoid (IDs con prefijo)
+Tailwind CSS + shadcn/ui · Drizzle ORM (migrações versionadas) · Better Auth + plugin
+organization · Zod · nanoid (IDs com prefixo)
 
-**Storage**: PostgreSQL 16 (self-hosted; servicio separado en Coolify / servicio compose)
+**Storage**: PostgreSQL 16 (self-hosted; serviço separado no Coolify / serviço compose)
 
-**Testing**: Vitest (unit) + Playwright vía MCP (self-test E2E conducido por el agente)
+**Testing**: Vitest (unit) + Playwright via MCP (self-test E2E conduzido pelo agente)
 
-**Target Platform**: VPS Linux con Coolify (Ruta A) o Docker Compose + Caddy (Ruta B);
-desarrollo en Windows/macOS/Linux con Docker
+**Target Platform**: VPS Linux com Coolify (Rota A) ou Docker Compose + Caddy (Rota B);
+desenvolvimento em Windows/macOS/Linux com Docker
 
-**Project Type**: Aplicación web monolítica (un solo paquete, sin workspaces)
+**Project Type**: Aplicação web monolítica (um único pacote, sem workspaces)
 
-**Performance Goals**: mensaje entrante visible en bandeja abierta ≤2s (SSE, también
-detrás de Caddy); instalación completa ~15 min; corrida del Laboratorio ≤10 min (timeout)
+**Performance Goals**: mensagem recebida visível na caixa de entrada aberta ≤2s (SSE,
+também atrás do Caddy); instalação completa ~15 min; execução do Laboratório ≤10 min
+(timeout)
 
-**Constraints**: SSE con heartbeat `: ping` ~25s, `Cache-Control: no-cache,
-no-transform`, `X-Accel-Buffering: no`, `Content-Type: text/event-stream` exacto, ruta
-`force-dynamic`, catch-up al reconectar · sin WebSocket ni servidor custom (rompe el
-standalone) · sin colas externas (background in-process) · dependencias runtime SOLO
-Meta Cloud API + LLM opcional (Constitución II endurecida) · repo público: cero
-secretos/nombres privados
+**Constraints**: SSE com heartbeat `: ping` ~25s, `Cache-Control: no-cache,
+no-transform`, `X-Accel-Buffering: no`, `Content-Type: text/event-stream` exato, rota
+`force-dynamic`, catch-up ao reconectar · sem WebSocket nem servidor custom (quebra o
+standalone) · sem filas externas (background in-process) · dependências de runtime SOMENTE
+Meta Cloud API + LLM opcional (Constituição II endurecida) · repositório público: zero
+segredos/nomes privados
 
-**Scale/Scope**: una instancia = un negocio; ~15 tablas; 8 user stories; equipo de
-operación pequeño (<10 usuarios); volumen WhatsApp de PyME (miles de mensajes/mes)
+**Scale/Scope**: uma instância = um negócio; ~15 tabelas; 8 user stories; equipe de
+operação pequena (<10 usuários); volume de WhatsApp de PME (milhares de mensagens/mês)
 
 ## Constitution Check
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-| Principio | Evaluación | Estado |
+| Princípio | Avaliação | Status |
 |---|---|---|
-| I. Seguridad de Datos | Token Meta cifrado AES-256-GCM en reposo; `ENCRYPTION_KEY` solo por env; secretos jamás al cliente/logs; aislamiento por `organization_id` en toda query | ✅ |
-| II. Soberanía (endurecida) | Runtime deps: solo Meta Cloud API + adaptador OpenRouter opcional. Sin S3/email/Stripe/Google. Auth (Better Auth) y Postgres self-hosted. Adaptadores dedicados (`lib/meta`, `lib/ai`) | ✅ |
-| III. Multi-Tenancy Real | `organization_id` NOT NULL + índice org-first en toda tabla de dominio; helpers de scope obligatorios (`lib/db/tenant`) | ✅ |
-| IV. Idempotencia | `wa_message_id` UNIQUE + dedup en ingesta; estados y template-status idempotentes; seed y migraciones idempotentes | ✅ |
-| V. Calidad Verificable | Gate typecheck+lint+build+Vitest; lo no verificable → lista "pendiente de verificación humana" | ✅ |
-| VI. Specs Antes de Código | Este flujo (spec → plan → tasks → implement); artefactos committeados y públicos | ✅ |
-| VII. Trazabilidad | Decisiones DV-VC-n en research.md; supuestos explícitos en spec | ✅ |
-| VIII. Foco Vertical | Alcance v1 rechaza broadcast/flujos visuales/scraping/Instagram (Out of Scope de la spec) | ✅ |
-| IX. Verificación en Vivo | Self-test E2E con Playwright contra wa-mock + ai-mock (camino feliz + infeliz), local primero; smoke real condicional a credenciales | ✅ |
+| I. Segurança de Dados | Token Meta criptografado AES-256-GCM em repouso; `ENCRYPTION_KEY` apenas via env; segredos jamais ao cliente/logs; isolamento por `organization_id` em toda query | ✅ |
+| II. Soberania (endurecida) | Runtime deps: apenas Meta Cloud API + adaptador OpenRouter opcional. Sem S3/email/Stripe/Google. Auth (Better Auth) e Postgres self-hosted. Adaptadores dedicados (`lib/meta`, `lib/ai`) | ✅ |
+| III. Multi-Tenancy Real | `organization_id` NOT NULL + índice org-first em toda tabela de domínio; helpers de escopo obrigatórios (`lib/db/tenant`) | ✅ |
+| IV. Idempotência | `wa_message_id` UNIQUE + dedup na ingestão; estados e template-status idempotentes; seed e migrações idempotentes | ✅ |
+| V. Qualidade Verificável | Gate typecheck+lint+build+Vitest; o que não é verificável → lista "pendente de verificação humana" | ✅ |
+| VI. Specs Antes do Código | Este fluxo (spec → plan → tasks → implement); artefatos commitados e públicos | ✅ |
+| VII. Rastreabilidade | Decisões DV-VC-n em research.md; premissas explícitas na spec | ✅ |
+| VIII. Foco Vertical | Escopo v1 rejeita broadcast/fluxos visuais/scraping/Instagram (Fora de Escopo da spec) | ✅ |
+| IX. Verificação ao Vivo | Self-test E2E com Playwright contra wa-mock + ai-mock (caminho feliz + infeliz), local primeiro; smoke real condicional a credenciais | ✅ |
 
-**Post-diseño (Fase 1)**: re-evaluado tras data-model y contratos — sin violaciones; no
-hay entradas en Complexity Tracking.
+**Pós-design (Fase 1)**: reavaliado após data-model e contratos — sem violações; não há
+entradas em Complexity Tracking.
 
 ## Project Structure
 
@@ -72,11 +73,11 @@ hay entradas en Complexity Tracking.
 
 ```text
 specs/001-vocero-core/
-├── plan.md              # Este archivo
-├── research.md          # Fase 0 — decisiones DV-VC-n
-├── data-model.md        # Fase 1 — ~15 tablas
-├── quickstart.md        # Fase 1 — correr local + self-test
-├── contracts/           # Fase 1 — API interna, webhook, SSE, mocks, juez
+├── plan.md              # Este arquivo
+├── research.md          # Fase 0 — decisões DV-VC-n
+├── data-model.md        # Fase 1 — ~15 tabelas
+├── quickstart.md        # Fase 1 — rodar local + self-test
+├── contracts/           # Fase 1 — API interna, webhook, SSE, mocks, juiz
 └── tasks.md             # Fase 2 (/speckit-tasks)
 ```
 
@@ -85,56 +86,56 @@ specs/001-vocero-core/
 ```text
 src/
 ├── app/
-│   ├── (auth)/                    # login, registro (cerrado tras 1ª org)
+│   ├── (auth)/                    # login, cadastro (fechado após 1ª org)
 │   ├── (app)/                     # shell autenticado
-│   │   ├── inbox/                 # US1 bandeja 3 columnas
+│   │   ├── inbox/                 # US1 caixa de entrada 3 colunas
 │   │   ├── pipeline/              # US2 kanban
-│   │   ├── contacts/              # US2 lista/búsqueda
-│   │   ├── agent/                 # US3 comportamiento + KB
-│   │   ├── lab/                   # US4 Laboratorio (corridas, reporte)
-│   │   └── settings/              # US5 wizard WhatsApp · US6 plantillas · US7 equipo
+│   │   ├── contacts/              # US2 lista/busca
+│   │   ├── agent/                 # US3 comportamento + KB
+│   │   ├── lab/                   # US4 Laboratório (execuções, relatório)
+│   │   └── settings/              # US5 wizard WhatsApp · US6 templates · US7 equipe
 │   └── api/
 │       ├── health/                # healthcheck deploy
 │       ├── auth/[...all]/         # Better Auth
 │       ├── webhooks/wa/[webhookToken]/   # US5 webhook (GET verify + POST eventos)
 │       ├── events/                # SSE (force-dynamic, heartbeat, catch-up)
-│       ├── conversations/         # mensajes, envío, plantilla, toggle IA
+│       ├── conversations/         # mensagens, envio, template, toggle IA
 │       ├── contacts/ · pipeline/ · agent/ · kb/ · lab/ · templates/ · settings/
 │       └── dev/
-│           ├── wa-mock/           # harness Cloud API (404 en prod)
-│           └── ai-mock/           # completions deterministas (404 en prod)
-├── components/                    # shadcn/ui + componentes de producto
+│           ├── wa-mock/           # harness Cloud API (404 em prod)
+│           └── ai-mock/           # completions determinísticas (404 em prod)
+├── components/                    # shadcn/ui + componentes de produto
 ├── lib/
-│   ├── env.ts                     # validación Zod de variables
+│   ├── env.ts                     # validação Zod de variáveis
 │   ├── crypto/                    # AES-256-GCM
-│   ├── meta/                      # cliente Graph API propio (+ plantillas)
-│   ├── ai/                        # adaptador OpenRouter-compatible (chatJson<T>)
+│   ├── meta/                      # cliente Graph API próprio (+ templates)
+│   ├── ai/                        # adaptador compatível com OpenRouter (chatJson<T>)
 │   ├── db/                        # drizzle schema, cliente, tenant scope
 │   └── auth/                      # Better Auth config + organization
 └── server/
     ├── inbox/                     # ingest idempotente, send (guard is_test), window
     ├── ai/                        # agent pipeline, coalesce+lock, prompts, handoff
-    ├── lab/                       # runner de corridas, personas, juez
-    ├── whatsapp/                  # credenciales, plantillas (sync estados)
+    ├── lab/                       # runner de execuções, personas, juiz
+    ├── whatsapp/                  # credenciais, templates (sync de estados)
     └── events/                    # bus SSE in-process
 
 scripts/
-├── migrate.mjs                    # migraciones al boot (esbuild)
+├── migrate.mjs                    # migrações no boot (esbuild)
 └── seed/demo.mjs                  # seed Ferretería El Martillo (idempotente)
 
 tests/
-├── unit/                          # crypto, firma, tenant, ventana, parser, regex,
-│                                  # mocks-prod-404, registro cerrado, lab-sandbox, juez
-└── e2e/                           # guiones del self-test (conducidos vía Playwright)
+├── unit/                          # crypto, assinatura, tenant, window, parser, regex,
+│                                  # mocks-prod-404, registro fechado, lab-sandbox, juiz
+└── e2e/                           # roteiros do self-test (conduzidos via Playwright)
 
 Dockerfile · docker-compose.yml · Caddyfile · INSTALL-IA.md · README.md · .env.example
 ```
 
-**Structure Decision**: Monolito Next.js de un solo paquete. Fronteras de modificación
-para agencias: `src/lib/ai/` (cambiar cerebro), `src/lib/meta/` (canal), `src/lib/db/schema`
-(campos), `src/server/ai/prompts.ts` (comportamiento). Los mocks viven bajo `src/app/api/dev/`
-con guard de producción único.
+**Structure Decision**: Monolito Next.js de um único pacote. Fronteiras de modificação
+para agências: `src/lib/ai/` (trocar o cérebro), `src/lib/meta/` (canal), `src/lib/db/schema`
+(campos), `src/server/ai/prompts.ts` (comportamento). Os mocks ficam sob `src/app/api/dev/`
+com guard de produção único.
 
 ## Complexity Tracking
 
-Sin violaciones constitucionales que justificar.
+Sem violações constitucionais a justificar.

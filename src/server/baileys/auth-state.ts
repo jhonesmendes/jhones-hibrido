@@ -12,11 +12,11 @@ import { newId } from "@/lib/db/ids";
 import { decryptSecret, encryptSecret } from "@/lib/crypto";
 
 /**
- * Estado de autenticación de Baileys persistido en Postgres, cifrado en
- * reposo (mismo `lib/crypto` AES-256-GCM que el token de Meta). Equivalente
- * a `useMultiFileAuthState` de Baileys, pero respaldado por BD en vez de
- * archivos — un blob JSON completo por organización (volumen bajo, sin
- * necesidad de una tabla de claves individuales en esta escala).
+ * Estado de autenticação do Baileys persistido no Postgres, criptografado em
+ * repouso (mesmo `lib/crypto` AES-256-GCM que o token da Meta). Equivalente
+ * a `useMultiFileAuthState` do Baileys, mas respaldado por BD em vez de
+ * arquivos — um blob JSON completo por organização (volume baixo, sem
+ * necessidade de uma tabela de chaves individuais nesta escala).
  */
 
 type StoredKeys = {
@@ -130,7 +130,7 @@ export async function deleteAuthState(organizationId: string): Promise<void> {
     .where(eq(schema.unofficialChannel.organizationId, organizationId));
 }
 
-/** Organizaciones con una sesión ya pareada (para reconectar al arrancar). */
+/** Organizações com uma sessão já pareada (para reconectar ao iniciar). */
 export async function listPairedOrganizations(): Promise<string[]> {
   const db = getDb();
   const rows = await db

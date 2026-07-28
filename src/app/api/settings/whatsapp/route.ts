@@ -30,7 +30,7 @@ const putSchema = z.object({
   token: z.string().trim().min(1),
 });
 
-/** Guarda la conexión: re-valida contra Meta, cifra y suscribe (FR-040). */
+/** Salva a conexão: revalida contra a Meta, criptografa e inscreve (FR-040). */
 export const PUT = withAuth(async (session, req: Request) => {
   const body = await parseBody(req, putSchema);
   if (!body.ok) return body.response;
@@ -50,7 +50,7 @@ export const PUT = withAuth(async (session, req: Request) => {
     verifiedName: check.verifiedName,
   });
 
-  // Best-effort: necesaria en modo directo; el modo agencia usa su override.
+  // Best-effort: necessária no modo direto; o modo agência usa seu override.
   await subscribeAppToWaba(body.data.wabaId, body.data.token);
 
   return Response.json({

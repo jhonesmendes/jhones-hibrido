@@ -2,10 +2,10 @@ import type { z } from "zod";
 import { getEnv, isAiConfigured } from "@/lib/env";
 
 /**
- * Adaptador LLM OpenRouter-compatible — ÚNICA frontera con el proveedor de IA
- * (Constitución II). Regla operativa: la salida del modelo es impredecible;
- * todo consumo pasa por extracción robusta + Zod + reintentos, y un hipo del
- * proveedor jamás propaga excepción (resultado `error` tipado).
+ * Adaptador LLM OpenRouter-compatible — ÚNICA fronteira com o provedor de IA
+ * (Constituição II). Regra operacional: a saída do modelo é imprevisível;
+ * todo consumo passa por extração robusta + Zod + retentativas, e um soluço
+ * do provedor jamais propaga exceção (resultado `error` tipado).
  */
 
 export type ChatMessage = {
@@ -29,7 +29,7 @@ export async function chatJson<T>(
     return {
       ok: false,
       error: "not_configured",
-      detail: "Sin OPENROUTER_API_TOKEN configurado",
+      detail: "Sem OPENROUTER_API_TOKEN configurado",
     };
   }
   const env = getEnv();
@@ -42,7 +42,7 @@ export async function chatJson<T>(
     return {
       ok: false,
       error: "not_configured",
-      detail: "Sin OPENROUTER_MODEL configurado",
+      detail: "Sem OPENROUTER_MODEL configurado",
     };
   }
 
@@ -63,12 +63,12 @@ export async function chatJson<T>(
       const raw = await callProvider(model, attemptMessages, opts?.timeoutMs);
       const extracted = extractJson(raw);
       if (extracted === null) {
-        lastDetail = `sin JSON extraíble (raw=${truncate(raw)})`;
+        lastDetail = `sem JSON extraível (raw=${truncate(raw)})`;
         continue;
       }
       const parsed = schema.safeParse(extracted);
       if (!parsed.success) {
-        lastDetail = `no cumple el esquema: ${parsed.error.issues
+        lastDetail = `não cumpre o esquema: ${parsed.error.issues
           .map((i) => i.path.join(".") + " " + i.message)
           .join("; ")} (raw=${truncate(raw)})`;
         continue;
@@ -103,7 +103,7 @@ async function callProvider(
     const res = await fetch(`${env.OPENROUTER_BASE_URL}/v1/chat/completions`, {
       method: "POST",
       headers: {
-        // El token jamás se loguea; solo viaja en este header.
+        // O token jamais é logado; só viaja neste header.
         Authorization: `Bearer ${env.OPENROUTER_API_TOKEN}`,
         "Content-Type": "application/json",
       },
@@ -112,14 +112,14 @@ async function callProvider(
     });
     if (!res.ok) {
       const text = await res.text().catch(() => "");
-      throw new Error(`proveedor respondió ${res.status}: ${truncate(text)}`);
+      throw new Error(`provedor respondeu ${res.status}: ${truncate(text)}`);
     }
     const json = (await res.json()) as {
       choices?: { message?: { content?: string } }[];
     };
     const content = json.choices?.[0]?.message?.content;
     if (typeof content !== "string" || content.length === 0) {
-      throw new Error("respuesta del proveedor sin contenido");
+      throw new Error("resposta do provedor sem conteúdo");
     }
     return content;
   } finally {
@@ -128,9 +128,9 @@ async function callProvider(
 }
 
 /**
- * Extracción robusta de JSON de una respuesta de modelo:
- * 1) bloque ```json ... ``` (o ``` ... ```), 2) el texto completo,
- * 3) del primer `{` al último `}`.
+ * Extração robusta de JSON de uma resposta de modelo:
+ * 1) bloco ```json ... ``` (ou ``` ... ```), 2) o texto completo,
+ * 3) do primeiro `{` ao último `}`.
  */
 export function extractJson(raw: string): unknown | null {
   const candidates: string[] = [];
@@ -146,7 +146,7 @@ export function extractJson(raw: string): unknown | null {
     try {
       return JSON.parse(c);
     } catch {
-      // siguiente candidato
+      // próximo candidato
     }
   }
   return null;

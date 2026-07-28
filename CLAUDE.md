@@ -1,76 +1,76 @@
-# Vocero CRM — Guía para Claude
+# Vocero CRM — Guia para Claude
 
-Vocero es un CRM de WhatsApp open source (MIT), self-hosted, con agente de IA y
-Laboratorio de auto-evaluación. Una instancia = un negocio. Este archivo guía a
-Claude Code (u otro asistente) para operar y **modificar** este repositorio —
-el caso típico: una agencia adaptando Vocero para un cliente.
+Vocero é um CRM de WhatsApp open source (MIT), self-hosted, com agente de IA e
+Laboratório de autoavaliação. Uma instância = um negócio. Este arquivo orienta o
+Claude Code (ou outro assistente) para operar e **modificar** este repositório —
+o caso típico: uma agência adaptando o Vocero para um cliente.
 
 ## Stack
 
-**Next.js 15 (App Router) + React 19** en monolito · TypeScript estricto
-(`strict` + `noUncheckedIndexedAccess`) · Tailwind CSS (tema oscuro propio,
-acento `#25D366`) · **PostgreSQL + Drizzle ORM** (migraciones versionadas en
-`drizzle/`, aplicadas al ARRANCAR el contenedor) · **Better Auth** + plugin
-organization · **Zod** en todo input externo · nanoid con prefijos (`ct_`,
-`cv_`, `msg_`…) · pnpm · Vitest (unit) + guiones E2E en `tests/e2e/`
-conducidos con Playwright · Docker multi-stage (standalone, healthcheck
-`/api/health`) · deploy en Coolify (Ruta A) o docker compose + Caddy (Ruta B).
+**Next.js 15 (App Router) + React 19** em monolito · TypeScript estrito
+(`strict` + `noUncheckedIndexedAccess`) · Tailwind CSS (tema escuro próprio,
+cor de destaque `#25D366`) · **PostgreSQL + Drizzle ORM** (migrações versionadas em
+`drizzle/`, aplicadas ao INICIAR o container) · **Better Auth** + plugin
+organization · **Zod** em toda entrada externa · nanoid com prefixos (`ct_`,
+`cv_`, `msg_`…) · pnpm · Vitest (unit) + roteiros E2E em `tests/e2e/`
+conduzidos com Playwright · Docker multi-stage (standalone, healthcheck
+`/api/health`) · deploy no Coolify (Rota A) ou docker compose + Caddy (Rota B).
 
-Tiempo real por **SSE** (`/api/events`): heartbeat `: ping` ~25s, headers
-anti-buffering, catch-up por refetch con `since=`. Sin WebSockets, sin colas
-externas: el trabajo en segundo plano (agente, Laboratorio) es in-process.
+Tempo real via **SSE** (`/api/events`): heartbeat `: ping` ~25s, headers
+anti-buffering, catch-up por refetch com `since=`. Sem WebSockets, sem filas
+externas: o trabalho em segundo plano (agente, Laboratório) é in-process.
 
-## Mapa del código (fronteras de modificación)
+## Mapa do código (fronteiras de modificação)
 
-| Quieres cambiar… | Toca… |
+| Quer mudar… | Mexa em… |
 |---|---|
-| El cerebro/proveedor LLM | `src/lib/ai/` (adaptador OpenRouter-compatible, `chatJson<T>`) |
-| El comportamiento/prompt del agente | `src/server/ai/prompts.ts` |
-| Las acciones que puede tomar el agente | `src/server/ai/actions.ts` + ejecución en `src/server/ai/pipeline.ts` |
-| Las personas o el juez del Laboratorio | `src/server/lab/personas.ts` · `src/server/lab/judge.ts` |
-| El canal WhatsApp oficial (Graph API) | `src/lib/meta/` (cliente único) + `src/server/whatsapp/` |
-| El canal WhatsApp no oficial (Baileys/Evolution) | `src/server/whatsapp/baileys/` (adaptador dedicado, roadmap en curso — ver `vocero_roadmap.md`) |
-| Campañas (disparo en masa, oficial y no oficial) | `src/server/campaigns/` + `src/lib/campaigns/` (roadmap en curso) |
-| Campos/tablas | `src/lib/db/schema.ts` → `pnpm db:generate` → migración nueva en `drizzle/` |
-| La ingesta/envío de mensajes | `src/server/inbox/` (ingest idempotente, send con guard de sandbox, ventana 24h) |
+| O cérebro/provedor LLM | `src/lib/ai/` (adaptador compatível com OpenRouter, `chatJson<T>`) |
+| O comportamento/prompt do agente | `src/server/ai/prompts.ts` |
+| As ações que o agente pode tomar | `src/server/ai/actions.ts` + execução em `src/server/ai/pipeline.ts` |
+| As personas ou o juiz do Laboratório | `src/server/lab/personas.ts` · `src/server/lab/judge.ts` |
+| O canal WhatsApp oficial (Graph API) | `src/lib/meta/` (cliente único) + `src/server/whatsapp/` |
+| O canal WhatsApp não oficial (motor Baileys nativo) | `src/server/baileys/` (conexão direta ao protocolo, sem gateway de terceiros) |
+| Campanhas (disparo em massa, oficial e não oficial) | `src/server/campaigns/` + `src/lib/campaigns/` (roadmap em andamento) |
+| Campos/tabelas | `src/lib/db/schema.ts` → `pnpm db:generate` → migração nova em `drizzle/` |
+| A ingestão/envio de mensagens | `src/server/inbox/` (ingest idempotente, send com guard de sandbox, janela de 24h) |
 | UI | `src/components/` + `src/app/(app)/` |
 
-Los mocks del entorno de pruebas viven en `src/app/api/dev/` (wa-mock +
-ai-mock) tras un gate único (`src/lib/dev-guard.ts`): 404 incondicional en
-producción.
+Os mocks do ambiente de testes vivem em `src/app/api/dev/` (wa-mock +
+ai-mock) atrás de um gate único (`src/lib/dev-guard.ts`): 404 incondicional em
+produção.
 
-## Reglas de la constitución (no negociables)
+## Regras da constituição (não negociáveis)
 
-Ver [.specify/memory/constitution.md](.specify/memory/constitution.md).
+Veja [.specify/memory/constitution.md](.specify/memory/constitution.md).
 
-- **Soberanía (II, v2.0.0)**: dependencias de runtime SOLO canal WhatsApp —
-  Cloud API oficial y/o canal no oficial (Baileys/Evolution), coexistiendo por
-  organización — + proveedor LLM OpenRouter-compatible opcional. PROHIBIDO en
-  v1 introducir S3/R2, email, Stripe, Google u otros servicios externos. Auth y
-  BD self-hosted. El canal no oficial es riesgo de cuenta, no fuga de
-  soberanía — se gobierna con guardarraíles (ver Principio IX), no se prohíbe.
-- **Foco Vertical (VIII, v2.0.0)**: se admite disparo en masa (Campañas,
-  oficial y no oficial) como extensión de "convertir conversaciones". Sigue
-  fuera: scraping de números, flujos visuales genéricos.
-- **Seguridad (I)**: secretos cifrados en reposo (AES-256-GCM, `lib/crypto`);
-  jamás al cliente ni a logs. El token de WhatsApp solo muestra sus últimos 4.
-- **Multi-tenancy (III)**: `organization_id` NOT NULL en toda tabla de dominio;
-  toda query pasa por `scoped()` de `src/lib/db/tenant.ts`.
-- **Idempotencia (IV)**: webhooks dedup por `wa_message_id` UNIQUE; estados
-  monotónicos; seeds y migraciones re-ejecutables.
-- **Sandbox del Laboratorio**: las conversaciones `is_test` JAMÁS tocan la API
-  real — el sender lanza excepción (no lo "arregles": es un guardrail).
-- **Canal no oficial como feature (IX, v2.0.0)**: toda campaña/disparo por el
-  canal no oficial MUST advertir riesgo de ban en la UI antes de confirmar, y
-  el intervalo entre envíos MUST ser configuración editable, nunca un valor
-  fijo en el código.
+- **Soberania (II, v2.0.0)**: dependências de runtime SOMENTE canal WhatsApp —
+  Cloud API oficial e/ou canal não oficial (Baileys/Evolution), coexistindo por
+  organização — + provedor LLM compatível com OpenRouter opcional. PROIBIDO na
+  v1 introduzir S3/R2, e-mail, Stripe, Google ou outros serviços externos. Auth e
+  BD self-hosted. O canal não oficial é risco de conta, não fuga de
+  soberania — é governado com guardrails (ver Princípio IX), não é proibido.
+- **Foco Vertical (VIII, v2.0.0)**: admite-se disparo em massa (Campanhas,
+  oficial e não oficial) como extensão de "converter conversas". Continua
+  fora: scraping de números, fluxos visuais genéricos.
+- **Segurança (I)**: segredos cifrados em repouso (AES-256-GCM, `lib/crypto`);
+  jamais ao cliente nem a logs. O token do WhatsApp só mostra os últimos 4 dígitos.
+- **Multi-tenancy (III)**: `organization_id` NOT NULL em toda tabela de domínio;
+  toda query passa por `scoped()` de `src/lib/db/tenant.ts`.
+- **Idempotência (IV)**: webhooks com dedup por `wa_message_id` UNIQUE; estados
+  monotônicos; seeds e migrações re-executáveis.
+- **Sandbox do Laboratório**: as conversas `is_test` JAMAIS tocam a API
+  real — o sender lança exceção (não "conserte": é um guardrail).
+- **Canal não oficial como feature (IX, v2.0.0)**: toda campanha/disparo pelo
+  canal não oficial MUST advertir o risco de ban na UI antes de confirmar, e
+  o intervalo entre envios MUST ser configuração editável, nunca um valor
+  fixo no código.
 
-## Variables de entorno
+## Variáveis de ambiente
 
-Ver `.env.example` (cada una con guía inline). Las claves: `APP_BASE_URL`,
+Veja `.env.example` (cada uma com guia inline). As principais: `APP_BASE_URL`,
 `DATABASE_URL`, `BETTER_AUTH_SECRET`, `ENCRYPTION_KEY` (32 bytes base64),
-`META_WEBHOOK_VERIFY_TOKEN` (segmento secreto del webhook), `META_APP_SECRET`
-(opcional, firma), y para IA:
+`META_WEBHOOK_VERIFY_TOKEN` (segmento secreto do webhook), `META_APP_SECRET`
+(opcional, assinatura), e para IA:
 
 ```bash
 OPENROUTER_API_TOKEN=sk-or-...
@@ -78,27 +78,27 @@ OPENROUTER_MODEL=anthropic/claude-sonnet-4.5
 OPENROUTER_JUDGE_MODEL=anthropic/claude-haiku-4.5   # opcional: juez más barato
 ```
 
-Para el self-test local existe además el modo de pruebas interno (mocks) —
-ver `specs/001-vocero-core/quickstart.md`. Nunca actives mocks en producción.
+Para o self-test local existe também o modo de testes interno (mocks) —
+veja `specs/001-vocero-core/quickstart.md`. Nunca ative mocks em produção.
 
-## Manejo de credenciales (obligatorio)
+## Gerenciamento de credenciais (obrigatório)
 
-Cuando una feature necesite una variable/credencial nueva: (1) agrégala a
-`.env` como placeholder `REEMPLAZA_...` (append), (2) deja guía inline `#` de
-cómo obtenerla, (3) resume en el chat y sigue. `.env` está gitignored; para
-deploy, las vars van también en la plataforma de hosting (runtime, no build).
+Quando uma feature precisar de uma variável/credencial nova: (1) adicione-a ao
+`.env` como placeholder `REEMPLAZA_...` (append), (2) deixe um guia inline `#` de
+como obtê-la, (3) resuma no chat e continue. `.env` está no gitignore; para
+o deploy, as vars também vão na plataforma de hospedagem (runtime, não build).
 
-## Definición de Hecho REFORZADA (obligatoria)
+## Definição de Pronto REFORÇADA (obrigatória)
 
-"Typecheck + lint + build (+ tests)" es el piso, NO el techo. Una feature no
-está "Hecha" hasta correr el **self-test de COMPORTAMIENTO de punta a punta**
+"Typecheck + lint + build (+ tests)" é o piso, NÃO o teto. Uma feature não
+está "Pronta" até rodar o **self-test de COMPORTAMENTO de ponta a ponta**
 (Playwright + mocks: `WA_MOCK_ENABLED=true`, `META_GRAPH_BASE_URL` → wa-mock,
-`OPENROUTER_BASE_URL` → ai-mock) y dejarlo verde: flujo real como usuario,
-resultado observable, y el camino infeliz degradando sin colgarse. Prohibido
-delegar la prueba al usuario. Si algo depende de un LLM/proveedor externo,
-todo turno tolera formato inesperado con extracción robusta + reintentos — un
-hipo del proveedor nunca tumba el turno. Al detectar un fallo: diagnostica,
-corrige y re-verifica tú mismo hasta verde (loop de auto-corrección).
+`OPENROUTER_BASE_URL` → ai-mock) e deixá-lo verde: fluxo real como usuário,
+resultado observável, e o caminho infeliz degradando sem travar. Proibido
+delegar o teste ao usuário. Se algo depender de um LLM/provedor externo,
+todo turno tolera formato inesperado com extração robusta + retentativas — um
+soluço do provedor nunca derruba o turno. Ao detectar uma falha: diagnostique,
+corrija e reverifique você mesmo até ficar verde (loop de autocorreção).
 
 Gate técnico:
 
@@ -106,28 +106,28 @@ Gate técnico:
 pnpm typecheck && pnpm lint && pnpm build && pnpm test
 ```
 
-Guiones E2E por historia en `tests/e2e/*.md`.
+Roteiros E2E por história em `tests/e2e/*.md`.
 
 ## Modo Objetivo — Loop SDD
 
-Cuando el dueño da una META (no prompts paso a paso): Discover → Plan →
-Execute → Verify → Iterate, de forma autónoma, volviendo solo con el objetivo
-verificado en vivo o con un bloqueo real (decisión de producto, credenciales,
-acción irreversible/costosa). Agrupa TODAS las preguntas bloqueantes al inicio.
-El estado durable son los artefactos SDD en `specs/` (spec/plan/tasks) —
-manténlos al día. Invocable como `/loop-sdd <objetivo>`.
+Quando o dono dá uma META (não prompts passo a passo): Discover → Plan →
+Execute → Verify → Iterate, de forma autônoma, voltando só com o objetivo
+verificado ao vivo ou com um bloqueio real (decisão de produto, credenciais,
+ação irreversível/custosa). Agrupe TODAS as perguntas bloqueantes no início.
+O estado durável são os artefatos SDD em `specs/` (spec/plan/tasks) —
+mantenha-os atualizados. Invocável como `/loop-sdd <objetivo>`.
 
-## Memoria persistente
+## Memória persistente
 
-Memoria de archivos en `memory/` (índice `memory/MEMORY.md`, cargado por
-sesión). Persiste decisiones, gotchas y correcciones; no dupliques lo que el
-repo ya registra. Los subagentes con `memory: project` usan
+Memória de arquivos em `memory/` (índice `memory/MEMORY.md`, carregado por
+sessão). Persiste decisões, gotchas e correções; não duplique o que o
+repo já registra. Os subagentes com `memory: project` usam
 `.claude/agent-memory/`.
 
-## Arquitectura de agentes
+## Arquitetura de agentes
 
-1. **Orquestador** = la sesión principal de Claude Code (este CLAUDE.md + skill
+1. **Orquestrador** = a sessão principal do Claude Code (este CLAUDE.md + skill
    `loop-sdd`).
 2. **Subagentes** (`.claude/agents/`): `deploy-ops` (deploy/logs/healthchecks,
-   no escribe código de app) · `public-site-builder` (páginas públicas/legales
-   y config de paneles externos).
+   não escreve código de app) · `public-site-builder` (páginas públicas/legais
+   e config de painéis externos).

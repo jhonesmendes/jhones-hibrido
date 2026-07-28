@@ -10,6 +10,7 @@ const TABS = [
   { href: "/settings/branding", label: "Marca" },
   { href: "/settings/templates", label: "Modelos" },
   { href: "/settings/team", label: "Equipe" },
+  { href: "/settings/email", label: "Email" },
 ] as const;
 
 export function SettingsNav() {

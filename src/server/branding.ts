@@ -6,7 +6,7 @@ import {
   type Branding,
 } from "@/lib/branding";
 
-/** Marca guardada en organization.metadata (JSON de Better Auth). */
+/** Marca salva em organization.metadata (JSON do Better Auth). */
 
 function parseMetadata(metadata: string | null): Record<string, unknown> {
   if (!metadata) return {};
@@ -30,7 +30,7 @@ export async function getBranding(
         .from(schema.organization)
         .where(eq(schema.organization.id, organizationId))
         .limit(1)
-    : // Sin sesión (login, layout raíz): la única organización de la instancia.
+    : // Sem sessão (login, layout raiz): a única organização da instância.
       await db
         .select({ metadata: schema.organization.metadata })
         .from(schema.organization)

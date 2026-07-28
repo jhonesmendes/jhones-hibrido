@@ -8,14 +8,14 @@ import { computeScore, judgeCase } from "@/server/lab/judge";
 import { PERSONAS, type Persona } from "@/server/lab/personas";
 
 /**
- * Runner del Laboratorio (FR-030/FR-034): corrida en segundo plano DENTRO del
- * proceso (sin cola externa), turnos secuenciales con debounce 0, timeout
- * global de 10 minutos, y lock de concurrencia por índice parcial UNIQUE en
- * BD (máx. 1 corrida `running` por organización).
+ * Runner do Laboratório (FR-030/FR-034): execução em segundo plano DENTRO do
+ * processo (sem fila externa), turnos sequenciais com debounce 0, timeout
+ * global de 10 minutos, e lock de concorrência por índice parcial UNIQUE no
+ * BD (máx. 1 execução `running` por organização).
  *
- * Sandbox (FR-031): las conversaciones se crean con is_test=true; el pipeline
- * del agente persiste las respuestas sin tocar la API, y el sender real lanza
- * si algo intenta enviarlas.
+ * Sandbox (FR-031): as conversas são criadas com is_test=true; o pipeline
+ * do agente persiste as respostas sem tocar a API, e o sender real lança
+ * exceção se algo tentar enviá-las.
  */
 
 const RUN_TIMEOUT_MS = 10 * 60 * 1000;
@@ -32,7 +32,7 @@ export async function startRun(organizationId: string): Promise<string> {
       .returning();
     runId = inserted[0]!.id;
   } catch (err) {
-    // Violación del índice parcial UNIQUE → ya hay una corrida activa.
+    // Violação do índice parcial UNIQUE → já há uma execução ativa.
     if (isUniqueViolation(err)) {
       throw new RunConflictError("Já há uma rodada em andamento");
     }
@@ -49,9 +49,9 @@ export async function startRun(organizationId: string): Promise<string> {
     }))
   );
 
-  // Fire-and-forget in-process: el POST regresa ya; el progreso va por SSE.
+  // Fire-and-forget in-process: o POST já retorna; o progresso vai por SSE.
   void executeRun(runId, organizationId).catch(async (err) => {
-    console.error("[lab] corrida falló:", err);
+    console.error("[lab] execução falhou:", err);
     await failRun(runId, organizationId, String(err));
   });
 
@@ -64,7 +64,7 @@ async function executeRun(
 ): Promise<void> {
   const timeout = new Promise<never>((_, reject) =>
     setTimeout(
-      () => reject(new Error("timeout de 10 minutos superado")),
+      () => reject(new Error("tempo limite de 10 minutos excedido")),
       RUN_TIMEOUT_MS
     )
   );
@@ -100,10 +100,10 @@ async function runAllCases(
   const profile = profileRows[0];
   const behaviorText = profile
     ? [
-        `Nombre: ${profile.name}`,
-        profile.tone ? `Tono: ${profile.tone}` : null,
-        profile.instructions ? `Instrucciones: ${profile.instructions}` : null,
-        profile.escalationRules ? `Escalado: ${profile.escalationRules}` : null,
+        `Nome: ${profile.name}`,
+        profile.tone ? `Tom: ${profile.tone}` : null,
+        profile.instructions ? `Instruções: ${profile.instructions}` : null,
+        profile.escalationRules ? `Escalonamento: ${profile.escalationRules}` : null,
       ]
         .filter(Boolean)
         .join("\n")
@@ -165,7 +165,7 @@ async function runAllCases(
   publishProgress(organizationId, runId, "done", done, total, score);
 }
 
-/** Conversa el guion completo contra el agente real; corta al primer handoff. */
+/** Conversa o roteiro completo com o agente real; corta no primeiro handoff. */
 async function runConversation(
   organizationId: string,
   persona: Persona
@@ -175,7 +175,7 @@ async function runConversation(
 }> {
   const db = getDb();
 
-  // Contacto sintético ARCHIVADO (no aparece en la lista ni genera leads).
+  // Contato sintético ARQUIVADO (não aparece na lista nem gera leads).
   const contactId = await upsertTestContact(organizationId, persona);
 
   const convId = newId("conversation");
@@ -204,7 +204,7 @@ async function runConversation(
       .set({ lastInboundAt: now, lastMessageAt: now, updatedAt: now })
       .where(eq(schema.conversation.id, convId));
 
-    // Turno REAL del agente, secuencial y sin debounce (FR-030).
+    // Turno REAL do agente, sequencial e sem debounce (FR-030).
     await runAgentTurn(convId);
 
     const convRows = await db
@@ -212,7 +212,7 @@ async function runConversation(
       .from(schema.conversation)
       .where(eq(schema.conversation.id, convId))
       .limit(1);
-    if (convRows[0]?.handoffAt) break; // primer handoff → fin del guion
+    if (convRows[0]?.handoffAt) break; // primeiro handoff → fim do roteiro
   }
 
   const messages = await db

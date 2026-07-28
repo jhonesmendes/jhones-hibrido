@@ -3,9 +3,9 @@
 @tailwind utilities;
 
 /*
-  Sistema de diseño "Atlas": modo claro sobrio (neutros fríos + un acento).
-  Los tokens de acento (--accent*) se sobreescriben en runtime por el
-  white-label de la organización (Configuración → Marca).
+  Sistema de design "Atlas": modo claro sóbrio (neutros frios + um acento).
+  Os tokens de acento (--accent*) são sobrescritos em runtime pelo
+  white-label da organização (Configurações → Marca).
 */
 @layer base {
   :root {
@@ -26,7 +26,7 @@
     --bubble-out: #f2f5f8;
     --bubble-out-text: #33414f;
 
-    /* Acento (default: azul acero apagado; white-label lo sobreescribe) */
+    /* Acento (padrão: azul aço apagado; white-label o sobrescreve) */
     --accent: #3f5972;
     --accent-hover: #334a60;
     --accent-soft: #dde5ee;
@@ -39,7 +39,7 @@
     --warning: #b08b5e;
     --danger: #a2504c;
 
-    /* Radios y sombras */
+    /* Raios e sombras */
     --radius-sm: 7px;
     --radius: 10px;
     --radius-lg: 14px;
@@ -47,7 +47,7 @@
     --shadow-md: 0 6px 20px -6px rgba(20, 20, 35, 0.12);
     --shadow-pop: 0 12px 32px -8px rgba(20, 20, 35, 0.22);
 
-    /* Densidad de filas de conversación */
+    /* Densidade das linhas de conversa */
     --row-py: 11px;
   }
 

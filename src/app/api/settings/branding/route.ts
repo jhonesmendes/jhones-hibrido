@@ -6,7 +6,7 @@ import { getBranding, saveBranding } from "@/server/branding";
 
 export const dynamic = "force-dynamic";
 
-/** GET público: el login necesita la marca antes de autenticarse. */
+/** GET público: o login precisa da marca antes de autenticar. */
 export async function GET() {
   const session = await getSessionOrNull();
   const branding = await getBranding(session?.organizationId);

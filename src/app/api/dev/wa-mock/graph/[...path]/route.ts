@@ -6,9 +6,9 @@ import {
 } from "@/server/dev/wa-mock-state";
 
 /**
- * Imitación de la Graph API (contrato mocks.md). El cliente real apunta aquí
- * cuando META_GRAPH_BASE_URL = <app>/api/dev/wa-mock/graph — el código de
- * producción no sabe que habla con un mock.
+ * Imitação da Graph API (contrato mocks.md). O cliente real aponta para cá
+ * quando META_GRAPH_BASE_URL = <app>/api/dev/wa-mock/graph — o código de
+ * produção não sabe que está falando com um mock.
  */
 export const dynamic = "force-dynamic";
 
@@ -33,7 +33,7 @@ function invalidTokenResponse(): Response {
   );
 }
 
-/** Quita el segmento de versión (v25.0/...) si viene en la ruta. */
+/** Remove o segmento de versão (v25.0/...) se vier na rota. */
 function normalizePath(path: string[]): string[] {
   return path[0] && /^v\d+/.test(path[0]) ? path.slice(1) : path;
 }
@@ -45,7 +45,7 @@ export async function GET(req: Request, ctx: Params) {
   const token = bearerToken(req);
   if (token.endsWith("-invalid")) return invalidTokenResponse();
 
-  // GET {wabaId}/message_templates → lista para el sync
+  // GET {wabaId}/message_templates → lista para o sync
   if (path.length === 2 && path[1] === "message_templates") {
     const state = getWaMockState();
     return Response.json({
@@ -60,7 +60,7 @@ export async function GET(req: Request, ctx: Params) {
     });
   }
 
-  // GET {phoneNumberId}?fields=... → validación del wizard
+  // GET {phoneNumberId}?fields=... → validação do wizard
   if (path.length === 1) {
     return Response.json({
       display_phone_number: "+52 55 0000 0000",
@@ -81,7 +81,7 @@ export async function POST(req: Request, ctx: Params) {
 
   const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
 
-  // POST {phoneNumberId}/messages → registra en el outbox
+  // POST {phoneNumberId}/messages → registra no outbox
   if (path.length === 2 && path[1] === "messages") {
     const state = getWaMockState();
     const n = nextN();
@@ -100,7 +100,7 @@ export async function POST(req: Request, ctx: Params) {
     });
   }
 
-  // POST {wabaId}/message_templates → alta de plantilla (queda PENDING)
+  // POST {wabaId}/message_templates → criação de template (fica PENDING)
   if (path.length === 2 && path[1] === "message_templates") {
     const state = getWaMockState();
     const bodyComponent = (
@@ -118,7 +118,7 @@ export async function POST(req: Request, ctx: Params) {
     return Response.json({ id: tpl.id, status: "PENDING", category: tpl.category });
   }
 
-  // POST {wabaId}/subscribed_apps → suscripción (con o sin override)
+  // POST {wabaId}/subscribed_apps → inscrição (com ou sem override)
   if (path.length === 2 && path[1] === "subscribed_apps") {
     return Response.json({ success: true });
   }

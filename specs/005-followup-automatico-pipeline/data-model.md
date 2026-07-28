@@ -2,92 +2,92 @@
 
 ## Entidades
 
-### `pipeline_followup` (1 fila por organización, como `agent_profile`)
+### `pipeline_followup` (1 linha por organização, como `agent_profile`)
 
 | Campo | Tipo | Notas |
 |---|---|---|
-| `id` | text PK | prefijo `pfu_` |
+| `id` | text PK | prefixo `pfu_` |
 | `organizationId` | text NOT NULL UNIQUE FK → organization | scoped, singleton |
 | `enabled` | boolean NOT NULL default false | |
-| `triggerStageId` | text NULL FK → pipeline_stage | etapa que activa el follow-up |
+| `triggerStageId` | text NULL FK → pipeline_stage | etapa que ativa o follow-up |
 | `intervalValue` | integer NOT NULL default 4 | |
 | `intervalUnit` | enum `hours` \| `days` NOT NULL default `hours` | |
-| `message` | text NULL | mensaje configurable, sin nada fijo |
-| `successStageId` | text NULL FK → pipeline_stage | al recibir documento (si aplica) |
-| `expiredStageId` | text NULL FK → pipeline_stage | al vencer el plazo de gracia |
+| `message` | text NULL | mensagem configurável, sem nada fixo |
+| `successStageId` | text NULL FK → pipeline_stage | ao receber documento (se aplicável) |
+| `expiredStageId` | text NULL FK → pipeline_stage | ao vencer o prazo de carência |
 | `requiresDocument` | boolean NOT NULL default false | |
 | `updatedAt` | timestamp NOT NULL default now() | |
 
-### `followup_send` (registro/idempotencia — no es una cola con fecha futura;
-se crea en el momento en que el recordatorio efectivamente se envía)
+### `followup_send` (registro/idempotência — não é uma fila com data futura;
+é criado no momento em que o lembrete efetivamente é enviado)
 
 | Campo | Tipo | Notas |
 |---|---|---|
-| `id` | text PK | prefijo `fus_` |
+| `id` | text PK | prefixo `fus_` |
 | `organizationId` | text NOT NULL | scoped |
 | `leadId` | text NOT NULL FK → lead (cascade) | |
 | `conversationId` | text NOT NULL FK → conversation | |
-| `message` | text NOT NULL | copia del mensaje enviado (auditoría; si se
-  edita la config después, no cambia el historial) |
-| `status` | enum `sent` \| `failed` \| `cancelled` \| `expired` NOT NULL | no hay
-  `pending`: se crea ya con el resultado del intento de envío |
+| `message` | text NOT NULL | cópia da mensagem enviada (auditoria; se
+  a config for editada depois, não muda o histórico) |
+| `status` | enum `sent` \| `failed` \| `cancelled` \| `expired` NOT NULL | não há
+  `pending`: já é criado com o resultado da tentativa de envio |
 | `sentAt` | timestamp NOT NULL default now() | |
-| `resolvedAt` | timestamp NULL | cuándo pasó a `cancelled`/`expired` |
+| `resolvedAt` | timestamp NULL | quando passou para `cancelled`/`expired` |
 
 Índice: `uniqueIndex("followup_send_lead_active_uq").on(leadId).where(status IN
-('sent'))` — como máximo un recordatorio "activo" (esperando resolución) por lead
-a la vez; ver Lógica de elegibilidad más abajo para cómo se permite uno nuevo tras
-resolverse.
+('sent'))` — no máximo um lembrete "ativo" (aguardando resolução) por lead
+por vez; ver Lógica de elegibilidade abaixo para como se permite um novo depois
+de resolvido.
 
-## Lógica de elegibilidad (server/pipeline/followup-scheduler.ts)
+## Lógica de elegibilidade (server/pipeline/followup-scheduler.ts)
 
-Por cada organización con `pipeline_followup.enabled = true`:
+Para cada organização com `pipeline_followup.enabled = true`:
 
-1. **Enviar recordatorio**: leads con `stageId = triggerStageId` AND
-   `lead.lastActivityAt < now() - interval` AND sin una fila `followup_send` con
-   `status = 'sent'` cuyo `sentAt > lead.lastActivityAt` (es decir: no se le
-   recordó ya desde su última actividad — si respondió después de un recordatorio
-   viejo, ese recordatorio deja de "contar" y puede recibir uno nuevo la próxima
-   vez que quede inactivo). → enviar `sendText(...)`, insertar `followup_send`
-   (`status: 'sent'` en éxito, `'failed'` si `sendText` lanza — no se reintenta en
-   el mismo ciclo, sí en el siguiente).
-2. **Expirar**: leads con `stageId = triggerStageId` AND una fila `followup_send`
-   `status = 'sent'` con `sentAt < now() - interval` (mismo intervalo = plazo de
-   gracia, ver spec.md → Assumptions) AND `lead.lastActivityAt <= followup_send.sentAt`
-   (sin actividad nueva desde que se envió) → si `expiredStageId` está configurado,
-   mover `lead.stageId = expiredStageId` y marcar el `followup_send`
+1. **Enviar lembrete**: leads com `stageId = triggerStageId` AND
+   `lead.lastActivityAt < now() - interval` AND sem uma linha `followup_send` com
+   `status = 'sent'` cujo `sentAt > lead.lastActivityAt` (ou seja: ele ainda não
+   recebeu lembrete desde sua última atividade — se respondeu depois de um lembrete
+   antigo, esse lembrete deixa de "contar" e pode receber um novo na próxima
+   vez que ficar inativo). → enviar `sendText(...)`, inserir `followup_send`
+   (`status: 'sent'` em sucesso, `'failed'` se `sendText` lançar erro — não é feita
+   nova tentativa no mesmo ciclo, mas sim no seguinte).
+2. **Expirar**: leads com `stageId = triggerStageId` AND uma linha `followup_send`
+   `status = 'sent'` com `sentAt < now() - interval` (mesmo intervalo = prazo de
+   carência, ver spec.md → Assumptions) AND `lead.lastActivityAt <= followup_send.sentAt`
+   (sem atividade nova desde o envio) → se `expiredStageId` estiver configurado,
+   mover `lead.stageId = expiredStageId` e marcar o `followup_send`
    `status = 'expired'`, `resolvedAt = now()`.
 
-## Lógica reactiva (server/pipeline/followup-document.ts, llamado desde
-`ingestInboundMessage` en `server/inbox/ingest.ts` cuando el mensaje entrante es
-de tipo media)
+## Lógica reativa (server/pipeline/followup-document.ts, chamada desde
+`ingestInboundMessage` em `server/inbox/ingest.ts` quando a mensagem recebida é
+do tipo mídia)
 
-Si `pipeline_followup.requiresDocument = true` AND el lead del contacto está en
-`triggerStageId` → mover `lead.stageId = successStageId` (si está configurado) y
-marcar cualquier `followup_send` `status = 'sent'` de ese lead como `'cancelled'`
+Se `pipeline_followup.requiresDocument = true` AND o lead do contato estiver em
+`triggerStageId` → mover `lead.stageId = successStageId` (se configurado) e
+marcar qualquer `followup_send` `status = 'sent'` desse lead como `'cancelled'`
 (`resolvedAt = now()`).
 
 ## Contratos de API
 
 ### `GET /api/pipeline/followup`
 
-Devuelve la configuración de la organización (o los valores por defecto si nunca
-se guardó ninguna).
+Devolve a configuração da organização (ou os valores padrão se nunca
+foi salva nenhuma).
 
 ### `PUT /api/pipeline/followup`
 
 Body: `{ enabled, triggerStageId, intervalValue, intervalUnit, message,
 successStageId, expiredStageId, requiresDocument }`.
 
-- Si `enabled = true`: `triggerStageId` y `message` (no vacío) MUST estar
-  presentes (FR-001/acceptance #4) — 422 si faltan.
+- Se `enabled = true`: `triggerStageId` e `message` (não vazio) MUST estar
+  presentes (FR-001/acceptance #4) — 422 se faltarem.
 - Upsert por `organizationId` (como `agent_profile`).
 
-## Arranque del scheduler
+## Inicialização do scheduler
 
-`src/instrumentation-node.ts` (arranque único del proceso) llama
-`startFollowupScheduler()`, que registra un `setInterval` module-level (mismo
-patrón anti-doble-registro que `scheduleAgentTurn` vía `globalThis`) con período
-`FOLLOWUP_SCHEDULER_INTERVAL_MS` (env var, default 5 min). Cada tick recorre todas
-las organizaciones con `pipeline_followup.enabled = true` y corre la lógica de
-elegibilidad de arriba.
+`src/instrumentation-node.ts` (inicialização única do processo) chama
+`startFollowupScheduler()`, que registra um `setInterval` module-level (mesmo
+padrão anti-registro-duplo de `scheduleAgentTurn` via `globalThis`) com período
+`FOLLOWUP_SCHEDULER_INTERVAL_MS` (env var, default 5 min). Cada tick percorre todas
+as organizações com `pipeline_followup.enabled = true` e roda a lógica de
+elegibilidade acima.

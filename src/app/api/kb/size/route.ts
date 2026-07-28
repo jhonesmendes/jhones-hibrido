@@ -7,8 +7,8 @@ import { renderKb } from "@/server/ai/prompts";
 export const dynamic = "force-dynamic";
 
 /**
- * Tamaño estimado del knowledge base (FR-020). v1 inyecta el KB completo al
- * prompt; umbral de aviso heurístico: ~24.000 caracteres (≈6k tokens).
+ * Tamanho estimado do knowledge base (FR-020). v1 injeta o KB completo no
+ * prompt; limite de aviso heurístico: ~24.000 caracteres (≈6k tokens).
  */
 const WARN_CHARS = 24_000;
 

@@ -82,7 +82,10 @@ export const member = pgTable("member", {
   userId: text("user_id")
     .notNull()
     .references(() => user.id, { onDelete: "cascade" }),
-  role: text("role").notNull().default("member"),
+  /** owner | admin | agent — ver src/lib/auth/permissions.ts. */
+  role: text("role").notNull().default("agent"),
+  /** Membro inativo não consegue logar (FR-009). */
+  isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -101,7 +104,7 @@ export const invitation = pgTable("invitation", {
 });
 
 /* ============================================================
- * Dominio (toda tabla lleva organization_id NOT NULL + índice org-first)
+ * Domínio (toda tabela leva organization_id NOT NULL + índice org-first)
  * ============================================================ */
 
 export const contact = pgTable(
@@ -133,7 +136,7 @@ export const pipelineStage = pgTable(
       .references(() => organization.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     position: integer("position").notNull(),
-    /** open = etapa normal · won / lost = anclas no borrables */
+    /** open = etapa normal · won / lost = âncoras não apagáveis */
     kind: text("kind", { enum: ["open", "won", "lost"] })
       .notNull()
       .default("open"),
@@ -176,13 +179,13 @@ export const conversation = pgTable(
     contactId: text("contact_id")
       .notNull()
       .references(() => contact.id, { onDelete: "cascade" }),
-    /** Conversación del Laboratorio: jamás toca la API de WhatsApp. */
+    /** Conversa do Laboratório: jamais toca a API real do WhatsApp. */
     isTest: boolean("is_test").notNull().default(false),
     /**
-     * Canal activo de la conversación. "official" = Cloud API de Meta ·
-     * "unofficial" = gateway no oficial (Evolution/WPPConnect/WAHA).
-     * Sticky: se actualiza al canal del último mensaje entrante, así las
-     * respuestas salen por donde el cliente escribió (modelo híbrido).
+     * Canal ativo da conversa. "official" = Cloud API da Meta ·
+     * "unofficial" = gateway não oficial (Evolution/WPPConnect/WAHA).
+     * Sticky: é atualizado para o canal da última mensagem recebida, assim
+     * as respostas saem por onde o cliente escreveu (modelo híbrido).
      */
     channel: text("channel", { enum: ["official", "unofficial"] })
       .notNull()
@@ -195,11 +198,15 @@ export const conversation = pgTable(
     lastInboundAt: timestamp("last_inbound_at"),
     lastMessageAt: timestamp("last_message_at"),
     unreadCount: integer("unread_count").notNull().default(0),
+    /** Agente responsável (FR-007); null = não atribuída. */
+    assignedTo: text("assigned_to").references(() => member.id, {
+      onDelete: "set null",
+    }),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
   (t) => [
-    // Una conversación real por contacto; las de prueba no compiten.
+    // Uma conversa real por contato; as de teste não competem.
     uniqueIndex("conversation_org_contact_real_uq")
       .on(t.organizationId, t.contactId)
       .where(sql`${t.isTest} = false`),
@@ -217,7 +224,7 @@ export const message = pgTable(
     conversationId: text("conversation_id")
       .notNull()
       .references(() => conversation.id, { onDelete: "cascade" }),
-    /** ID de WhatsApp — UNIQUE (idempotencia). Nullable en salientes de prueba. */
+    /** ID do WhatsApp — UNIQUE (idempotência). Nullable em saídas de teste. */
     waMessageId: text("wa_message_id").unique(),
     direction: text("direction", { enum: ["in", "out"] }).notNull(),
     type: text("type").notNull().default("text"),
@@ -265,17 +272,17 @@ export const metaCredentials = pgTable(
   },
   (t) => [
     uniqueIndex("meta_credentials_org_uq").on(t.organizationId),
-    // El webhook enruta por phone_number_id: debe ser único en la instancia.
+    // O webhook roteia por phone_number_id: precisa ser único na instância.
     uniqueIndex("meta_credentials_phone_uq").on(t.phoneNumberId),
   ]
 );
 
 /**
- * Canal de WhatsApp NO oficial — motor propio (Baileys), conexión directa al
- * protocolo de WhatsApp Web, sin gateway de terceros. Complementa a la Cloud
- * API oficial en el modelo híbrido: captación por el número oficial,
- * automatización por este. La sesión (credenciales + claves de Signal) se
- * cifra en reposo igual que el token de Meta.
+ * Canal de WhatsApp NÃO oficial — motor próprio (Baileys), conexão direta com
+ * o protocolo do WhatsApp Web, sem gateway de terceiros. Complementa a Cloud
+ * API oficial no modelo híbrido: captação pelo número oficial, automação por
+ * este. A sessão (credenciais + chaves do Signal) é cifrada em repouso, igual
+ * ao token da Meta.
  */
 export const unofficialChannel = pgTable(
   "unofficial_channel",
@@ -284,7 +291,7 @@ export const unofficialChannel = pgTable(
     organizationId: text("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
-    /** JSON `{ creds, keys }` de Baileys, cifrado. */
+    /** JSON `{ creds, keys }` do Baileys, cifrado. */
     authStateCipher: text("auth_state_cipher").notNull(),
     authStateIv: text("auth_state_iv").notNull(),
     authStateTag: text("auth_state_tag").notNull(),
@@ -302,7 +309,7 @@ export const unofficialChannel = pgTable(
 
 /**
  * Bytes de mídia (imagem/áudio/vídeo/documento/sticker) do canal não
- * oficial nativo. Autohospedado por decisão da constitución (proibido
+ * oficial nativo. Autohospedado por decisão da constituição (proibido
  * S3/R2) — sem infraestrutura nova, reusa o mesmo Postgres já usado pra
  * tudo (mesmo padrão de blob em texto que `unofficial_channel` já usa pro
  * auth-state cifrado). O canal oficial não usa esta tabela: sua mídia é
@@ -330,7 +337,7 @@ export const agentProfile = pgTable(
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
     enabled: boolean("enabled").notNull().default(false),
-    name: text("name").notNull().default("Asistente"),
+    name: text("name").notNull().default("Assistente"),
     tone: text("tone"),
     instructions: text("instructions"),
     escalationRules: text("escalation_rules"),
@@ -447,9 +454,9 @@ export const campaignRecipient = pgTable(
 );
 
 /**
- * Configuración de follow-up automático del pipeline — singular por
- * organización (este proyecto no modela múltiples pipelines con nombre).
- * Nada de negocio fijo en el código: etapas, intervalo y mensaje vienen de acá.
+ * Configuração de follow-up automático do pipeline — singular por
+ * organização (este projeto não modela múltiplos pipelines nomeados).
+ * Nada de negócio fixo no código: etapas, intervalo e mensagem vêm daqui.
  */
 export const pipelineFollowup = pgTable(
   "pipeline_followup",
@@ -474,9 +481,9 @@ export const pipelineFollowup = pgTable(
 );
 
 /**
- * Registro de recordatorios de follow-up enviados — existe para no reenviar
- * de más (idempotencia) y para saber a quién se le venció el plazo de gracia.
- * Se crea ya con el resultado del intento (no es una cola con fecha futura).
+ * Registro de lembretes de follow-up enviados — existe para não reenviar
+ * a mais (idempotência) e para saber a quem venceu o prazo de carência.
+ * Já é criado com o resultado da tentativa (não é uma fila com data futura).
  */
 export const followupSend = pgTable(
   "followup_send",
@@ -497,7 +504,7 @@ export const followupSend = pgTable(
     resolvedAt: timestamp("resolved_at"),
   },
   (t) => [
-    // Como máximo un recordatorio "activo" (esperando resolución) por lead.
+    // No máximo um lembrete "ativo" (aguardando resolução) por lead.
     uniqueIndex("followup_send_lead_active_uq")
       .on(t.leadId)
       .where(sql`${t.status} = 'sent'`),
@@ -521,7 +528,7 @@ export const agentTestRun = pgTable(
     finishedAt: timestamp("finished_at"),
   },
   (t) => [
-    // Lock de concurrencia en BD: máximo 1 corrida activa por organización.
+    // Lock de concorrência no BD: no máximo 1 execução ativa por organização.
     uniqueIndex("test_run_org_running_uq")
       .on(t.organizationId)
       .where(sql`${t.status} = 'running'`),
@@ -554,4 +561,144 @@ export const agentTestCase = pgTable(
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (t) => [index("test_case_run_idx").on(t.runId)]
+);
+
+/**
+ * Concessão/revogação individual de permissão por membro — sobrepõe o
+ * default do papel (src/lib/auth/permissions.ts). Ausência de linha = usa o
+ * default; presença sempre vence.
+ */
+export const memberPermission = pgTable(
+  "member_permission",
+  {
+    id: text("id").primaryKey(),
+    memberId: text("member_id")
+      .notNull()
+      .references(() => member.id, { onDelete: "cascade" }),
+    permission: text("permission").notNull(),
+    granted: boolean("granted").notNull().default(true),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("member_permission_member_perm_uq").on(
+      t.memberId,
+      t.permission
+    ),
+  ]
+);
+
+/**
+ * Restrição opcional de acesso a canal por membro. Sem channel_id: cada
+ * organização tem no máximo um canal oficial e um não oficial hoje
+ * (meta_credentials/unofficial_channel são UNIQUE por organização).
+ * Ausência de linha = acesso liberado por padrão.
+ */
+export const memberChannel = pgTable(
+  "member_channel",
+  {
+    id: text("id").primaryKey(),
+    memberId: text("member_id")
+      .notNull()
+      .references(() => member.id, { onDelete: "cascade" }),
+    channelType: text("channel_type", {
+      enum: ["official", "unofficial"],
+    }).notNull(),
+    canView: boolean("can_view").notNull().default(true),
+    canSend: boolean("can_send").notNull().default(true),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("member_channel_member_type_uq").on(
+      t.memberId,
+      t.channelType
+    ),
+  ]
+);
+
+/**
+ * Convite de uso único: papel + permissões/canais iniciais + expiração. O
+ * token em si nunca é persistido — só seu hash (token_hash), como uma senha.
+ */
+export const inviteToken = pgTable(
+  "invite_token",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    tokenHash: text("token_hash").notNull().unique(),
+    email: text("email"),
+    role: text("role", { enum: ["admin", "agent"] }).notNull(),
+    initialPermissions: jsonb("initial_permissions"),
+    initialChannels: jsonb("initial_channels"),
+    expiresAt: timestamp("expires_at").notNull(),
+    usedAt: timestamp("used_at"),
+    usedBy: text("used_by").references(() => member.id),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => member.id),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("invite_token_org_idx").on(t.organizationId)]
+);
+
+/**
+ * Servidor SMTP do próprio operador (Constituição II v2.1.0) — opcional, um
+ * por organização. Usado só para convites (futuro) e recuperação de senha.
+ */
+export const smtpConfig = pgTable("smtp_config", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id")
+    .notNull()
+    .unique()
+    .references(() => organization.id, { onDelete: "cascade" }),
+  host: text("host").notNull(),
+  port: integer("port").notNull().default(587),
+  secure: boolean("secure").notNull().default(false),
+  user: text("user").notNull(),
+  passwordCipher: text("password_cipher").notNull(),
+  passwordIv: text("password_iv").notNull(),
+  passwordTag: text("password_tag").notNull(),
+  fromName: text("from_name").notNull(),
+  fromEmail: text("from_email").notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+/** Token de recuperação de senha — uso único, expira em 1h. */
+export const passwordResetToken = pgTable("password_reset_token", {
+  id: text("id").primaryKey(),
+  memberId: text("member_id")
+    .notNull()
+    .references(() => member.id, { onDelete: "cascade" }),
+  tokenHash: text("token_hash").notNull().unique(),
+  expiresAt: timestamp("expires_at").notNull(),
+  usedAt: timestamp("used_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+/** Registro imutável de ações críticas — nunca UPDATE/DELETE de aplicação. */
+export const auditLog = pgTable(
+  "audit_log",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    memberId: text("member_id").references(() => member.id, {
+      onDelete: "set null",
+    }),
+    action: text("action").notNull(),
+    resource: text("resource"),
+    resourceId: text("resource_id"),
+    ipAddress: text("ip_address"),
+    userAgent: text("user_agent"),
+    metadata: jsonb("metadata"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("audit_log_org_created_idx").on(t.organizationId, t.createdAt),
+    index("audit_log_org_member_idx").on(t.organizationId, t.memberId),
+  ]
 );

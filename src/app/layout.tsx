@@ -4,7 +4,7 @@ import { accentCssVariables, DEFAULT_BRANDING } from "@/lib/branding";
 import { getBranding } from "@/server/branding";
 import "./globals.css";
 
-// next/font descarga la fuente en BUILD y la sirve self-hosted (sin CDN).
+// next/font baixa a fonte no BUILD e a serve self-hosted (sem CDN).
 const geist = Geist({
   subsets: ["latin"],
   variable: "--font-geist",
@@ -28,7 +28,7 @@ export default async function RootLayout({
   return (
     <html lang="pt-BR" className={geist.variable} suppressHydrationWarning>
       <head>
-        {/* Acento white-label inyectado en SSR: sin flash de tema */}
+        {/* Acento white-label injetado no SSR: sem flash de tema */}
         <style
           dangerouslySetInnerHTML={{ __html: accentCssVariables(branding.accent) }}
         />

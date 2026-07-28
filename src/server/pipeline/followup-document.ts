@@ -3,10 +3,10 @@ import { getDb, schema } from "@/lib/db";
 import { getFollowupRow } from "@/server/pipeline/followup";
 
 /**
- * Reactivo (no espera al scheduler, SC-004): se llama desde la ingesta de
- * mensajes entrantes cuando llega media de un contacto. Si "requiere
- * documento" está habilitado y el lead está en la etapa gatillo, lo mueve a
- * la etapa de éxito y cancela cualquier recordatorio activo.
+ * Reativo (não espera pelo scheduler, SC-004): é chamado a partir da ingestão
+ * de mensagens recebidas quando chega mídia de um contato. Se "requer
+ * documento" está habilitado e o lead está na etapa gatilho, move-o para a
+ * etapa de sucesso e cancela qualquer lembrete ativo.
  */
 export async function onInboundMedia(
   organizationId: string,

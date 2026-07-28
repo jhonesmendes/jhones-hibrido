@@ -1,9 +1,9 @@
-# Contrato: Canal SSE de la bandeja
+# Contrato: Canal SSE da caixa de entrada
 
-Ruta: `GET /api/events` (autenticada por sesión; scope = organización del usuario).
+Rota: `GET /api/events` (autenticada por sessão; escopo = organização do usuário).
 `export const dynamic = 'force-dynamic'`.
 
-Headers de respuesta (obligatorios, exactos):
+Headers de resposta (obrigatórios, exatos):
 
 ```
 Content-Type: text/event-stream
@@ -12,16 +12,16 @@ X-Accel-Buffering: no
 Connection: keep-alive
 ```
 
-- **Heartbeat**: comentario `: ping\n\n` cada ~25s (mantiene vivo el stream detrás de
-  Caddy/Traefik y proxies intermedios).
+- **Heartbeat**: comentário `: ping\n\n` a cada ~25s (mantém o stream vivo atrás do
+  Caddy/Traefik e proxies intermediários).
 - **Eventos** (`event: <tipo>`, `data: <json>`, `id: <epoch_ms>`):
-  - `message.new` — `{ conversationId, message: {...} }` (nunca de conversaciones `is_test`)
+  - `message.new` — `{ conversationId, message: {...} }` (nunca de conversas `is_test`)
   - `message.status` — `{ conversationId, messageId, status }`
   - `conversation.updated` — `{ conversation: {...} }` (handoff, unread, last_message_at)
   - `lab.run` — `{ runId, status, progress: {done, total}, score? }`
-- **Catch-up**: el cliente manda `Last-Event-ID` (o el front refetch desde su último
-  `last_message_at`) al reconectar; el servidor NO garantiza replay — el cliente hace
-  refetch de conversaciones/mensajes con `since=<timestamp>` al evento `open` tras una
-  reconexión. EventSource reconecta solo (retry por defecto).
-- **Bus interno**: EventEmitter in-process por organización (`server/events`); publicar
-  tras commit de BD.
+- **Catch-up**: o cliente envia `Last-Event-ID` (ou o front refaz a busca a partir do seu
+  último `last_message_at`) ao reconectar; o servidor NÃO garante replay — o cliente faz
+  refetch de conversas/mensagens com `since=<timestamp>` no evento `open` após uma
+  reconexão. EventSource reconecta sozinho (retry por padrão).
+- **Bus interno**: EventEmitter in-process por organização (`server/events`); publicar
+  após commit no BD.

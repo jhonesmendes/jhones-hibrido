@@ -1,101 +1,101 @@
 ---
 
-description: "Task list: motor WhatsApp no oficial nativo (Baileys)"
+description: "Task list: motor WhatsApp não oficial nativo (Baileys)"
 ---
 
-# Tasks: Motor WhatsApp no oficial nativo (Baileys)
+# Tasks: Motor WhatsApp não oficial nativo (Baileys)
 
 **Input**: Design documents from `specs/006-motor-baileys-nativo/`
 
 **Prerequisites**: plan.md, data-model.md, spec.md
 
-**Tests**: unitarios para la normalización de mensajes entrantes (pura). El
-pareo QR↔teléfono real NO es automatizable — queda como verificación humana
-explícita (ver spec.md → Assumptions), no se finge una prueba que no existe.
+**Tests**: unitários para a normalização de mensagens recebidas (pura). O
+pareamento QR↔telefone real NÃO é automatizável — fica como verificação humana
+explícita (ver spec.md → Assumptions), não se finge um teste que não existe.
 
 ## Phase 1: Setup
 
 - [X] T001 `pnpm add @whiskeysockets/baileys qrcode` + `pnpm add -D
   @types/qrcode`.
-- [X] T002 Migración: reescribir `unofficial_channel` en `src/lib/db/schema.ts`
-  (ver data-model.md) — fuera columnas de gateway, dentro
+- [X] T002 Migração: reescrever `unofficial_channel` em `src/lib/db/schema.ts`
+  (ver data-model.md) — fora colunas de gateway, dentro
   `authStateCipher/Iv/Tag`. `pnpm db:generate` + `pnpm db:migrate`.
-- [X] T003 Agregar el evento `channel.status` a `SseEvent`
-  (`src/server/events/bus.ts`) + handler `onChannelStatus` en
+- [X] T003 Adicionar o evento `channel.status` a `SseEvent`
+  (`src/server/events/bus.ts`) + handler `onChannelStatus` em
   `src/components/use-events.ts`.
 
-**Checkpoint**: dependencias instaladas, schema migrado.
+**Checkpoint**: dependências instaladas, schema migrado.
 
 ---
 
-## Phase 2: User Story 1 - Conectar sin gateway externo (Priority: P1) 🎯 MVP
+## Phase 2: User Story 1 - Conectar sem gateway externo (Priority: P1) 🎯 MVP
 
 - [X] T010 [US1] `src/server/baileys/auth-state.ts`: `loadAuthState`,
-  `SignalKeyStore` en memoria + `persist()` cifrado (ver data-model.md).
+  `SignalKeyStore` em memória + `persist()` cifrado (ver data-model.md).
 - [X] T011 [US1] `src/server/baileys/manager.ts`: `connect`, `disconnect`,
-  `getLiveStatus` — maneja `connection.update` (QR, open, close),
-  `creds.update` (persist). Runtime Node explícito donde haga falta.
+  `getLiveStatus` — trata `connection.update` (QR, open, close),
+  `creds.update` (persist). Runtime Node explícito onde for necessário.
 - [X] T012 [US1] `src/app/api/settings/channels/route.ts` reescrita: POST
   (conectar), DELETE (desconectar), GET (estado inicial). Elimina
-  `src/app/api/settings/channels/status/route.ts` (ya no hay polling).
-- [X] T013 [US1] `src/components/settings/channels-client.tsz` reescrita: sin
-  campos de proveedor/URL/instancia/API key — un botón "Conectar", QR/estado
-  vía `useEvents({ onChannelStatus })`, botón "Desconectar" cuando conectado.
-- [X] T014 [US1] Eliminar `src/lib/unofficial/` completo (types.ts,
-  evolution.ts, wppconnect.ts, waha.ts, index.ts) y
+  `src/app/api/settings/channels/status/route.ts` (já não há polling).
+- [X] T013 [US1] `src/components/settings/channels-client.tsz` reescrita: sem
+  campos de provedor/URL/instância/API key — um botão "Conectar", QR/estado
+  via `useEvents({ onChannelStatus })`, botão "Desconectar" quando conectado.
+- [X] T014 [US1] Eliminar `src/lib/unofficial/` por completo (types.ts,
+  evolution.ts, wppconnect.ts, waha.ts, index.ts) e
   `src/server/unofficial/channel.ts` (FR-010).
 - [X] T015 [US1] Eliminar `src/app/api/webhooks/unofficial/[webhookToken]/`
-  (ya no hay webhook que recibir).
+  (já não há webhook a receber).
 
-**Checkpoint**: conectar/desconectar funcional; pareo real pendiente de
-verificación humana (no automatizable).
+**Checkpoint**: conectar/desconectar funcional; pareamento real pendente de
+verificação humana (não automatizável).
 
 ---
 
-## Phase 3: User Story 2 - Enviar/recibir texto por el motor (Priority: P1)
+## Phase 3: User Story 2 - Enviar/receber texto pelo motor (Priority: P1)
 
 - [X] T020 [US2] `src/server/baileys/inbound.ts`: `handleIncomingMessages` —
-  filtra grupos/broadcast, normaliza tipo/texto/from, llama
-  `ingestInboundMessage` (reuso directo).
-- [X] T021 [US2] Enganchar `messages.upsert` del socket (en `manager.ts`) a
+  filtra grupos/broadcast, normaliza tipo/texto/from, chama
+  `ingestInboundMessage` (reuso direto).
+- [X] T021 [US2] Encaixar `messages.upsert` do socket (em `manager.ts`) a
   `handleIncomingMessages`.
 - [X] T022 [US2] `src/server/baileys/sender.ts`: `sendText(organizationId,
-  phone, text)` sobre el socket activo; error tipado si no hay conexión.
-- [X] T023 [US2] `src/server/inbox/send.ts`: `sendViaUnofficial` llama al
-  nuevo `sender.ts` en vez de `getAdapter(...).sendText(...)`.
+  phone, text)` sobre o socket ativo; erro tipado se não houver conexão.
+- [X] T023 [US2] `src/server/inbox/send.ts`: `sendViaUnofficial` chama o
+  novo `sender.ts` em vez de `getAdapter(...).sendText(...)`.
 - [X] T024 [US2] Eliminar `src/server/unofficial/ingest.ts`
-  (`processUnofficialWebhook`/`unofficialMessageId`) — reemplazado por T020.
-- [X] T025 [US2] `src/app/api/media/[id]/route.ts`: sirve media del canal no
-  oficial desde `message_media` (Postgres, base64, autohospedado) — revisado
-  post self-test: implementado, ya no es 404 (ver spec.md → Assumptions,
-  actualizado).
+  (`processUnofficialWebhook`/`unofficialMessageId`) — substituído por T020.
+- [X] T025 [US2] `src/app/api/media/[id]/route.ts`: serve mídia do canal não
+  oficial a partir de `message_media` (Postgres, base64, self-hosted) — revisado
+  pós self-test: implementado, já não é 404 (ver spec.md → Assumptions,
+  atualizado).
 - [X] T025b [US2] `src/lib/db/schema.ts` (`messageMedia`) +
-  `drizzle/0006_message_media_table.sql`: tabla nueva para los bytes de
-  media del canal no oficial. `src/server/baileys/inbound.ts`:
-  `downloadMedia()` vía `downloadMediaMessage` de Baileys (descarga +
-  descifra, ya trae la clave en el mensaje). `src/server/inbox/ingest.ts`:
-  `ingestInboundMessage` acepta `media` y lo persiste; `LOCAL_MEDIA_MARKER`
-  exportado para que la ruta sepa distinguir "URL externa" de "bytes
-  locales".
-- [X] T026 [US2] [P] Tests unitarios de `inbound.ts` (normalización pura, sin
-  socket real) en `tests/unit/baileys-inbound.test.ts`: texto simple, media
-  sin preview, grupo ignorado, `fromMe` (eco), resolución de LID (dos casos
-  nuevos post self-test: resuelve / descarta sin mapeo).
+  `drizzle/0006_message_media_table.sql`: tabela nova para os bytes de
+  mídia do canal não oficial. `src/server/baileys/inbound.ts`:
+  `downloadMedia()` via `downloadMediaMessage` do Baileys (baixa +
+  decifra, já traz a chave na mensagem). `src/server/inbox/ingest.ts`:
+  `ingestInboundMessage` aceita `media` e o persiste; `LOCAL_MEDIA_MARKER`
+  exportado para a rota saber distinguir "URL externa" de "bytes
+  locais".
+- [X] T026 [US2] [P] Testes unitários de `inbound.ts` (normalização pura, sem
+  socket real) em `tests/unit/baileys-inbound.test.ts`: texto simples, mídia
+  sem preview, grupo ignorado, `fromMe` (eco), resolução de LID (dois casos
+  novos pós self-test: resolve / descarta sem mapeamento).
 
-**Checkpoint**: envío/recepción de texto verificado en código; el intercambio
-real con un WhatsApp de verdad queda para verificación humana.
+**Checkpoint**: envio/recebimento de texto verificado em código; a troca
+real com um WhatsApp de verdade fica para verificação humana.
 
 ---
 
-## Phase 4: User Story 3 - Reconexión automática al reiniciar (Priority: P2)
+## Phase 4: User Story 3 - Reconexão automática ao reiniciar (Priority: P2)
 
 - [X] T030 [US3] `src/server/baileys/manager.ts`: `reconnectAllOnBoot()` —
-  lista organizaciones con fila en `unofficial_channel`, llama `connect()`
-  para cada una.
-- [X] T031 [US3] Enganchar `reconnectAllOnBoot()` en `src/instrumentation.ts`
+  lista organizações com linha em `unofficial_channel`, chama `connect()`
+  para cada uma.
+- [X] T031 [US3] Encaixar `reconnectAllOnBoot()` em `src/instrumentation.ts`
   (junto a `cleanupOrphanRuns`/`startFollowupScheduler`).
 
-**Checkpoint**: las 3 historias completas en código.
+**Checkpoint**: as 3 histórias completas em código.
 
 ---
 
@@ -103,66 +103,66 @@ real con un WhatsApp de verdad queda para verificación humana.
 
 - [X] T040 [P] Gate técnico completo: `pnpm typecheck && pnpm lint && pnpm
   build && pnpm test`.
-- [X] T041 Self-test automatizable en vivo (Principio IX): arrancar el
-  servidor, iniciar una conexión, verificar que llega un QR real por SSE
-  dentro de unos segundos, verificar que `GET /api/settings/channels`
-  refleja el estado, verificar que enviar sin conexión da el error esperado.
-- [ ] T042 **Verificación humana obligatoria** (no delegable a herramientas,
-  Principio IX): escanear el QR con un WhatsApp real, confirmar que el
-  estado pasa a "Conectado" con el número correcto, enviar un mensaje desde
-  la bandeja y confirmar que llega al teléfono real, responder desde el
-  teléfono y confirmar que aparece en la bandeja. Reiniciar el servidor y
-  confirmar que reconecta solo (US3) sin pedir QR de nuevo.
+- [X] T041 Self-test automatizável ao vivo (Princípio IX): iniciar o
+  servidor, iniciar uma conexão, verificar que chega um QR real por SSE
+  dentro de alguns segundos, verificar que `GET /api/settings/channels`
+  reflete o estado, verificar que enviar sem conexão dá o erro esperado.
+- [ ] T042 **Verificação humana obrigatória** (não delegável a ferramentas,
+  Princípio IX): escanear o QR com um WhatsApp real, confirmar que o
+  estado passa a "Conectado" com o número correto, enviar uma mensagem a partir
+  da caixa de entrada e confirmar que chega ao telefone real, responder a partir do
+  telefone e confirmar que aparece na caixa de entrada. Reiniciar o servidor e
+  confirmar que reconecta sozinho (US3) sem pedir QR de novo.
 
-## Resultado del self-test (T040-T041)
+## Resultado do self-test (T040-T041)
 
-Gate técnico, ejecutado dos veces (antes y después de la migración del
-schema/entorno de prueba, ver Notes de la sesión) — verde en ambas:
+Gate técnico, executado duas vezes (antes e depois da migração do
+schema/ambiente de teste, ver Notes da sessão) — verde em ambas:
 
 ```
 pnpm typecheck  → TYPECHECK=0
 pnpm lint       → LINT=0
-pnpm exec vitest run --no-file-parallelism → 124/124 tests, 22/22 archivos
-pnpm build      → BUILD=0 (17 rutas dinámicas compiladas, sin warnings de
-                  resolución de módulos nativos)
+pnpm exec vitest run --no-file-parallelism → 124/124 testes, 22/22 arquivos
+pnpm build      → BUILD=0 (17 rotas dinâmicas compiladas, sem warnings de
+                  resolução de módulos nativos)
 ```
 
-Self-test de comportamiento en vivo (Playwright, `WA_MOCK_ENABLED=true`,
-servidor real en `localhost:3001`, login real, sin mocks del motor Baileys —
-este habla con los servidores reales de WhatsApp):
+Self-test de comportamento ao vivo (Playwright, `WA_MOCK_ENABLED=true`,
+servidor real em `localhost:3001`, login real, sem mocks do motor Baileys —
+este fala com os servidores reais do WhatsApp):
 
-| # | Aserción | Resultado |
+| # | Asserção | Resultado |
 |---|---|---|
-| 1 | US1: pantalla de conexión no pide URL/instancia/API key/proveedor de terceros | OK |
-| 2 | US1: estado inicial muestra "Desconectado" | OK |
-| 3 | US1: clic en "Conectar" cambia el estado a "Conectando…" en vivo (SSE) | OK |
-| 4 | US1/SC-002: el motor nativo contacta los servidores reales de WhatsApp y genera un QR real (sin gateway de terceros) | OK |
-| 5 | `GET /api/settings/channels` refleja el mismo estado que la UI (connecting + qrCode) | OK |
-| 6 | US2 camino infeliz: enviar sin conexión confirmada falla limpio (409, `not_connected`) | OK |
-| 7 | US1: desconectar limpia la sesión (estado vuelve a "Desconectado") | OK |
+| 1 | US1: tela de conexão não pede URL/instância/API key/provedor de terceiros | OK |
+| 2 | US1: estado inicial mostra "Desconectado" | OK |
+| 3 | US1: clique em "Conectar" muda o estado para "Conectando…" ao vivo (SSE) | OK |
+| 4 | US1/SC-002: o motor nativo contata os servidores reais do WhatsApp e gera um QR real (sem gateway de terceiros) | OK |
+| 5 | `GET /api/settings/channels` reflete o mesmo estado da UI (connecting + qrCode) | OK |
+| 6 | US2 caminho infeliz: enviar sem conexão confirmada falha de forma limpa (409, `not_connected`) | OK |
+| 7 | US1: desconectar limpa a sessão (estado volta a "Desconectado") | OK |
 
-8/8 aserciones en verde. Lo que este self-test **no** cubre (no automatizable
-— ver T042): el pareo real con un teléfono, el intercambio de mensajes real,
-y la reconexión automática tras un reinicio con una sesión ya pareada.
+8/8 asserções em verde. O que este self-test **não** cobre (não automatizável
+— ver T042): o pareamento real com um telefone, a troca real de mensagens,
+e a reconexão automática após um reinício com uma sessão já pareada.
 
 ## Dependencies & Execution Order
 
-- Setup (T001-T003) bloquea todo lo demás.
-- US1 (T010-T015) es la base — sin conexión no hay nada que enviar/recibir.
-- US2 (T020-T026) depende de US1 (necesita `manager.ts` con un socket activo).
-- US3 (T030-T031) depende de US1 (reconectar es solo "conectar de nuevo").
-- Polish depende de las 3 historias; T042 es el cierre real de la feature —
-  sin eso, no se declara "Hecha" (Principio IX), aunque todo el código ya
-  esté verificado hasta donde las herramientas alcanzan.
+- Setup (T001-T003) bloqueia todo o resto.
+- US1 (T010-T015) é a base — sem conexão não há nada a enviar/receber.
+- US2 (T020-T026) depende de US1 (precisa de `manager.ts` com um socket ativo).
+- US3 (T030-T031) depende de US1 (reconectar é apenas "conectar de novo").
+- Polish depende das 3 histórias; T042 é o fechamento real da feature —
+  sem isso, não se declara "Feita" (Princípio IX), ainda que todo o código já
+  esteja verificado até onde as ferramentas alcançam.
 
 ## Notes
 
 - Elimina por completo: `src/lib/unofficial/`, `src/server/unofficial/`,
-  `/api/webhooks/unofficial/`, `/api/settings/channels/status/` — sin dejar
-  código muerto ni una opción "modo gateway" alternativa (FR-010).
-- Reutiliza: `ingestInboundMessage`, `lib/crypto` (cifrado), el bus SSE, el
-  patrón `globalThis` de socket/estado in-process ya usado por
-  Campañas/Follow-up.
-- T042 no se puede ejecutar en este entorno de desarrollo — requiere un
-  teléfono real con WhatsApp. Se documenta el resultado cuando el dueño lo
-  ejecute, no se asume ni se finge.
+  `/api/webhooks/unofficial/`, `/api/settings/channels/status/` — sem deixar
+  código morto nem uma opção "modo gateway" alternativa (FR-010).
+- Reaproveita: `ingestInboundMessage`, `lib/crypto` (cifragem), o bus SSE, o
+  padrão `globalThis` de socket/estado in-process já usado por
+  Campanhas/Follow-up.
+- T042 não pode ser executado neste ambiente de desenvolvimento — exige um
+  telefone real com WhatsApp. O resultado é documentado quando o dono o
+  executar, não é presumido nem fingido.
