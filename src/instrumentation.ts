@@ -11,5 +11,7 @@ export async function register(): Promise<void> {
       "@/server/pipeline/followup-scheduler"
     );
     startFollowupScheduler();
+    const { reconnectAllOnBoot } = await import("@/server/baileys/manager");
+    await reconnectAllOnBoot();
   }
 }

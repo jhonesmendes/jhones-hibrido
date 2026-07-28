@@ -9,6 +9,11 @@ import { onLeadActivity } from "@/server/inbox/lead-activity";
 import { maybeRunAgentTurn } from "@/server/ai/trigger";
 import { onInboundMedia } from "@/server/pipeline/followup-document";
 
+/** Marca `message.mediaUrl` cuando los bytes viven en `message_media`
+ * (canal no oficial, autohospedado) en vez de una URL externa fetchable
+ * (canal oficial, CDN de Meta). */
+export const LOCAL_MEDIA_MARKER = "local";
+
 /** Tipos de contenido soportados; el resto se ignora sin error. */
 const SUPPORTED_TYPES = new Set([
   "text",
@@ -153,6 +158,8 @@ export async function ingestInboundMessage(input: {
   fromMe?: boolean;
   /** URL da mídia no gateway (servida ao navegador via /api/media/[id]). */
   mediaUrl?: string | null;
+  /** Bytes de mídia já baixados (canal não oficial: sem URL de terceiro). */
+  media?: { mimeType: string; dataBase64: string } | null;
 }): Promise<void> {
   const db = getDb();
   const { organizationId } = input;
@@ -183,7 +190,7 @@ export async function ingestInboundMessage(input: {
       direction: fromMe ? "out" : "in",
       type: input.type,
       text: input.text,
-      mediaUrl: input.mediaUrl ?? null,
+      mediaUrl: input.mediaUrl ?? (input.media ? LOCAL_MEDIA_MARKER : null),
       status: fromMe ? "sent" : "delivered",
       waTimestamp,
     })
@@ -191,6 +198,19 @@ export async function ingestInboundMessage(input: {
     .returning();
   const message = inserted[0];
   if (!message) return; // duplicado
+
+  if (input.media) {
+    await db
+      .insert(schema.messageMedia)
+      .values({
+        id: newId("messageMedia"),
+        organizationId,
+        messageId: message.id,
+        mimeType: input.media.mimeType,
+        dataBase64: input.media.dataBase64,
+      })
+      .onConflictDoNothing({ target: [schema.messageMedia.messageId] });
+  }
 
   await db
     .update(schema.conversation)
@@ -233,17 +253,13 @@ function toDate(timestamp: string): Date {
 const MEDIA_TYPES = new Set(["image", "audio", "video", "document", "sticker"]);
 
 /**
- * true se a mídia desta mensagem pode ser servida pelo proxy /api/media/[id]:
- * ou há URL armazenada, ou o provedor não oficial sabe buscá-la por ID
- * (Evolution/WPPConnect via base64).
+ * true se a mídia desta mensagem pode ser servida pelo proxy /api/media/[id]
+ * — canal oficial: `mediaUrl` é a URL real do CDN da Meta. Canal não
+ * oficial: `mediaUrl` é o marcador `LOCAL_MEDIA_MARKER`, e os bytes de
+ * verdade estão em `message_media`.
  */
 function hasServableMedia(m: typeof schema.message.$inferSelect): boolean {
-  if (!MEDIA_TYPES.has(m.type)) return false;
-  if (m.mediaUrl) return true;
-  return (
-    m.waMessageId?.startsWith("unof:evolution:") === true ||
-    m.waMessageId?.startsWith("unof:wppconnect:") === true
-  );
+  return MEDIA_TYPES.has(m.type) && Boolean(m.mediaUrl);
 }
 
 export function serializeMessage(m: typeof schema.message.$inferSelect) {

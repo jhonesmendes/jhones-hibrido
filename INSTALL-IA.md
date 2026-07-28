@@ -63,7 +63,7 @@
    build). `DATABASE_URL` apunta al host interno del paso 1.
 4. **Sin Pre-Deployment Command**: las migraciones corren solas al arrancar el
    contenedor (`node migrate.mjs && node server.js`).
-5. **Despliega** y espera el healthcheck verde (`/api/health`; el start-period
+5. **Despliega** y espera el healthcheck verde (`/api/health`; el ![1785188082867](image/INSTALL-IA/1785188082867.png)-period
    cubre las migraciones).
 6. **Verifica**: `https://<dominio>/api/health` responde `{"ok":true}` y
    `https://<dominio>/login` carga.
@@ -76,7 +76,7 @@ cp .env.example .env
 # rellena .env con el dominio del usuario y los secretos generados
 docker compose up -d --build
 ```
-
+![1785188086193](image/INSTALL-IA/1785188086193.png)
 - Caddy emite el certificado HTTPS automáticamente con `DOMAIN`.
 - Verifica: `docker compose ps` (tres servicios healthy) y
   `https://<dominio>/api/health` → `{"ok":true}`.

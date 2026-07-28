@@ -31,6 +31,14 @@ export type SseEvent =
         sent: number;
         failed: number;
       };
+    }
+  | {
+      type: "channel.status";
+      data: {
+        status: "disconnected" | "connecting" | "connected";
+        qrCode: string | null;
+        phoneNumber: string | null;
+      };
     };
 
 const globalForBus = globalThis as unknown as { __voceroBus?: EventEmitter };

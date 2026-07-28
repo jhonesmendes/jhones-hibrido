@@ -4,7 +4,7 @@ import { newId } from "@/lib/db/ids";
 import { scoped } from "@/lib/db/tenant";
 import { parseRecipientsCsv } from "@/lib/campaigns/csv";
 import { extractVariables } from "@/lib/campaigns/render";
-import { getChannelByOrg } from "@/server/unofficial/channel";
+import { getLiveStatus } from "@/server/baileys/manager";
 import { serializeCampaign } from "@/server/campaigns/queries";
 
 export class CampaignError extends Error {
@@ -92,8 +92,8 @@ export async function createCampaign(
     if (!input.messageTemplate.trim()) {
       throw new CampaignError("invalid", "A mensagem não pode ficar vazia");
     }
-    const channel = await getChannelByOrg(organizationId);
-    if (!channel) {
+    const channel = await getLiveStatus(organizationId);
+    if (channel.status !== "connected") {
       throw new CampaignError(
         "channel_not_connected",
         "Conecte o canal não oficial em Configurações antes de criar esta campanha"

@@ -29,6 +29,7 @@ const sendSchema = z.object({ text: z.string().trim().min(1).max(4096) });
 const SEND_ERROR_STATUS: Record<SendError["code"], number> = {
   sandbox_violation: 403,
   not_connected: 409,
+  recipient_not_found: 422,
   reconnect_required: 409,
   window_closed: 409,
   meta_error: 422,

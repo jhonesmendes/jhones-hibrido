@@ -7,7 +7,7 @@ import {
 } from "@/server/inbox/ingest";
 import { sendText } from "@/server/inbox/send";
 import { sendTemplate } from "@/server/whatsapp/templates";
-import { getChannelByOrg } from "@/server/unofficial/channel";
+import { getLiveStatus } from "@/server/baileys/manager";
 import { renderMessage } from "@/lib/campaigns/render";
 import { getCampaign } from "@/server/campaigns/queries";
 
@@ -68,8 +68,8 @@ export async function startCampaign(
       );
     }
   } else {
-    const channel = await getChannelByOrg(organizationId);
-    if (!channel) {
+    const channel = await getLiveStatus(organizationId);
+    if (channel.status !== "connected") {
       throw new CampaignSendError(
         "not_ready",
         "O canal não oficial não está mais conectado"

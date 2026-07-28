@@ -23,6 +23,11 @@ export type EventHandlers = {
     sent: number;
     failed: number;
   }) => void;
+  onChannelStatus?: (data: {
+    status: "disconnected" | "connecting" | "connected";
+    qrCode: string | null;
+    phoneNumber: string | null;
+  }) => void;
   /** Se llama tras RECONECTAR (no en la conexión inicial): catch-up con refetch. */
   onReconnect?: () => void;
 };
@@ -58,6 +63,9 @@ export function useEvents(handlers: EventHandlers): void {
       handlersRef.current.onConversationUpdated?.(d as never)
     );
     listen("lab.run", (d) => handlersRef.current.onLabRun?.(d as never));
+    listen("channel.status", (d) =>
+      handlersRef.current.onChannelStatus?.(d as never)
+    );
     listen("campaign.run", (d) =>
       handlersRef.current.onCampaignRun?.(d as never)
     );

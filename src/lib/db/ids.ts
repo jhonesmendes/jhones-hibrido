@@ -21,6 +21,7 @@ const prefixes = {
   campaignRecipient: "crc",
   pipelineFollowup: "pfu",
   followupSend: "fus",
+  messageMedia: "mm",
 } as const;
 
 export type IdKind = keyof typeof prefixes;

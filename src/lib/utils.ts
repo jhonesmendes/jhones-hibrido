@@ -40,6 +40,22 @@ export function formatPhone(phone: string): string {
 }
 
 /**
+ * Celular BR (55 + DDD de 2 dígitos + 8 dígitos locais, sem o 9º dígito) é
+ * completado pro formato de 13 dígitos. O WhatsApp é inconsistente sobre
+ * qual formato usa pro mesmo contato dependendo da via (JID direto vs.
+ * resolvido de um LID, ver `memory/sprint4_baileys_native_engine.md`) — sem
+ * essa normalização em TODA entrada de telefone (digitada ou vinda de uma
+ * mensagem real), o mesmo contato vira dois. Outros formatos (já com 9, ou
+ * não-BR) voltam sem alteração.
+ */
+export function ensureBrNinthDigit(digits: string): string {
+  if (digits.length === 12 && digits.startsWith("55")) {
+    return `55${digits.slice(2, 4)}9${digits.slice(4)}`;
+  }
+  return digits;
+}
+
+/**
  * Normaliza um telefone digitado livre para dígitos com código do país.
  * Ex.: "66 99674-6147" → "5566996746147". 10–11 dígitos (fixo/celular BR
  * com DDD) ganham prefixo 55. Devolve null se não parecer telefone.
@@ -49,6 +65,7 @@ export function normalizePhoneInput(input: string): string | null {
   if (digits.length < 8 || digits.length > 15) return null;
   // Sem sinal de texto junto (busca por nome não vira telefone)
   if (/[a-zA-Z]{2,}/.test(input)) return null;
-  if (digits.length === 10 || digits.length === 11) return `55${digits}`;
-  return digits;
+  if (digits.length === 10) return `55${digits.slice(0, 2)}9${digits.slice(2)}`;
+  if (digits.length === 11) return `55${digits}`;
+  return ensureBrNinthDigit(digits);
 }

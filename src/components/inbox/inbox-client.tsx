@@ -116,6 +116,19 @@ export function InboxClient() {
     },
   });
 
+  // Esc fecha a conversa aberta (mesmo atalho do WhatsApp Web) — respeita
+  // `defaultPrevented`, então não interfere no Esc que o composer já usa
+  // pra fechar o dropdown de templates.
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      setSelectedId(null);
+      setMessages([]);
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   const selected = conversations?.find((c) => c.id === selectedId) ?? null;
 
   const sendText = useCallback(

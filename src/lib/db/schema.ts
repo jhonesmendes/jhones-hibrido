@@ -271,10 +271,11 @@ export const metaCredentials = pgTable(
 );
 
 /**
- * Canal de WhatsApp NO oficial (gateway self-hosted: Evolution API,
- * WPPConnect o WAHA). Complementa a la Cloud API oficial en el modelo
- * híbrido: captación por el número oficial, automatización por este.
- * La API key se cifra en reposo igual que el token de Meta.
+ * Canal de WhatsApp NO oficial — motor propio (Baileys), conexión directa al
+ * protocolo de WhatsApp Web, sin gateway de terceros. Complementa a la Cloud
+ * API oficial en el modelo híbrido: captación por el número oficial,
+ * automatización por este. La sesión (credenciales + claves de Signal) se
+ * cifra en reposo igual que el token de Meta.
  */
 export const unofficialChannel = pgTable(
   "unofficial_channel",
@@ -283,17 +284,10 @@ export const unofficialChannel = pgTable(
     organizationId: text("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
-    provider: text("provider", {
-      enum: ["evolution", "wppconnect", "waha"],
-    }).notNull(),
-    baseUrl: text("base_url").notNull(),
-    /** Nombre de instancia (Evolution) / sesión (WPPConnect, WAHA). */
-    instanceName: text("instance_name").notNull(),
-    apiKeyCipher: text("api_key_cipher").notNull(),
-    apiKeyIv: text("api_key_iv").notNull(),
-    apiKeyTag: text("api_key_tag").notNull(),
-    /** Segmento secreto de la URL del webhook entrante (enrutamiento). */
-    webhookToken: text("webhook_token").notNull(),
+    /** JSON `{ creds, keys }` de Baileys, cifrado. */
+    authStateCipher: text("auth_state_cipher").notNull(),
+    authStateIv: text("auth_state_iv").notNull(),
+    authStateTag: text("auth_state_tag").notNull(),
     displayPhoneNumber: text("display_phone_number"),
     status: text("status", {
       enum: ["disconnected", "connecting", "connected"],
@@ -303,11 +297,30 @@ export const unofficialChannel = pgTable(
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
-  (t) => [
-    uniqueIndex("unofficial_channel_org_uq").on(t.organizationId),
-    uniqueIndex("unofficial_channel_webhook_uq").on(t.webhookToken),
-  ]
+  (t) => [uniqueIndex("unofficial_channel_org_uq").on(t.organizationId)]
 );
+
+/**
+ * Bytes de mídia (imagem/áudio/vídeo/documento/sticker) do canal não
+ * oficial nativo. Autohospedado por decisão da constitución (proibido
+ * S3/R2) — sem infraestrutura nova, reusa o mesmo Postgres já usado pra
+ * tudo (mesmo padrão de blob em texto que `unofficial_channel` já usa pro
+ * auth-state cifrado). O canal oficial não usa esta tabela: sua mídia é
+ * proxied direto do CDN da Meta via `message.mediaUrl`.
+ */
+export const messageMedia = pgTable("message_media", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id")
+    .notNull()
+    .references(() => organization.id, { onDelete: "cascade" }),
+  messageId: text("message_id")
+    .notNull()
+    .unique()
+    .references(() => message.id, { onDelete: "cascade" }),
+  mimeType: text("mime_type").notNull(),
+  dataBase64: text("data_base64").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
 
 export const agentProfile = pgTable(
   "agent_profile",

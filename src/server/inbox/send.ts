@@ -10,19 +10,15 @@ import {
 } from "@/server/whatsapp/credentials";
 import { isWindowOpen } from "@/server/inbox/window";
 import { serializeMessage } from "@/server/inbox/ingest";
-import { getAdapter, UnofficialApiError } from "@/lib/unofficial";
-import {
-  getChannelByOrg,
-  toConfig,
-  updateChannelStatus,
-} from "@/server/unofficial/channel";
-import { unofficialMessageId } from "@/server/unofficial/ingest";
+import { BaileysSendError, sendText as sendBaileysText } from "@/server/baileys/sender";
+import { baileysMessageId } from "@/server/baileys/inbound";
 
 /** Error tipado del envío; `code` mapea a HTTP en la capa de API. */
 export class SendError extends Error {
   code:
     | "sandbox_violation"
     | "not_connected"
+    | "recipient_not_found"
     | "reconnect_required"
     | "window_closed"
     | "meta_error"
@@ -153,49 +149,37 @@ async function sendViaUnofficial(
 ): Promise<SendResult> {
   const db = getDb();
 
-  const channel = await getChannelByOrg(input.organizationId);
-  if (!channel) {
-    throw new SendError(
-      "not_connected",
-      "Não há gateway não oficial configurado: confira Configurações → Canal não oficial"
-    );
-  }
-
-  const adapter = getAdapter(channel.provider);
   let providerMessageId: string;
   try {
-    providerMessageId = await adapter.sendText(
-      toConfig(channel),
+    providerMessageId = await sendBaileysText(
+      input.organizationId,
       normalizeRecipient(contactPhone),
       input.text
     );
   } catch (err) {
-    if (err instanceof UnofficialApiError) {
-      if (err.status === 401 || err.status === 403) {
-        await updateChannelStatus(input.organizationId, "disconnected");
+    if (err instanceof BaileysSendError) {
+      if (err.code === "not_connected") {
         throw new SendError(
-          "reconnect_required",
-          "O gateway rejeitou a API key: confira Configurações → Canal não oficial"
+          "not_connected",
+          "Não há canal não oficial conectado: confira Configurações → Canal não oficial"
         );
       }
-      if (err.status === 0 || err.status >= 500) {
-        throw new SendError(
-          "meta_unavailable",
-          "O gateway não oficial não está disponível agora"
-        );
+      if (err.code === "recipient_not_found") {
+        throw new SendError("recipient_not_found", err.message);
       }
-      throw new SendError("meta_error", err.message);
+      throw new SendError("meta_unavailable", err.message);
     }
     throw err;
   }
 
+  const waMessageId = baileysMessageId(providerMessageId);
   const inserted = await db
     .insert(schema.message)
     .values({
       id: newId("message"),
       organizationId: input.organizationId,
       conversationId: input.conversationId,
-      waMessageId: unofficialMessageId(channel.provider, providerMessageId),
+      waMessageId,
       direction: "out",
       type: "text",
       text: input.text,
@@ -221,8 +205,8 @@ async function sendViaUnofficial(
     });
     return { messageId: message.id };
   }
-  // El eco del webhook llegó antes que nosotros (carrera benigna).
-  return { messageId: unofficialMessageId(channel.provider, providerMessageId) };
+  // El propio eco del socket llegó antes que nosotros (carrera benigna).
+  return { messageId: waMessageId };
 }
 
 /** Llama a Graph /messages y traduce errores de Meta a SendError. */
