@@ -3,6 +3,7 @@ import { getDb, schema } from "@/lib/db";
 import { newId } from "@/lib/db/ids";
 import { publish } from "@/server/events/bus";
 import { runAgentTurn } from "@/server/ai/pipeline";
+import { resolveAiConfig } from "@/server/ai/config";
 import { renderKb } from "@/server/ai/prompts";
 import { computeScore, judgeCase } from "@/server/lab/judge";
 import { PERSONAS, type Persona } from "@/server/lab/personas";
@@ -86,6 +87,9 @@ async function runAllCases(
     .where(eq(schema.agentTestCase.runId, runId))
     .orderBy(asc(schema.agentTestCase.createdAt));
 
+  const aiConfig = await resolveAiConfig(organizationId);
+  if (!aiConfig) throw new Error("Sem provedor de IA configurado");
+
   const kbEntries = await db
     .select()
     .from(schema.kbEntry)
@@ -132,6 +136,7 @@ async function runAllCases(
       transcript,
       kbText,
       behaviorText,
+      aiConfig,
     });
 
     await db

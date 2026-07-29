@@ -26,6 +26,8 @@ const prefixes = {
   memberChannel: "mc",
   inviteToken: "inv",
   smtpConfig: "smtp",
+  aiConfig: "aic",
+  n8nConfig: "n8n",
   passwordResetToken: "prt",
   auditLog: "aud",
 } as const;

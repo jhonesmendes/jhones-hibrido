@@ -39,12 +39,24 @@ export function isValidSignature(
 
 /* ---------- Tipos do payload da Meta (subconjunto suportado) ---------- */
 
+export type WebhookMedia = {
+  id: string;
+  mime_type?: string;
+  filename?: string;
+  caption?: string;
+};
+
 export type WebhookMessage = {
   from: string;
   id: string;
   timestamp: string;
   type: string;
   text?: { body: string };
+  image?: WebhookMedia;
+  document?: WebhookMedia;
+  audio?: WebhookMedia;
+  video?: WebhookMedia;
+  sticker?: WebhookMedia;
 };
 
 export type WebhookStatus = {

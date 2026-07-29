@@ -1,10 +1,11 @@
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { newId } from "@/lib/db/ids";
 import { scoped } from "@/lib/db/tenant";
 import { parseRecipientsCsv } from "@/lib/campaigns/csv";
 import { extractVariables } from "@/lib/campaigns/render";
 import { getLiveStatus } from "@/server/baileys/manager";
+import { countVariables } from "@/server/whatsapp/templates";
 import { serializeCampaign } from "@/server/campaigns/queries";
 
 export class CampaignError extends Error {
@@ -32,12 +33,21 @@ export function campaignErrorStatus(err: CampaignError): number {
   return CAMPAIGN_ERROR_STATUS[err.code];
 }
 
+type RecipientSource =
+  | { source: "csv"; csvText: string }
+  | {
+      source: "crm";
+      stageId?: string | null;
+      /** Filtra pelo canal da CONVERSA do contato — independente do canal de envio da campanha. */
+      originChannel?: "official" | "unofficial" | null;
+    };
+
 type CreateOfficialInput = {
   name: string;
   channel: "official";
   templateId: string;
-  csvText: string;
-};
+  scheduledAt?: string | null;
+} & RecipientSource;
 
 type CreateUnofficialInput = {
   name: string;
@@ -45,10 +55,95 @@ type CreateUnofficialInput = {
   messageTemplate: string;
   sendIntervalMs: number;
   riskAcknowledged: boolean;
-  csvText: string;
-};
+  scheduledAt?: string | null;
+} & RecipientSource;
 
 export type CreateCampaignInput = CreateOfficialInput | CreateUnofficialInput;
+
+type Recipient = { phone: string; variables: Record<string, string> };
+
+/** Contatos do CRM (não arquivados) filtrados por etapa do pipeline e/ou canal da conversa. */
+export async function resolveCrmContacts(
+  organizationId: string,
+  filter: { stageId?: string | null; channel?: "official" | "unofficial" | null }
+): Promise<{ phone: string; name: string }[]> {
+  const db = getDb();
+  const conditions = [
+    eq(schema.contact.organizationId, organizationId),
+    isNull(schema.contact.archivedAt),
+    filter.stageId ? eq(schema.lead.stageId, filter.stageId) : undefined,
+    filter.channel ? eq(schema.conversation.channel, filter.channel) : undefined,
+  ].filter((c) => c !== undefined);
+
+  const rows = await db
+    .select({ phone: schema.contact.phone, name: schema.contact.name })
+    .from(schema.contact)
+    .leftJoin(schema.lead, eq(schema.lead.contactId, schema.contact.id))
+    .leftJoin(
+      schema.conversation,
+      and(
+        eq(schema.conversation.contactId, schema.contact.id),
+        eq(schema.conversation.isTest, false)
+      )
+    )
+    .where(and(...conditions));
+
+  // Dedup por telefone: se por algum motivo o contato casar mais de uma vez.
+  const byPhone = new Map<string, { phone: string; name: string }>();
+  for (const r of rows) byPhone.set(r.phone, r);
+  return [...byPhone.values()];
+}
+
+/** Resolve os destinatários (CSV ou filtro de CRM) num formato comum. */
+async function resolveRecipients(
+  organizationId: string,
+  input: CreateCampaignInput
+): Promise<{
+  validRows: Recipient[];
+  invalidRows: { line: number; reason: string }[];
+  csvVariableNames: string[];
+}> {
+  if (input.source === "csv") {
+    const { validRows, invalidRows, variableNames } = parseRecipientsCsv(
+      input.csvText
+    );
+    if (input.channel === "official") {
+      return {
+        validRows: validRows.map((row) => {
+          const variables: Record<string, string> = {};
+          row.variablesOrdered.forEach((v, i) => {
+            variables[String(i + 1)] = v;
+          });
+          return { phone: row.phone, variables };
+        }),
+        invalidRows,
+        csvVariableNames: variableNames,
+      };
+    }
+    return {
+      validRows: validRows.map((row) => ({
+        phone: row.phone,
+        variables: row.variables,
+      })),
+      invalidRows,
+      csvVariableNames: variableNames,
+    };
+  }
+
+  const contacts = await resolveCrmContacts(organizationId, {
+    stageId: input.stageId,
+    channel: input.originChannel ?? null,
+  });
+  return {
+    validRows: contacts.map((c) => {
+      const variables: Record<string, string> =
+        input.channel === "official" ? { "1": c.name } : { nome: c.name };
+      return { phone: c.phone, variables };
+    }),
+    invalidRows: [],
+    csvVariableNames: [],
+  };
+}
 
 export async function createCampaign(
   organizationId: string,
@@ -56,7 +151,7 @@ export async function createCampaign(
 ) {
   const db = getDb();
 
-  let templateVariableKey: string | null = null;
+  let templateVariableCount = 0;
 
   if (input.channel === "official") {
     const templates = await db
@@ -80,13 +175,12 @@ export async function createCampaign(
         "Só é possível criar uma campanha oficial com um modelo aprovado"
       );
     }
-    // Limitação v1 do projeto: no máximo a variável {{1}}.
-    templateVariableKey = /\{\{\s*1\s*\}\}/.test(template.body) ? "1" : null;
+    templateVariableCount = countVariables(template.body);
   } else {
     if (!input.riskAcknowledged) {
       throw new CampaignError(
         "invalid",
-        "É preciso confirmar o aviso de risco de banimento para criar uma campanha pelo canal não oficial"
+        "É preciso confirmar o aviso de risco de banimento para criar uma campanha pelo WhatsApp Web"
       );
     }
     if (!input.messageTemplate.trim()) {
@@ -96,25 +190,38 @@ export async function createCampaign(
     if (channel.status !== "connected") {
       throw new CampaignError(
         "channel_not_connected",
-        "Conecte o canal não oficial em Configurações antes de criar esta campanha"
+        "Conecte o WhatsApp Web em Configurações antes de criar esta campanha"
       );
     }
   }
 
-  const { validRows, invalidRows, variableNames } = parseRecipientsCsv(
-    input.csvText
+  const { validRows, invalidRows, csvVariableNames } = await resolveRecipients(
+    organizationId,
+    input
   );
   if (validRows.length === 0) {
     throw new CampaignError(
       "no_recipients",
-      "Nenhum destinatário válido encontrado no CSV"
+      "Nenhum destinatário válido encontrado"
     );
   }
-  if (templateVariableKey && variableNames.length === 0) {
+  if (
+    input.channel === "official" &&
+    input.source === "csv" &&
+    templateVariableCount > 0 &&
+    csvVariableNames.length < templateVariableCount
+  ) {
     throw new CampaignError(
       "invalid",
-      "O modelo usa {{1}}, mas o CSV não tem uma coluna além do telefone para preenchê-la"
+      `O modelo usa ${templateVariableCount} variável(is) ({{1}}${
+        templateVariableCount > 1 ? ` a {{${templateVariableCount}}}` : ""
+      }), mas o CSV só tem ${csvVariableNames.length} coluna(s) além do telefone`
     );
+  }
+
+  const scheduledAt = input.scheduledAt ? new Date(input.scheduledAt) : null;
+  if (scheduledAt && Number.isNaN(scheduledAt.getTime())) {
+    throw new CampaignError("invalid", "Data de agendamento inválida");
   }
 
   const campaignId = newId("campaign");
@@ -136,6 +243,7 @@ export async function createCampaign(
         input.channel === "unofficial" ? input.sendIntervalMs : 1000,
       status: "draft",
       total: validRows.length,
+      scheduledAt,
       createdAt: now,
     });
 
@@ -145,12 +253,7 @@ export async function createCampaign(
         campaignId,
         organizationId,
         phone: row.phone,
-        variables:
-          input.channel === "official"
-            ? templateVariableKey
-              ? { [templateVariableKey]: row.variablesOrdered[0] ?? "" }
-              : {}
-            : row.variables,
+        variables: row.variables,
       }))
     );
   });

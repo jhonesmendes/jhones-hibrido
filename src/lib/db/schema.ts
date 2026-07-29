@@ -4,6 +4,7 @@ import {
   integer,
   jsonb,
   pgTable,
+  real,
   text,
   timestamp,
   uniqueIndex,
@@ -326,6 +327,9 @@ export const messageMedia = pgTable("message_media", {
     .references(() => message.id, { onDelete: "cascade" }),
   mimeType: text("mime_type").notNull(),
   dataBase64: text("data_base64").notNull(),
+  /** Nome original (documentos) — usado no card do documento e ao encaminhar/baixar. */
+  filename: text("filename"),
+  sizeBytes: integer("size_bytes"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -423,11 +427,18 @@ export const campaign = pgTable(
     sent: integer("sent").notNull().default(0),
     failed: integer("failed").notNull().default(0),
     cancelRequested: boolean("cancel_requested").notNull().default(false),
+    /** Agendamento (opcional): o scheduler dispara sozinho quando chega a hora. */
+    scheduledAt: timestamp("scheduled_at"),
     startedAt: timestamp("started_at"),
     completedAt: timestamp("completed_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
-  (t) => [index("campaign_org_created_idx").on(t.organizationId, t.createdAt)]
+  (t) => [
+    index("campaign_org_created_idx").on(t.organizationId, t.createdAt),
+    index("campaign_scheduled_idx")
+      .on(t.scheduledAt)
+      .where(sql`${t.status} = 'draft' and ${t.scheduledAt} is not null`),
+  ]
 );
 
 export const campaignRecipient = pgTable(
@@ -641,6 +652,54 @@ export const inviteToken = pgTable(
   },
   (t) => [index("invite_token_org_idx").on(t.organizationId)]
 );
+
+/**
+ * Configuração do provedor de IA por organização — opcional, sobrepõe as
+ * variáveis de ambiente (OPENROUTER_*) quando presente. Continua atrás do
+ * único adaptador compatível com OpenRouter (Constituição II): `baseUrl`
+ * aceita qualquer endpoint compatível com a API de chat completions da
+ * OpenAI, não é uma integração nova por provedor.
+ */
+export const aiConfig = pgTable("ai_config", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id")
+    .notNull()
+    .unique()
+    .references(() => organization.id, { onDelete: "cascade" }),
+  baseUrl: text("base_url").notNull(),
+  apiKeyCipher: text("api_key_cipher"),
+  apiKeyIv: text("api_key_iv"),
+  apiKeyTag: text("api_key_tag"),
+  apiKeyLast4: text("api_key_last4"),
+  model: text("model").notNull(),
+  fallbackModel: text("fallback_model"),
+  temperature: real("temperature").notNull().default(0.7),
+  maxTokens: integer("max_tokens").notNull().default(500),
+  contextMessages: integer("context_messages").notNull().default(20),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+/**
+ * Servidor N8N do próprio operador/agência (Constituição II v2.2.0) —
+ * opcional, um por organização, auto-hospedado. Usado só para listar/
+ * executar workflows e ver histórico de execuções na aba Automações de
+ * Campanhas — nunca é pré-requisito de uso da instância.
+ */
+export const n8nConfig = pgTable("n8n_config", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id")
+    .notNull()
+    .unique()
+    .references(() => organization.id, { onDelete: "cascade" }),
+  baseUrl: text("base_url").notNull(),
+  apiKeyCipher: text("api_key_cipher").notNull(),
+  apiKeyIv: text("api_key_iv").notNull(),
+  apiKeyTag: text("api_key_tag").notNull(),
+  apiKeyLast4: text("api_key_last4").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
 
 /**
  * Servidor SMTP do próprio operador (Constituição II v2.1.0) — opcional, um

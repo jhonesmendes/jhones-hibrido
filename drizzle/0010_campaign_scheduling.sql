@@ -1,0 +1,2 @@
+ALTER TABLE "campaign" ADD COLUMN "scheduled_at" timestamp;--> statement-breakpoint
+CREATE INDEX "campaign_scheduled_idx" ON "campaign" USING btree ("scheduled_at") WHERE "campaign"."status" = 'draft' and "campaign"."scheduled_at" is not null;

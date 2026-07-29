@@ -1,18 +1,24 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   AlertTriangle,
   Check,
   CheckCheck,
   Clock3,
+  Download,
   FileText,
+  Forward,
   Paperclip,
   Sparkles,
+  ZoomIn,
 } from "lucide-react";
 import type { MessageDto } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { formatFileSize } from "@/lib/media";
 import { mediaLabel } from "./helpers";
+import { MediaLightbox } from "./media-lightbox";
+import { ForwardModal } from "./forward-modal";
 
 function StatusTicks({ status }: { status: MessageDto["status"] }) {
   const cls = "h-[13px] w-[13px]";
@@ -42,8 +48,21 @@ function bubbleTime(iso: string): string {
   });
 }
 
-/** Mídia do canal não oficial, servida pelo proxy autenticado do CRM. */
-function MediaContent({ m }: { m: MessageDto }) {
+/**
+ * Mídia da conversa, servida pelo proxy autenticado do CRM (`/api/media/[id]`
+ * — canal não oficial: bytes locais; canal oficial: baixados na ingestão,
+ * ver ingest.ts). Imagem/vídeo abrem no lightbox; documento tem card com
+ * baixar/encaminhar; ambos podem encaminhar.
+ */
+function MediaContent({
+  m,
+  onOpenLightbox,
+  onForward,
+}: {
+  m: MessageDto;
+  onOpenLightbox: () => void;
+  onForward: () => void;
+}) {
   if (!m.mediaUrl) {
     return (
       <span className="inline-flex items-center gap-1.5 text-text-3">
@@ -57,14 +76,37 @@ function MediaContent({ m }: { m: MessageDto }) {
   if (m.type === "image" || m.type === "sticker") {
     return (
       <span className="block">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={m.mediaUrl}
-          alt={m.text ?? mediaLabel(m.type)}
-          loading="lazy"
-          className="max-h-72 max-w-full cursor-pointer rounded-md"
-          onClick={() => window.open(m.mediaUrl!, "_blank")}
-        />
+        <span
+          className="group relative block cursor-pointer overflow-hidden rounded-md"
+          onClick={onOpenLightbox}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={m.mediaUrl}
+            alt={m.text ?? mediaLabel(m.type)}
+            loading="lazy"
+            className="max-h-72 max-w-full rounded-md"
+          />
+          <span className="absolute inset-0 hidden items-center justify-center gap-2 bg-black/30 group-hover:flex">
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/90">
+              <ZoomIn className="h-4 w-4 text-foreground" strokeWidth={1.7} />
+            </span>
+          </span>
+          {m.type !== "sticker" && (
+            <span className="absolute right-1.5 top-1.5 flex gap-1">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onForward();
+                }}
+                aria-label="Encaminhar"
+                className="flex h-6 w-6 items-center justify-center rounded-md bg-black/60 text-white hover:bg-black/80"
+              >
+                <Forward className="h-3 w-3" strokeWidth={1.7} />
+              </button>
+            </span>
+          )}
+        </span>
         {m.text && <span className="mt-1 block">{m.text}</span>}
       </span>
     );
@@ -77,33 +119,74 @@ function MediaContent({ m }: { m: MessageDto }) {
   if (m.type === "video") {
     return (
       <span className="block">
-        <video
-          controls
-          preload="metadata"
-          src={m.mediaUrl}
-          className="max-h-72 max-w-full rounded-md"
-        />
+        <span className="group relative block cursor-pointer" onClick={onOpenLightbox}>
+          <video
+            controls={false}
+            preload="metadata"
+            src={m.mediaUrl}
+            className="max-h-72 max-w-full rounded-md"
+          />
+          <span className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/30">
+            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white/90">
+              <ZoomIn className="h-4 w-4 text-foreground" strokeWidth={1.7} />
+            </span>
+          </span>
+        </span>
         {m.text && <span className="mt-1 block">{m.text}</span>}
       </span>
     );
   }
 
   // document e demais tipos
+  const sizeLabel = formatFileSize(m.sizeBytes);
   return (
-    <a
-      href={m.mediaUrl}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="inline-flex items-center gap-1.5 underline underline-offset-2"
-    >
-      <FileText className="h-3.5 w-3.5" strokeWidth={1.7} />
-      {m.text || mediaLabel(m.type)}
-    </a>
+    <span className="flex items-center gap-2.5">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-brand-tint">
+        <FileText className="h-4.5 w-4.5 text-brand" strokeWidth={1.7} />
+      </span>
+      <span className="min-w-0 flex-1">
+        <a
+          href={m.mediaUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="block truncate font-medium underline-offset-2 hover:underline"
+        >
+          {m.filename || m.text || mediaLabel(m.type)}
+        </a>
+        {sizeLabel && <span className="block text-xs text-text-3">{sizeLabel}</span>}
+      </span>
+      <span className="flex shrink-0 gap-1">
+        <button
+          onClick={onForward}
+          aria-label="Encaminhar"
+          className="rounded-md border p-1.5 text-text-3 hover:bg-accent hover:text-foreground"
+        >
+          <Forward className="h-3.5 w-3.5" strokeWidth={1.7} />
+        </button>
+        <a
+          href={m.mediaUrl}
+          download={m.filename ?? undefined}
+          aria-label="Baixar"
+          className="rounded-md border p-1.5 text-text-3 hover:bg-accent hover:text-foreground"
+        >
+          <Download className="h-3.5 w-3.5" strokeWidth={1.7} />
+        </a>
+      </span>
+    </span>
   );
 }
 
+/** Tipos exibidos em tela cheia no lightbox, com tira de miniaturas entre eles. */
+const LIGHTBOX_TYPES = new Set(["image", "video", "sticker"]);
+
 export function MessageThread({ messages }: { messages: MessageDto[] }) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const [forwardMessageId, setForwardMessageId] = useState<string | null>(null);
+
+  const lightboxItems = messages.filter(
+    (m) => m.mediaUrl && LIGHTBOX_TYPES.has(m.type)
+  );
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -155,7 +238,13 @@ export function MessageThread({ messages }: { messages: MessageDto[] }) {
                     {m.text}
                   </span>
                 ) : (
-                  <MediaContent m={m} />
+                  <MediaContent
+                    m={m}
+                    onOpenLightbox={() =>
+                      setLightboxIndex(lightboxItems.findIndex((it) => it.id === m.id))
+                    }
+                    onForward={() => setForwardMessageId(m.id)}
+                  />
                 )}
                 <span className="float-right ml-2 mt-1 flex items-center gap-1">
                   {m.aiGenerated && (
@@ -176,6 +265,26 @@ export function MessageThread({ messages }: { messages: MessageDto[] }) {
           </div>
         );
       })}
+
+      {lightboxIndex !== null && lightboxItems[lightboxIndex] && (
+        <MediaLightbox
+          items={lightboxItems}
+          index={lightboxIndex}
+          onClose={() => setLightboxIndex(null)}
+          onNavigate={setLightboxIndex}
+          onForward={(m) => {
+            setForwardMessageId(m.id);
+            setLightboxIndex(null);
+          }}
+        />
+      )}
+
+      {forwardMessageId && (
+        <ForwardModal
+          messageId={forwardMessageId}
+          onClose={() => setForwardMessageId(null)}
+        />
+      )}
     </div>
   );
 }

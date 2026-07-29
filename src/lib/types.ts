@@ -24,6 +24,9 @@ export type MessageDto = {
   text: string | null;
   /** Rota do proxy de mídia (/api/media/[id]) quando há mídia exibível. */
   mediaUrl: string | null;
+  filename: string | null;
+  sizeBytes: number | null;
+  mimeType: string | null;
   status: "pending" | "sent" | "delivered" | "read" | "failed";
   aiGenerated: boolean;
   createdAt: string;
@@ -65,6 +68,7 @@ export type CampaignDto = {
   total: number;
   sent: number;
   failed: number;
+  scheduledAt: string | null;
   startedAt: string | null;
   completedAt: string | null;
   createdAt: string;

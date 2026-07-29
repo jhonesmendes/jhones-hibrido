@@ -17,6 +17,7 @@ export function serializeCampaign(c: CampaignRow) {
     total: c.total,
     sent: c.sent,
     failed: c.failed,
+    scheduledAt: c.scheduledAt?.toISOString() ?? null,
     startedAt: c.startedAt?.toISOString() ?? null,
     completedAt: c.completedAt?.toISOString() ?? null,
     createdAt: c.createdAt.toISOString(),

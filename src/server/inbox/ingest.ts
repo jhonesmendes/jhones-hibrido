@@ -3,7 +3,8 @@ import { getDb, schema } from "@/lib/db";
 import { newId } from "@/lib/db/ids";
 import { publish } from "@/server/events/bus";
 import { getCredentialsByPhoneNumberId } from "@/server/whatsapp/credentials";
-import type { WebhookValue } from "@/server/inbox/webhook";
+import { downloadMetaMedia, getMetaMediaMeta } from "@/lib/meta/client";
+import type { WebhookMedia, WebhookValue } from "@/server/inbox/webhook";
 import { applyStatusUpdate } from "@/server/inbox/status";
 import { onLeadActivity } from "@/server/inbox/lead-activity";
 import { maybeRunAgentTurn } from "@/server/ai/trigger";
@@ -128,15 +129,48 @@ export async function processMessagesValue(value: WebhookValue): Promise<void> {
     const profileName = value.contacts?.find(
       (c) => c.wa_id === msg.from
     )?.profile?.name;
+
+    const mediaField: WebhookMedia | undefined =
+      msg.image ?? msg.document ?? msg.audio ?? msg.video ?? msg.sticker;
+    const media = mediaField
+      ? await downloadOfficialMedia(mediaField, credentials.token)
+      : null;
+
     await ingestInboundMessage({
       organizationId,
       from: msg.from,
       profileName: profileName ?? null,
       waMessageId: msg.id,
       type: msg.type,
-      text: msg.text?.body ?? null,
+      text: msg.text?.body ?? mediaField?.caption ?? null,
       timestamp: msg.timestamp,
+      media,
     });
+  }
+}
+
+/**
+ * Baixa mídia do canal oficial (2 passos do Graph API: metadados → bytes) e
+ * guarda localmente — igual ao WhatsApp Web, nunca depende de uma URL da
+ * Meta ainda viva no momento em que o agente/usuário abre a conversa (essas
+ * URLs expiram em minutos). Uma falha aqui não derruba a ingestão da
+ * mensagem: ela entra sem mídia anexada, em vez de travar o webhook.
+ */
+async function downloadOfficialMedia(
+  field: WebhookMedia,
+  token: string
+): Promise<{ mimeType: string; dataBase64: string; filename: string | null } | null> {
+  try {
+    const meta = await getMetaMediaMeta(field.id, token);
+    const buffer = await downloadMetaMedia(meta.url, token);
+    return {
+      mimeType: field.mime_type ?? meta.mimeType,
+      dataBase64: buffer.toString("base64"),
+      filename: field.filename ?? null,
+    };
+  } catch (err) {
+    console.error("[webhook] falha ao baixar mídia oficial:", err);
+    return null;
   }
 }
 
@@ -158,8 +192,8 @@ export async function ingestInboundMessage(input: {
   fromMe?: boolean;
   /** URL da mídia no gateway (servida ao navegador via /api/media/[id]). */
   mediaUrl?: string | null;
-  /** Bytes de mídia já baixados (canal não oficial: sem URL de terceiro). */
-  media?: { mimeType: string; dataBase64: string } | null;
+  /** Bytes de mídia já baixados (sem URL de terceiro persistente). */
+  media?: { mimeType: string; dataBase64: string; filename?: string | null } | null;
 }): Promise<void> {
   const db = getDb();
   const { organizationId } = input;
@@ -208,6 +242,8 @@ export async function ingestInboundMessage(input: {
         messageId: message.id,
         mimeType: input.media.mimeType,
         dataBase64: input.media.dataBase64,
+        filename: input.media.filename ?? null,
+        sizeBytes: Math.ceil((input.media.dataBase64.length * 3) / 4),
       })
       .onConflictDoNothing({ target: [schema.messageMedia.messageId] });
   }
@@ -234,7 +270,19 @@ export async function ingestInboundMessage(input: {
 
   publish(organizationId, {
     type: "message.new",
-    data: { conversationId: conversation.id, message: serializeMessage(message) },
+    data: {
+      conversationId: conversation.id,
+      message: serializeMessage(
+        message,
+        input.media
+          ? {
+              filename: input.media.filename ?? null,
+              sizeBytes: Math.ceil((input.media.dataBase64.length * 3) / 4),
+              mimeType: input.media.mimeType,
+            }
+          : null
+      ),
+    },
   });
   publish(organizationId, {
     type: "conversation.updated",
@@ -262,7 +310,10 @@ function hasServableMedia(m: typeof schema.message.$inferSelect): boolean {
   return MEDIA_TYPES.has(m.type) && Boolean(m.mediaUrl);
 }
 
-export function serializeMessage(m: typeof schema.message.$inferSelect) {
+export function serializeMessage(
+  m: typeof schema.message.$inferSelect,
+  media?: { filename: string | null; sizeBytes: number | null; mimeType: string | null } | null
+) {
   return {
     id: m.id,
     conversationId: m.conversationId,
@@ -271,6 +322,9 @@ export function serializeMessage(m: typeof schema.message.$inferSelect) {
     text: m.text,
     // Sempre a rota do proxy: a URL real do gateway nunca vai ao navegador.
     mediaUrl: hasServableMedia(m) ? `/api/media/${m.id}` : null,
+    filename: media?.filename ?? null,
+    sizeBytes: media?.sizeBytes ?? null,
+    mimeType: media?.mimeType ?? null,
     status: m.status,
     aiGenerated: m.aiGenerated,
     createdAt: (m.waTimestamp ?? m.createdAt).toISOString(),

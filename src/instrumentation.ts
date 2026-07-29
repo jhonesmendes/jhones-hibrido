@@ -11,6 +11,10 @@ export async function register(): Promise<void> {
       "@/server/pipeline/followup-scheduler"
     );
     startFollowupScheduler();
+    const { startCampaignScheduler } = await import(
+      "@/server/campaigns/scheduler"
+    );
+    startCampaignScheduler();
     const { reconnectAllOnBoot } = await import("@/server/baileys/manager");
     await reconnectAllOnBoot();
   }

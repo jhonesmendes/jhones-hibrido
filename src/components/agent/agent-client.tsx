@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { Plus, Sparkles, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -8,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { HelpLink } from "@/components/docs/help-link";
 
 type Profile = {
   enabled: boolean;
@@ -73,7 +75,10 @@ export function AgentClient() {
   return (
     <div className="h-full overflow-y-auto">
       <header className="flex items-center justify-between border-b px-6 py-4">
-        <h2 className="font-semibold">Agente de IA</h2>
+        <div className="flex items-center gap-1.5">
+          <h2 className="font-semibold">Agente de IA</h2>
+          <HelpLink slug="agente" />
+        </div>
         <div className="flex items-center gap-3">
           {saved && <span className="text-xs text-primary">Salvo ✓</span>}
           <span className="text-sm text-muted-foreground">
@@ -103,9 +108,13 @@ export function AgentClient() {
           <Sparkles className="mx-auto mb-2 h-8 w-8 text-primary" />
           <p className="font-medium">Configure seu provedor de IA para ativar o agente</p>
           <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-            Adicione <code className="rounded bg-secondary px-1">OPENROUTER_API_TOKEN</code> e{" "}
-            <code className="rounded bg-secondary px-1">OPENROUTER_MODEL</code> às variáveis
-            de ambiente da instância e reinicie. Enquanto isso, você pode deixar prontos o
+            Configure em{" "}
+            <Link href="/settings/ai" className="text-primary hover:underline">
+              Configurações → Inteligência IA
+            </Link>
+            , ou adicione <code className="rounded bg-secondary px-1">OPENROUTER_API_TOKEN</code>{" "}
+            e <code className="rounded bg-secondary px-1">OPENROUTER_MODEL</code> às variáveis de
+            ambiente da instância e reinicie. Enquanto isso, você pode deixar prontos o
             comportamento e o conhecimento aqui embaixo.
           </p>
         </div>

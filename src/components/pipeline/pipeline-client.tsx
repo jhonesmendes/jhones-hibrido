@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils";
 import { ContactAvatar } from "@/components/avatar";
 import { Button } from "@/components/ui/button";
 import { formatTime } from "@/components/inbox/helpers";
+import { HelpLink } from "@/components/docs/help-link";
 import { StageManager } from "./stage-manager";
 import { FollowupManager } from "./followup-manager";
 
@@ -83,7 +84,10 @@ export function PipelineClient() {
   return (
     <div className="flex h-full flex-col">
       <header className="flex items-center justify-between border-b px-6 py-4">
-        <h2 className="font-semibold">Pipeline</h2>
+        <div className="flex items-center gap-1.5">
+          <h2 className="font-semibold">Pipeline</h2>
+          <HelpLink slug="pipeline" />
+        </div>
         <div className="flex items-center gap-2">
           <Button
             variant="outline"

@@ -45,25 +45,28 @@ export function templateErrorStatus(err: TemplateError): number {
 
 const VARIABLE_REGEX = /\{\{\s*(\d+)\s*\}\}/g;
 
-/** Conta variáveis {{n}} e valida a limitação v1: no máximo UMA e deve ser {{1}}. */
+/** Quantidade de variáveis {{n}} no corpo — o maior índice usado (ex.: só {{2}} conta como 2, mas é inválido: ver validateBodyVariables). */
 export function countVariables(body: string): number {
   const matches = [...body.matchAll(VARIABLE_REGEX)];
-  return matches.length;
+  if (matches.length === 0) return 0;
+  return Math.max(...matches.map((m) => Number(m[1])));
 }
 
+/** Variáveis MUST ser sequenciais a partir de {{1}}, sem buracos nem repetição de índice. */
 export function validateBodyVariables(body: string): string | null {
   const matches = [...body.matchAll(VARIABLE_REGEX)];
-  if (matches.length > 1) {
-    return "A v1 admite uma única variável {{1}} no corpo";
-  }
-  if (matches.length === 1 && matches[0]![1] !== "1") {
-    return "A variável deve ser {{1}}";
+  const indices = [...new Set(matches.map((m) => Number(m[1])))].sort((a, b) => a - b);
+  for (let i = 0; i < indices.length; i++) {
+    if (indices[i] !== i + 1) {
+      return "As variáveis devem ser sequenciais a partir de {{1}} (ex.: {{1}}, {{2}}, {{3}}…), sem pular números";
+    }
   }
   return null;
 }
 
-export function renderBody(body: string, variable?: string): string {
-  return body.replace(VARIABLE_REGEX, variable ?? "");
+/** Substitui {{1}}, {{2}}… pelos valores correspondentes, na ordem. */
+export function renderBody(body: string, variables: string[] = []): string {
+  return body.replace(VARIABLE_REGEX, (_, idx: string) => variables[Number(idx) - 1] ?? "");
 }
 
 type TemplateRow = typeof schema.template.$inferSelect;
@@ -280,7 +283,8 @@ export async function sendTemplate(input: {
   organizationId: string;
   conversationId: string;
   templateId: string;
-  variable?: string;
+  /** Ordenadas: índice 0 = {{1}}, índice 1 = {{2}}, etc. */
+  variables?: string[];
 }): Promise<{ messageId: string }> {
   const db = getDb();
 
@@ -300,9 +304,18 @@ export async function sendTemplate(input: {
   if (template.status !== "approved") {
     throw new TemplateError("invalid", "Só é possível enviar modelos aprovados");
   }
-  const needsVariable = countVariables(template.body) === 1;
-  if (needsVariable && !input.variable?.trim()) {
-    throw new TemplateError("invalid", "O modelo requer o valor de {{1}}");
+  const variableCount = countVariables(template.body);
+  const variables = input.variables ?? [];
+  if (
+    variableCount > 0 &&
+    variables.slice(0, variableCount).some((v) => !v?.trim())
+  ) {
+    throw new TemplateError(
+      "invalid",
+      variableCount === 1
+        ? "O modelo requer o valor de {{1}}"
+        : `O modelo requer o valor de {{1}} a {{${variableCount}}}`
+    );
   }
 
   const rows = await db
@@ -343,12 +356,15 @@ export async function sendTemplate(input: {
     template: {
       name: template.name,
       language: { code: template.language },
-      ...(needsVariable
+      ...(variableCount > 0
         ? {
             components: [
               {
                 type: "body",
-                parameters: [{ type: "text", text: input.variable!.trim() }],
+                parameters: Array.from({ length: variableCount }, (_, i) => ({
+                  type: "text",
+                  text: (variables[i] ?? "").trim(),
+                })),
               },
             ],
           }
@@ -365,7 +381,10 @@ export async function sendTemplate(input: {
       waMessageId,
       direction: "out",
       type: "template",
-      text: renderBody(template.body, input.variable?.trim()),
+      text: renderBody(
+        template.body,
+        variables.map((v) => v.trim())
+      ),
       status: "pending",
     })
     .returning();

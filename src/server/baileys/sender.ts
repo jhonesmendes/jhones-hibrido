@@ -47,7 +47,7 @@ export async function sendText(
   if (!sock || live.status !== "connected") {
     throw new BaileysSendError(
       "not_connected",
-      "Não há canal não oficial conectado"
+      "Não há WhatsApp Web conectado"
     );
   }
 
@@ -68,4 +68,68 @@ export async function sendText(
       err instanceof Error ? err.message : "Falha ao enviar a mensagem"
     );
   }
+}
+
+/** Envia mídia (imagem/documento/áudio/vídeo) pelo motor nativo; devolve o ID da mensagem. */
+export async function sendMedia(
+  organizationId: string,
+  phone: string,
+  file: { buffer: Buffer; mimeType: string; filename: string | null; caption?: string }
+): Promise<string> {
+  const sock = getSocket(organizationId);
+  const live = await getLiveStatus(organizationId);
+  if (!sock || live.status !== "connected") {
+    throw new BaileysSendError(
+      "not_connected",
+      "Não há WhatsApp Web conectado"
+    );
+  }
+
+  try {
+    const jid = await resolveJid(sock, phone);
+    const content = buildBaileysMediaContent(file);
+    const result = await sock.sendMessage(jid, content);
+    if (!result?.key.id) {
+      throw new BaileysSendError(
+        "send_failed",
+        "O WhatsApp não devolveu o ID da mensagem"
+      );
+    }
+    return result.key.id;
+  } catch (err) {
+    if (err instanceof BaileysSendError) throw err;
+    throw new BaileysSendError(
+      "send_failed",
+      err instanceof Error ? err.message : "Falha ao enviar a mídia"
+    );
+  }
+}
+
+type BaileysMediaContent =
+  | { image: Buffer; caption?: string }
+  | { video: Buffer; caption?: string }
+  | { audio: Buffer; mimetype: string }
+  | { document: Buffer; mimetype: string; fileName: string; caption?: string };
+
+function buildBaileysMediaContent(file: {
+  buffer: Buffer;
+  mimeType: string;
+  filename: string | null;
+  caption?: string;
+}): BaileysMediaContent {
+  if (file.mimeType.startsWith("image/")) {
+    return { image: file.buffer, caption: file.caption };
+  }
+  if (file.mimeType.startsWith("video/")) {
+    return { video: file.buffer, caption: file.caption };
+  }
+  if (file.mimeType.startsWith("audio/")) {
+    return { audio: file.buffer, mimetype: file.mimeType };
+  }
+  return {
+    document: file.buffer,
+    mimetype: file.mimeType,
+    fileName: file.filename ?? "arquivo",
+    caption: file.caption,
+  };
 }

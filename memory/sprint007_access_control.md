@@ -115,8 +115,42 @@ humana/Playwright (Princípio IX).
 
 ## Estado no fim desta sessão
 
-MVP (Setup+Foundational+US1+US2) implementado, testado (27 testes unitários
-novos, 164 no total, todos verdes) e verificado ao vivo via API. Faltam
-US3 (convite por token), US4 (SMTP+reset de senha), US5 (auditoria) e
-Polish. Ver `specs/007-controle-acesso-seguranca/tasks.md` para o estado
-exato task-a-task.
+Feature completa: as 5 user stories + Polish implementadas, testadas (191
+testes unitários no total, todos verdes) e verificadas ao vivo via HTTP real
++ cookies de sessão (sem navegador disponível nesta sessão — busquei via
+ToolSearch e não achei nenhuma ferramenta de browser/Playwright). ~40
+asserções ao vivo cobrindo toda a lógica de servidor das 5 histórias.
+
+Dois bugs reais encontrados e corrigidos durante os self-tests (não só
+achados de design na fase de planejamento):
+1. `withAuth` (`src/lib/api.ts`) sobrescrevia a mensagem de todo
+   `UnauthorizedError` para "Não autenticado" — escondia "Conta desativada"
+   de um membro com sessão já aberta que foi desativado. Corrigido para
+   repassar `err.message`.
+2. `POST /api/auth/accept-invite`: se o token de convite já estivesse usado
+   mas o e-mail fornecido fosse novo (não duplicado), o `signUpEmail` do
+   Better Auth criava a conta ANTES de `consumeInviteToken` descobrir que o
+   token estava gasto — deixando um `user` órfão sem `member`, sem
+   organização (dead-end de login). Corrigido com checagem rápida
+   (`checkInviteToken`) antes de criar a conta + limpeza best-effort do
+   `user` órfão no `catch` (cobre a corrida residual).
+
+**Pendente explicitamente**: verificação visual/Playwright dos componentes
+novos (`EditMemberDialog`, `InviteDialog`, `SmtpClient`, `AuditClient`,
+`/forgot-password`, `/reset-password`) — o dono pediu para revisar isso à
+parte no fim. Nada foi reportado como "testado visualmente" sem ter sido.
+
+**Design que reusa infraestrutura já existente em vez de duplicar**:
+- Convite por token (US3) É COMPLEMENTAR à criação direta de conta que já
+  existia (`/api/settings/team`, owner define senha temporária) — não
+  substitui.
+- Recuperação de senha usa uma tabela própria (`password_reset_token`), não
+  o fluxo `/reset-password` embutido do Better Auth — decisão consciente
+  porque precisávamos do "pedido pendente visível ao owner sem SMTP"
+  (FR-018), que o fluxo nativo do Better Auth não modela.
+- "Gerar link manual" (owner, sem SMTP) sempre cria um token NOVO — o token
+  original nunca é recuperável (só o hash é persistido, como senha), então
+  não existe "reexibir o link antigo".
+
+Ver `specs/007-controle-acesso-seguranca/tasks.md` para o detalhe
+task-a-task e as tabelas de resultado de cada checkpoint ao vivo.

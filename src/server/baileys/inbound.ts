@@ -85,12 +85,13 @@ function extractMimeType(message: proto.IMessage | null | undefined): string | n
  */
 async function downloadMedia(
   msg: WAMessage
-): Promise<{ mimeType: string; dataBase64: string } | null> {
+): Promise<{ mimeType: string; dataBase64: string; filename: string | null } | null> {
   try {
     const buffer = await downloadMediaMessage(msg, "buffer", {});
     return {
       mimeType: extractMimeType(msg.message) ?? "application/octet-stream",
       dataBase64: buffer.toString("base64"),
+      filename: msg.message?.documentMessage?.fileName ?? null,
     };
   } catch (err) {
     console.error("[baileys] falha ao baixar mídia:", err);

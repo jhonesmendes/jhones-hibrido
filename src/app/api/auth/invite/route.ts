@@ -18,5 +18,11 @@ export async function GET(req: Request) {
   if (!result.ok) {
     return apiError(422, result.code, CHECK_MESSAGE[result.code]);
   }
-  return Response.json({ email: result.email, role: result.role });
+  return Response.json({
+    email: result.email,
+    role: result.role,
+    expiresAt: result.expiresAt.toISOString(),
+    inviterName: result.inviterName,
+    permissions: result.permissions,
+  });
 }

@@ -51,7 +51,7 @@ export function ChannelsClient() {
   async function disconnect() {
     if (
       !confirm(
-        "Desconectar o número não oficial? Será preciso escanear um QR novo para reconectar."
+        "Desconectar o WhatsApp Web? Será preciso escanear um QR novo para reconectar."
       )
     ) {
       return;
@@ -72,11 +72,11 @@ export function ChannelsClient() {
       <div className="flex items-start gap-2 rounded-lg border border-[#ece2cf] bg-[#faf7f0] p-4 text-sm text-[#8a6d3b]">
         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
         <p>
-          Canal <strong>não oficial</strong> — motor próprio do Vocero,
-          conexão direta ao WhatsApp (sem gateway de terceiros). A Meta pode
-          banir o número: use um secundário, não o principal do negócio. No
-          modelo híbrido, a captação entra pela Cloud API oficial e a
-          automação opera por este número.
+          <strong>WhatsApp Web</strong> — motor próprio do Vocero, conexão
+          direta ao WhatsApp (sem gateway de terceiros). A Meta pode banir o
+          número: use um secundário, não o principal do negócio. No modelo
+          híbrido, a captação entra pela Cloud API oficial e a automação
+          opera por este número.
         </p>
       </div>
 
@@ -84,7 +84,7 @@ export function ChannelsClient() {
         <CardHeader>
           <div className="flex items-center justify-between gap-2">
             <div>
-              <CardTitle>Canal não oficial</CardTitle>
+              <CardTitle>WhatsApp Web</CardTitle>
               <CardDescription>
                 Sem URL, instância ou API key para configurar — só conectar.
               </CardDescription>
@@ -145,11 +145,24 @@ export function ChannelsClient() {
                   WhatsApp → Aparelhos conectados → Conectar um aparelho. O
                   status atualiza sozinho, em tempo real.
                 </p>
-                {state.status !== "connecting" && (
-                  <Button disabled={connecting} onClick={() => void connect()}>
-                    {connecting ? "Iniciando…" : "Conectar"}
-                  </Button>
-                )}
+                <div className="flex gap-2">
+                  {state.status !== "connecting" && (
+                    <Button disabled={connecting} onClick={() => void connect()}>
+                      {connecting ? "Iniciando…" : "Conectar"}
+                    </Button>
+                  )}
+                  {state.status === "connecting" && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={disconnecting}
+                      onClick={() => void disconnect()}
+                    >
+                      <LogOut className="h-4 w-4" strokeWidth={1.7} />
+                      {disconnecting ? "Cancelando…" : "Cancelar / resetar conexão"}
+                    </Button>
+                  )}
+                </div>
               </div>
             </div>
           )}

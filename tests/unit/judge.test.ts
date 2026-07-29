@@ -7,6 +7,17 @@ vi.mock("@/lib/ai", () => ({
 }));
 
 import { computeScore, judgeCase } from "@/server/lab/judge";
+import type { ResolvedAiConfig } from "@/lib/ai";
+
+const fakeAiConfig: ResolvedAiConfig = {
+  baseUrl: "https://openrouter.ai/api",
+  apiKey: "test-key",
+  model: "test-model",
+  fallbackModel: null,
+  temperature: null,
+  maxTokens: null,
+  contextMessages: 20,
+};
 
 describe("judgeCase (FR-032)", () => {
   beforeEach(() => chatJson.mockReset());
@@ -22,6 +33,7 @@ describe("judgeCase (FR-032)", () => {
       transcript: [{ role: "cliente", text: "hola" }],
       kbText: "kb",
       behaviorText: "b",
+      aiConfig: fakeAiConfig,
     });
     expect(outcome.status).toBe("done");
     // usa el modelo del juez (opts.judge)
@@ -39,6 +51,7 @@ describe("judgeCase (FR-032)", () => {
       transcript: [],
       kbText: "",
       behaviorText: "",
+      aiConfig: fakeAiConfig,
     });
     expect(outcome.status).toBe("judge_failed");
   });

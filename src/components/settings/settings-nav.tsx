@@ -5,8 +5,8 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
 const TABS = [
-  { href: "/settings/whatsapp", label: "WhatsApp" },
-  { href: "/settings/channels", label: "Canal não oficial" },
+  { href: "/settings/channels", label: "Canais" },
+  { href: "/settings/ai", label: "Inteligência IA" },
   { href: "/settings/branding", label: "Marca" },
   { href: "/settings/templates", label: "Modelos" },
   { href: "/settings/team", label: "Equipe" },

@@ -72,6 +72,19 @@ export async function getCredentialsByOrg(
   return rows[0] ? toCredentials(rows[0]) : null;
 }
 
+/** Checagem leve (sem decifrar o token) se o canal oficial está pronto para enviar. */
+export async function isOfficialChannelConnected(
+  organizationId: string
+): Promise<boolean> {
+  const db = getDb();
+  const rows = await db
+    .select({ status: schema.metaCredentials.status })
+    .from(schema.metaCredentials)
+    .where(scoped(schema.metaCredentials.organizationId, organizationId))
+    .limit(1);
+  return rows[0]?.status === "connected";
+}
+
 export async function saveCredentials(input: {
   organizationId: string;
   wabaId: string;

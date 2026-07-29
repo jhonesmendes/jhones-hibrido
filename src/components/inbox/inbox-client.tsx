@@ -132,14 +132,17 @@ export function InboxClient() {
   const selected = conversations?.find((c) => c.id === selectedId) ?? null;
 
   const sendText = useCallback(
-    async (text: string): Promise<string | null> => {
+    async (
+      text: string,
+      channel?: "official" | "unofficial"
+    ): Promise<string | null> => {
       if (!selectedIdRef.current) return "Nenhuma conversa selecionada";
       const res = await fetch(
         `/api/conversations/${selectedIdRef.current}/messages`,
         {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ text }),
+          body: JSON.stringify({ text, channel }),
         }
       ).catch(() => null);
       if (!res) return "Sem conexão com o servidor";

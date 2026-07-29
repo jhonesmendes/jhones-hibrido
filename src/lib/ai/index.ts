@@ -17,32 +17,67 @@ export type ChatJsonResult<T> =
   | { ok: true; data: T; raw: string }
   | { ok: false; error: "not_configured" | "provider_error" | "invalid_output"; detail: string };
 
+/**
+ * Configuração já resolvida (org override em `ai_config` ou fallback para
+ * env) — ver `src/server/ai/config.ts`. `lib/ai` fica adaptador-puro: não
+ * consulta o banco, só recebe o resultado já resolvido.
+ */
+export type ResolvedAiConfig = {
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+  fallbackModel: string | null;
+  temperature: number | null;
+  maxTokens: number | null;
+  contextMessages: number;
+};
+
 const MAX_ATTEMPTS = 3;
 const RETRY_DELAY_MS = 500;
+
+function resolveFromEnv(judge: boolean): ResolvedAiConfig | null {
+  if (!isAiConfigured()) return null;
+  const env = getEnv();
+  const model = judge ? (env.OPENROUTER_JUDGE_MODEL ?? env.OPENROUTER_MODEL) : env.OPENROUTER_MODEL;
+  if (!model?.trim()) return null;
+  return {
+    baseUrl: env.OPENROUTER_BASE_URL,
+    apiKey: env.OPENROUTER_API_TOKEN!,
+    model,
+    fallbackModel: null,
+    temperature: null,
+    maxTokens: null,
+    contextMessages: 20,
+  };
+}
 
 export async function chatJson<T>(
   schema: z.ZodType<T>,
   messages: ChatMessage[],
-  opts?: { model?: string; judge?: boolean; timeoutMs?: number }
+  opts?: {
+    model?: string;
+    judge?: boolean;
+    timeoutMs?: number;
+    /** Config já resolvida (org override ou env) — ver resolveAiConfig(). */
+    config?: ResolvedAiConfig | null;
+  }
 ): Promise<ChatJsonResult<T>> {
-  if (!isAiConfigured()) {
+  const resolved = opts?.config ?? resolveFromEnv(opts?.judge ?? false);
+  if (!resolved) {
     return {
       ok: false,
       error: "not_configured",
-      detail: "Sem OPENROUTER_API_TOKEN configurado",
+      detail: "Sem provedor de IA configurado (Configurações → Inteligência IA ou OPENROUTER_API_TOKEN)",
     };
   }
-  const env = getEnv();
   const model =
     opts?.model ??
-    (opts?.judge
-      ? (env.OPENROUTER_JUDGE_MODEL ?? env.OPENROUTER_MODEL)
-      : env.OPENROUTER_MODEL);
+    (opts?.judge ? (resolved.fallbackModel ?? resolved.model) : resolved.model);
   if (!model?.trim()) {
     return {
       ok: false,
       error: "not_configured",
-      detail: "Sem OPENROUTER_MODEL configurado",
+      detail: "Sem modelo configurado",
     };
   }
 
@@ -60,7 +95,7 @@ export async function chatJson<T>(
             },
           ];
     try {
-      const raw = await callProvider(model, attemptMessages, opts?.timeoutMs);
+      const raw = await callProvider(resolved, model, attemptMessages, opts?.timeoutMs);
       const extracted = extractJson(raw);
       if (extracted === null) {
         lastDetail = `sem JSON extraível (raw=${truncate(raw)})`;
@@ -91,23 +126,34 @@ export async function chatJson<T>(
   };
 }
 
+/** Aceita base URL com ou sem sufixo `/v1` (convenção varia por provedor). */
+function chatCompletionsUrl(baseUrl: string): string {
+  const trimmed = baseUrl.replace(/\/+$/, "");
+  return trimmed.endsWith("/v1") ? `${trimmed}/chat/completions` : `${trimmed}/v1/chat/completions`;
+}
+
 async function callProvider(
+  config: ResolvedAiConfig,
   model: string,
   messages: ChatMessage[],
   timeoutMs = 60_000
 ): Promise<string> {
-  const env = getEnv();
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const res = await fetch(`${env.OPENROUTER_BASE_URL}/v1/chat/completions`, {
+    const res = await fetch(chatCompletionsUrl(config.baseUrl), {
       method: "POST",
       headers: {
         // O token jamais é logado; só viaja neste header.
-        Authorization: `Bearer ${env.OPENROUTER_API_TOKEN}`,
+        Authorization: `Bearer ${config.apiKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ model, messages }),
+      body: JSON.stringify({
+        model,
+        messages,
+        ...(config.temperature != null ? { temperature: config.temperature } : {}),
+        ...(config.maxTokens != null ? { max_tokens: config.maxTokens } : {}),
+      }),
       signal: controller.signal,
     });
     if (!res.ok) {
@@ -150,6 +196,25 @@ export function extractJson(raw: string): unknown | null {
     }
   }
   return null;
+}
+
+/** Testa uma configuração (não salva) enviando uma chamada mínima real ao provedor. */
+export async function testAiConnection(
+  config: Pick<ResolvedAiConfig, "baseUrl" | "apiKey" | "model">
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  const full: ResolvedAiConfig = {
+    fallbackModel: null,
+    temperature: null,
+    maxTokens: null,
+    contextMessages: 20,
+    ...config,
+  };
+  try {
+    await callProvider(full, full.model, [{ role: "user", content: "ping" }], 15_000);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : String(err) };
+  }
 }
 
 function truncate(s: string, n = 300): string {

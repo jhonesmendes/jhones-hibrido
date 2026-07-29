@@ -1,52 +1,52 @@
 <!--
 RELATÓRIO DE IMPACTO DE SINCRONIZAÇÃO
 ==================
-Versão: 2.0.0 → 2.1.0
+Versão: 2.1.0 → 2.2.0
 
 Mudanças:
   - Princípio II "Soberania / Self-Hosted" → EXPANDIDO (aditivo, não
     incompatível): a lista fechada de dependências externas em runtime ganha
-    uma TERCEIRA categoria, ao lado do canal WhatsApp e do provedor LLM:
-    (3) um servidor SMTP opcional, configurado e operado pelo próprio dono da
-    organização (o servidor de e-mail que ele já possui/contrata, não um SaaS
-    de e-mail transacional de terceiro embutido no produto). Usado
-    exclusivamente para convites de membro e recuperação de senha
-    (feature 007-controle-acesso-seguranca); sem SMTP configurado, o produto
-    MUST degradar para um fluxo manual (owner gera/envia o link pelo painel),
-    nunca travar. A proibição de serviços de e-mail transacional de terceiros
-    embutidos (SendGrid/Resend/Postmark ou equivalente) como dependência
-    obrigatória do produto permanece — o que muda é abrir espaço para um
-    serviço que o próprio operador já possui, seguindo o mesmo padrão já
-    usado para o canal WhatsApp não oficial (adaptador próprio, credenciais
-    do operador, nunca hardcoded, sempre cifradas — Princípio I).
+    uma QUARTA categoria, ao lado do canal WhatsApp, do provedor LLM e do
+    SMTP: (4) um servidor N8N opcional, operado e hospedado pelo próprio
+    dono/agência da organização (auto-hospedado, não um SaaS de automação de
+    terceiro embutido no produto). Usado exclusivamente para: listar
+    workflows (GET /api/v1/workflows), executar um workflow com um clique a
+    partir da aba "Automações N8N" dentro de Campanhas
+    (POST /api/v1/workflows/{id}/execute), ver histórico de execuções
+    (GET /api/v1/executions) e, opcionalmente, embutir o painel completo via
+    iframe na mesma aba. Sem N8N configurado, o produto MUST continuar
+    funcionando normalmente — a aba de Automações apresenta apenas uma
+    chamada para configurar, nunca trava nem é pré-requisito de uso da
+    instância. Segue exatamente o precedente já aberto pelo SMTP (v2.1.0) e
+    pelo canal não oficial: credenciais do operador (N8N_BASE_URL,
+    N8N_API_KEY) nunca hardcoded, sempre cifradas em repouso com o mesmo
+    helper AES-256-GCM (`src/lib/crypto`).
   - Princípios I, III, IV, V, VI, VII, VIII e IX: íntegros (sem mudança
     semântica); a Restrição de Plataforma "Cifragem em repouso" já cobre a
-    senha SMTP sem precisar de texto novo.
+    API key do N8N sem precisar de texto novo.
   - Governança: Ratificada em 2026-07-09 / Última Emenda em 2026-07-28.
 
-Bump: MINOR (2.0.0 → 2.1.0) — adição aditiva de uma terceira categoria
-opcional à lista de dependências externas do Princípio II; nada existente foi
-redefinido, removido ou tornado incompatível (o próprio texto anterior já
-enquadrava o canal não oficial como precedente para "serviço que roda na
-infraestrutura do operador, não SaaS de terceiro").
+Bump: MINOR (2.1.0 → 2.2.0) — adição aditiva de uma quarta categoria opcional
+à lista de dependências externas do Princípio II, no mesmo padrão da terceira
+(SMTP, v2.1.0); nada existente foi redefinido, removido ou tornado
+incompatível.
 
 Validado contra o código real antes de escrever esta emenda: não existe
-nenhum client de e-mail (nodemailer ou equivalente) no projeto hoje; não há
-hook `sendResetPassword`/similar configurado no plugin `emailAndPassword` do
-Better Auth (`src/lib/auth/index.ts`) — ou seja, recuperação de senha não tem
-caminho automático funcional hoje, confirmando a lacuna. `src/lib/crypto`
-(`encryptSecret`/`decryptSecret`, AES-256-GCM) já é genérico o bastante para
-cifrar a senha SMTP sem mudança — é o mesmo helper reusado pelo auth-state do
-Baileys.
+nenhum client N8N (nem `N8N_BASE_URL`/`N8N_API_KEY`) no projeto hoje; a aba
+"Automações N8N" e o modal de campanha não oficial existem hoje apenas como
+mockup de frontend, sem endpoint server-side correspondente — confirmando que
+esta é uma feature nova, ainda não implementada, e por isso precisava de
+autorização constitucional antes do código (Princípio VI).
 
 Templates dependentes:
   - .specify/templates/plan-template.md — ✅ compatível (Constitution Check
     genérico; não requer mudanças).
   - .specify/templates/spec-template.md — ✅ compatível.
   - .specify/templates/tasks-template.md — ✅ compatível.
-  - CLAUDE.md — ⚠ PENDENTE: mencionar SMTP/e-mail como dependência externa
-    opcional na lista de variáveis de ambiente quando a feature
-    007-controle-acesso-seguranca for implementada.
+  - CLAUDE.md — ⚠ PENDENTE: adicionar `N8N_BASE_URL` e `N8N_API_KEY` à lista
+    de variáveis de ambiente (seção "Variáveis de ambiente") quando a
+    integração N8N for implementada, seguindo o guia de gestão de
+    credenciais (placeholder `REEMPLAZA_...` + comentário inline).
 
 TODOs adiados: nenhum.
 -->
@@ -105,14 +105,26 @@ dependências externas em runtime é FECHADA:
      redefinição de senha pelo painel) — nunca travar nem exigir SMTP como
      pré-requisito de uso da instância. A senha SMTP segue a mesma cifragem
      em repouso que os demais segredos (Princípio I).
+  4. **Servidor N8N**, opcional, operado e hospedado pelo próprio dono/agência
+     da organização (auto-hospedado, não um SaaS de automação de terceiro
+     embutido no produto) — informado via tela de Configurações
+     (`N8N_BASE_URL`, `N8N_API_KEY`). Usado exclusivamente para: listar
+     workflows do operador, executar um workflow com um clique a partir da
+     aba "Automações N8N" dentro de Campanhas, consultar histórico de
+     execuções e, opcionalmente, embutir o painel completo via iframe na
+     mesma aba. Sem N8N configurado, o produto MUST continuar funcionando
+     normalmente — a aba apresenta apenas uma chamada para configurar, nunca
+     trava nem é pré-requisito de uso da instância. A API key do N8N segue a
+     mesma cifragem em repouso que os demais segredos (Princípio I).
 - **PROIBIDO na v1**: armazenamento de objetos externo (S3/R2), serviços de
   e-mail transacional de terceiros (SendGrid, Resend, Postmark ou equivalente)
   como dependência embutida do produto, Stripe ou outro billing, e serviços do
   Google. Qualquer feature que os exija fica fora do escopo da v1.
 - O instalador só precisa de: um VPS com Coolify ou Docker, um domínio, e
   credenciais do canal WhatsApp escolhido (Meta e/ou sessão do canal não
-  oficial), (opcional) um token do OpenRouter e (opcional) os dados de um
-  servidor SMTP próprio. Nada mais.
+  oficial), (opcional) um token do OpenRouter, (opcional) os dados de um
+  servidor SMTP próprio e (opcional) a URL e API key de um servidor N8N
+  próprio. Nada mais.
 - As funções core —autenticação e banco de dados— rodam self-hosted (Better
   Auth + PostgreSQL próprios da instância).
 - As integrações externas permitidas são isoladas atrás de adaptadores dedicados
@@ -131,6 +143,10 @@ por isso é governado com guardrails explícitos (Princípio IX) em vez de
 ser proibido. O mesmo raciocínio vale para o SMTP opcional: é o operador quem
 possui e paga por esse servidor, não o produto contratando um SaaS em nome
 dele — por isso soma como terceira categoria em vez de violar a lista fechada.
+O N8N opcional segue o mesmo raciocínio como quarta categoria: é o
+operador/agência quem hospeda e paga por essa instância N8N, o Vocero apenas
+consome a API dela através de um adaptador dedicado — não é o produto
+contratando um serviço de automação em nome do operador.
 
 ### III. Multi-Tenancy Real
 
@@ -324,4 +340,4 @@ prática, convenção ou preferência; diante de um conflito, a constituição v
 - **Propagação**: ao emendar a constituição, revisam-se e, se necessário, atualizam-se
   os templates dependentes (plan, spec, tasks).
 
-**Version**: 2.1.0 | **Ratified**: 2026-07-09 | **Last Amended**: 2026-07-28
+**Version**: 2.2.0 | **Ratified**: 2026-07-09 | **Last Amended**: 2026-07-28

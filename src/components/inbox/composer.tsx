@@ -1,11 +1,18 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Clock3, Send } from "lucide-react";
+import { BadgeCheck, Clock3, Send, Wifi } from "lucide-react";
 import type { ConversationDto, TemplateDto } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { formatRemaining } from "./helpers";
 import { TemplateSender } from "./template-sender";
+
+type ChannelType = "official" | "unofficial";
+
+const CHANNEL_LABEL: Record<ChannelType, string> = {
+  official: "Oficial",
+  unofficial: "WhatsApp Web",
+};
 
 export function Composer({
   conversation,
@@ -13,7 +20,7 @@ export function Composer({
   onSent,
 }: {
   conversation: ConversationDto;
-  onSend: (text: string) => Promise<string | null>;
+  onSend: (text: string, channel?: ChannelType) => Promise<string | null>;
   onSent: () => void;
 }) {
   const [text, setText] = useState("");
@@ -22,7 +29,16 @@ export function Composer({
   const [templates, setTemplates] = useState<TemplateDto[]>([]);
   const [pickerIndex, setPickerIndex] = useState(0);
   const [pickerDismissed, setPickerDismissed] = useState(false);
+  const [availableChannels, setAvailableChannels] = useState<
+    Record<ChannelType, boolean>
+  >({ official: false, unofficial: false });
+  const [channelOverride, setChannelOverride] = useState<ChannelType | null>(
+    null
+  );
   const taRef = useRef<HTMLTextAreaElement>(null);
+
+  const effectiveChannel = channelOverride ?? conversation.channel;
+  const bothConnected = availableChannels.official && availableChannels.unofficial;
 
   // Atalho "/" (primeiro caractere, sem espaço ainda) abre o seletor de modelos.
   const slashMatch = /^\/(\S*)$/.exec(text);
@@ -48,6 +64,24 @@ export function Composer({
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/channels/available")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: Record<ChannelType, boolean> | null) => {
+        if (!cancelled && d) setAvailableChannels(d);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Override é pontual: some ao trocar de conversa, voltando ao canal sticky.
+  useEffect(() => {
+    setChannelOverride(null);
+  }, [conversation.id]);
 
   function autogrow() {
     const el = taRef.current;
@@ -83,7 +117,7 @@ export function Composer({
     if (!value || sending) return;
     setSending(true);
     setError(null);
-    const err = await onSend(value);
+    const err = await onSend(value, channelOverride ?? undefined);
     setSending(false);
     if (err) {
       setError(err);
@@ -93,9 +127,40 @@ export function Composer({
     if (taRef.current) taRef.current.style.height = "auto";
   }
 
-  if (!conversation.windowOpen) {
+  // O canal não oficial não tem janela de 24h; um override pontual para ele
+  // libera texto livre mesmo com a janela oficial (sticky) fechada.
+  const showFreeText = effectiveChannel === "unofficial" || conversation.windowOpen;
+
+  const channelSelector = bothConnected && (
+    <div className="mb-2.5 flex items-center gap-1.5">
+      <span className="text-[11px] text-text-3">Enviar via:</span>
+      {(["official", "unofficial"] as const).map((c) => (
+        <button
+          key={c}
+          type="button"
+          onClick={() => setChannelOverride(c === conversation.channel ? null : c)}
+          className={cn(
+            "flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+            effectiveChannel === c
+              ? "border-brand bg-brand-tint text-brand-text"
+              : "border-border bg-transparent text-text-3 hover:text-foreground"
+          )}
+        >
+          {c === "official" ? (
+            <BadgeCheck className="h-3 w-3" />
+          ) : (
+            <Wifi className="h-3 w-3" />
+          )}
+          {CHANNEL_LABEL[c]}
+        </button>
+      ))}
+    </div>
+  );
+
+  if (!showFreeText) {
     return (
       <div className="border-t bg-background px-[18px] py-3.5">
+        {channelSelector}
         <div className="mb-3 flex items-start gap-2 rounded-md border border-[#ece2cf] bg-[#faf7f0] p-3 text-sm text-[#8a6d3b]">
           <Clock3 className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={1.7} />
           <div>
@@ -103,7 +168,7 @@ export function Composer({
             <p className="opacity-80">
               O WhatsApp só permite texto livre dentro das 24 horas seguintes
               à última mensagem do cliente. Para retomar a conversa, envie um
-              modelo aprovado.
+              modelo aprovado{bothConnected ? ", ou envie pelo WhatsApp Web acima" : ""}.
             </p>
           </div>
         </div>
@@ -114,6 +179,7 @@ export function Composer({
 
   return (
     <div className="border-t bg-background px-[18px] pb-3.5 pt-3">
+      {channelSelector}
       {templates.length > 0 && (
         <div className="mb-2.5 flex flex-wrap gap-1.5">
           {templates.slice(0, 4).map((t) => (
@@ -222,9 +288,12 @@ export function Composer({
       <div className="mt-1.5 flex items-center justify-between">
         {error ? <p className="text-xs text-destructive">{error}</p> : <span />}
         <p className="text-[11px] text-text-3">
-          {conversation.channel === "unofficial"
-            ? "Canal não oficial · sem janela de 24h"
+          {effectiveChannel === "unofficial"
+            ? "WhatsApp Web · sem janela de 24h"
             : `Janela aberta · restam ${formatRemaining(conversation.windowRemainingMs)}`}
+          {channelOverride && channelOverride !== conversation.channel && (
+            <span className="ml-1 text-brand-text">(override manual)</span>
+          )}
         </p>
       </div>
     </div>

@@ -20,6 +20,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { HelpLink } from "@/components/docs/help-link";
 
 type Run = {
   id: string;
@@ -200,6 +201,7 @@ function Header({
       <div>
         <h2 className="flex items-center gap-2 font-semibold">
           <FlaskConical className="h-4 w-4 text-primary" /> Laboratório
+          <HelpLink slug="laboratorio" />
         </h2>
         <p className="text-xs text-muted-foreground">
           Sandbox interno — não envia mensagens reais

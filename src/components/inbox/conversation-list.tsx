@@ -7,6 +7,7 @@ import { cn, formatPhone, normalizePhoneInput } from "@/lib/utils";
 import { ContactAvatar } from "@/components/avatar";
 import { Button } from "@/components/ui/button";
 import { formatTime, previewText } from "./helpers";
+import { HelpLink } from "@/components/docs/help-link";
 
 const STAGE_DOT: Record<string, string> = {
   // pt-BR (novas organizações)
@@ -136,6 +137,7 @@ export function ConversationList({
         <div className="mb-3 flex items-baseline gap-2">
           <h2 className="text-[17px] font-[650] tracking-tight">Caixa de entrada</h2>
           <span className="text-sm text-text-3">{conversations.length}</span>
+          <HelpLink slug="inbox" />
         </div>
         <div className="flex items-center gap-2 rounded-md border bg-secondary px-3 py-[7px] transition-colors focus-within:border-brand focus-within:bg-background focus-within:ring-[3px] focus-within:ring-brand-soft">
           <Search className="h-4 w-4 shrink-0 text-text-3" strokeWidth={1.7} />
@@ -260,7 +262,7 @@ export function ConversationList({
                         {c.channel === "unofficial" && (
                           <span className="inline-flex items-center gap-1 rounded-full border border-[#d6dcec] bg-[#f2f5fb] px-2 py-0.5 text-[11px] text-[#5a6c99]">
                             <Zap className="h-3 w-3" strokeWidth={1.7} />
-                            Não oficial
+                            WhatsApp Web
                           </span>
                         )}
                         {c.handoffAt && (

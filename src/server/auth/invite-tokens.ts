@@ -51,7 +51,14 @@ export async function createInviteToken(params: {
 }
 
 export type InviteCheckResult =
-  | { ok: true; email: string | null; role: Role }
+  | {
+      ok: true;
+      email: string | null;
+      role: Role;
+      expiresAt: Date;
+      inviterName: string | null;
+      permissions: string[];
+    }
   | { ok: false; code: "invalid" | "expired" | "used" };
 
 /** Checagem de leitura (UX do formulário) — não consome o token. */
@@ -60,15 +67,36 @@ export async function checkInviteToken(
 ): Promise<InviteCheckResult> {
   const db = getDb();
   const rows = await db
-    .select()
+    .select({
+      invite: schema.inviteToken,
+      inviterName: schema.user.name,
+    })
     .from(schema.inviteToken)
+    .innerJoin(schema.member, eq(schema.inviteToken.createdBy, schema.member.id))
+    .innerJoin(schema.user, eq(schema.member.userId, schema.user.id))
     .where(eq(schema.inviteToken.tokenHash, hashToken(tokenPlain)))
     .limit(1);
-  const invite = rows[0];
-  if (!invite) return { ok: false, code: "invalid" };
+  const row = rows[0];
+  if (!row) return { ok: false, code: "invalid" };
+  const invite = row.invite;
   if (invite.usedAt) return { ok: false, code: "used" };
   if (invite.expiresAt.getTime() < Date.now()) return { ok: false, code: "expired" };
-  return { ok: true, email: invite.email, role: invite.role as Role };
+
+  const initialPermissions = invite.initialPermissions as Record<string, boolean> | null;
+  const permissions = initialPermissions
+    ? Object.entries(initialPermissions)
+        .filter(([, granted]) => granted)
+        .map(([key]) => key)
+    : [];
+
+  return {
+    ok: true,
+    email: invite.email,
+    role: invite.role as Role,
+    expiresAt: invite.expiresAt,
+    inviterName: row.inviterName,
+    permissions,
+  };
 }
 
 export class InviteConsumeError extends Error {

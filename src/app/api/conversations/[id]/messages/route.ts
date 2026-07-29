@@ -28,10 +28,21 @@ export const GET = withAuth(async (session, req: Request, ctx: Params) => {
     id,
     since && !Number.isNaN(since.getTime()) ? since : undefined
   );
-  return Response.json({ messages: messages.map(serializeMessage) });
+  return Response.json({
+    messages: messages.map((row) =>
+      serializeMessage(row.message, {
+        filename: row.filename,
+        sizeBytes: row.sizeBytes,
+        mimeType: row.mimeType,
+      })
+    ),
+  });
 });
 
-const sendSchema = z.object({ text: z.string().trim().min(1).max(4096) });
+const sendSchema = z.object({
+  text: z.string().trim().min(1).max(4096),
+  channel: z.enum(["official", "unofficial"]).optional(),
+});
 
 const SEND_ERROR_STATUS: Record<SendError["code"], number> = {
   sandbox_violation: 403,
@@ -52,13 +63,15 @@ export const POST = withAuth(async (session, req: Request, ctx: Params) => {
   if (!row) return apiError(404, "not_found", "Conversa não encontrada");
   await requireConversationAccess(session, row.conversation.assignedTo);
   await requirePermission(session, "conversations:reply");
-  await requireChannelAccess(session, row.conversation.channel, "send");
+  const effectiveChannel = body.data.channel ?? row.conversation.channel;
+  await requireChannelAccess(session, effectiveChannel, "send");
 
   try {
     const result = await sendText({
       conversationId: id,
       organizationId: session.organizationId,
       text: body.data.text,
+      channelOverride: body.data.channel,
     });
     return Response.json({ messageId: result.messageId });
   } catch (err) {

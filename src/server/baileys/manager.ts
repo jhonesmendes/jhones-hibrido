@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import QRCode from "qrcode";
 import makeWASocket, {
   DisconnectReason,
+  fetchLatestBaileysVersion,
   type Contact,
   type WASocket,
 } from "@whiskeysockets/baileys";
@@ -32,6 +33,7 @@ type LiveStatus = {
 const globalForBaileys = globalThis as unknown as {
   __voceroBaileysSockets?: Map<string, WASocket>;
   __voceroBaileysStatus?: Map<string, LiveStatus>;
+  __voceroBaileysReconnectAttempts?: Map<string, number>;
 };
 
 function sockets(): Map<string, WASocket> {
@@ -46,6 +48,41 @@ function statuses(): Map<string, LiveStatus> {
     globalForBaileys.__voceroBaileysStatus = new Map();
   }
   return globalForBaileys.__voceroBaileysStatus;
+}
+
+function reconnectAttempts(): Map<string, number> {
+  if (!globalForBaileys.__voceroBaileysReconnectAttempts) {
+    globalForBaileys.__voceroBaileysReconnectAttempts = new Map();
+  }
+  return globalForBaileys.__voceroBaileysReconnectAttempts;
+}
+
+/** Falhas seguidas (rede instável, handshake do WhatsApp) antes de desistir
+ * e devolver o controle pro usuário — sem isso, o loop de reconexão batia
+ * de novo a cada poucos segundos e nunca dava tempo do QR ser escaneado. */
+const MAX_RECONNECT_ATTEMPTS = 5;
+const RECONNECT_BASE_DELAY_MS = 4000;
+const RECONNECT_MAX_DELAY_MS = 30000;
+
+/** Cache em memória por boot — evita buscar a versão do protocolo do
+ * WhatsApp Web a cada tentativa de conexão. Sem isso, o Baileys usa a
+ * versão embutida no pacote, que o WhatsApp pode já ter descontinuado
+ * (handshake falha logo no registro, antes de emitir o QR). */
+let cachedWaVersion: [number, number, number] | undefined;
+
+async function resolveWaVersion(): Promise<[number, number, number] | undefined> {
+  if (cachedWaVersion) return cachedWaVersion;
+  try {
+    const { version } = await fetchLatestBaileysVersion();
+    cachedWaVersion = version;
+    return version;
+  } catch (err) {
+    console.error(
+      "[baileys] falha ao buscar versão do protocolo, usando padrão da lib:",
+      err
+    );
+    return undefined;
+  }
 }
 
 function jidToPhoneNumber(jid: string): string {
@@ -78,13 +115,18 @@ async function setStatus(
     .where(eq(schema.unofficialChannel.organizationId, organizationId));
 }
 
-export async function connect(organizationId: string): Promise<void> {
+export async function connect(
+  organizationId: string,
+  opts: { isRetry?: boolean } = {}
+): Promise<void> {
   if (sockets().has(organizationId)) return;
+  if (!opts.isRetry) reconnectAttempts().delete(organizationId);
 
   await setStatus(organizationId, { status: "connecting", qrCode: null });
 
   const { state, saveState } = await loadAuthState(organizationId);
-  const sock = makeWASocket({ auth: state, syncFullHistory: false });
+  const version = await resolveWaVersion();
+  const sock = makeWASocket({ auth: state, version, syncFullHistory: false });
   sockets().set(organizationId, sock);
 
   sock.ev.on("creds.update", () => {
@@ -99,6 +141,7 @@ export async function connect(organizationId: string): Promise<void> {
       }
 
       if (update.connection === "open") {
+        reconnectAttempts().delete(organizationId);
         const phoneNumber = sock.user?.id
           ? jidToPhoneNumber(sock.user.id)
           : null;
@@ -119,6 +162,7 @@ export async function connect(organizationId: string): Promise<void> {
         const loggedOut = statusCode === DisconnectReason.loggedOut;
 
         if (loggedOut) {
+          reconnectAttempts().delete(organizationId);
           await deleteAuthState(organizationId);
           await setStatus(organizationId, {
             status: "disconnected",
@@ -126,12 +170,35 @@ export async function connect(organizationId: string): Promise<void> {
             phoneNumber: null,
           });
         } else {
-          // Corte de rede/reinício do lado do WhatsApp: reinicia a sessão.
+          const attempts = (reconnectAttempts().get(organizationId) ?? 0) + 1;
+          reconnectAttempts().set(organizationId, attempts);
+
+          if (attempts > MAX_RECONNECT_ATTEMPTS) {
+            // Rede instável demais pra fechar o pareamento (ex.: handshake
+            // falhando repetido em segundos) — desiste e devolve o controle
+            // pro usuário em vez de martelar reconexões pra sempre.
+            reconnectAttempts().delete(organizationId);
+            await setStatus(organizationId, {
+              status: "disconnected",
+              qrCode: null,
+              phoneNumber: null,
+            });
+            return;
+          }
+
+          // Corte de rede/reinício do lado do WhatsApp: reinicia a sessão,
+          // com espera crescente pra não martelar o servidor do WhatsApp.
           await setStatus(organizationId, {
             status: "connecting",
             qrCode: null,
           });
-          void connect(organizationId);
+          const delay = Math.min(
+            RECONNECT_BASE_DELAY_MS * attempts,
+            RECONNECT_MAX_DELAY_MS
+          );
+          setTimeout(() => {
+            void connect(organizationId, { isRetry: true });
+          }, delay);
         }
       }
     })();
@@ -195,6 +262,7 @@ export async function disconnect(organizationId: string): Promise<void> {
   }
   await deleteAuthState(organizationId);
   statuses().delete(organizationId);
+  reconnectAttempts().delete(organizationId);
   publish(organizationId, {
     type: "channel.status",
     data: { status: "disconnected", qrCode: null, phoneNumber: null },

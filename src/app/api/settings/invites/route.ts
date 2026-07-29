@@ -1,10 +1,44 @@
+import { and, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { apiError, parseBody, withAuth } from "@/lib/api";
 import { createInviteToken } from "@/server/auth/invite-tokens";
 import { logAudit } from "@/server/auth/audit";
 import { getEnv } from "@/lib/env";
+import { getDb, schema } from "@/lib/db";
+import { scoped } from "@/lib/db/tenant";
 
 export const dynamic = "force-dynamic";
+
+/** Lista convites pendentes (não usados) da organização (US3). */
+export const GET = withAuth(async (session) => {
+  const db = getDb();
+  const rows = await db
+    .select({
+      id: schema.inviteToken.id,
+      email: schema.inviteToken.email,
+      role: schema.inviteToken.role,
+      expiresAt: schema.inviteToken.expiresAt,
+      createdAt: schema.inviteToken.createdAt,
+    })
+    .from(schema.inviteToken)
+    .where(
+      and(
+        scoped(schema.inviteToken.organizationId, session.organizationId),
+        isNull(schema.inviteToken.usedAt)
+      )
+    );
+
+  const invites = rows.map((r) => ({
+    id: r.id,
+    email: r.email,
+    role: r.role,
+    expiresAt: r.expiresAt.toISOString(),
+    createdAt: r.createdAt.toISOString(),
+    expired: r.expiresAt.getTime() < Date.now(),
+  }));
+
+  return Response.json({ invites });
+});
 
 const channelAccessSchema = z.object({
   canView: z.boolean(),

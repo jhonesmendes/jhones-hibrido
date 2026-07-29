@@ -15,9 +15,26 @@ export type AccentSet = {
 export type Branding = {
   name: string;
   accent: string; // hex do acento base escolhido
+  /** Logo do cliente (data URI) — substitui a inicial do nome no avatar. */
+  logo: string | null;
 };
 
-export const DEFAULT_BRANDING: Branding = { name: "Vocero", accent: "#3f5972" };
+export const DEFAULT_BRANDING: Branding = {
+  name: "Vocero",
+  accent: "#3f5972",
+  logo: null,
+};
+
+/** ~180KB em base64 — suficiente pra um ícone, sem inchar a linha da org. */
+export const MAX_LOGO_DATA_URI_LENGTH = 240_000;
+
+const LOGO_DATA_URI_RE = /^data:image\/(png|jpeg|jpg|webp|svg\+xml);base64,/;
+
+export function isValidLogoDataUri(value: string): boolean {
+  return (
+    LOGO_DATA_URI_RE.test(value) && value.length <= MAX_LOGO_DATA_URI_LENGTH
+  );
+}
 
 /** Presets do handoff (valores exatos). */
 export const ACCENT_PRESETS: Record<string, { label: string; set: AccentSet }> = {
@@ -137,5 +154,7 @@ export function normalizeBranding(input: Partial<Branding> | null): Branding {
     input?.accent && isValidHex(input.accent)
       ? input.accent.toLowerCase()
       : DEFAULT_BRANDING.accent;
-  return { name, accent };
+  const logo =
+    input?.logo && isValidLogoDataUri(input.logo) ? input.logo : null;
+  return { name, accent, logo };
 }

@@ -126,11 +126,22 @@ export function CampaignDetailClient({ id }: { id: string }) {
             <div className="flex items-center gap-2">
               <h2 className="font-semibold">{campaign.name}</h2>
               <Badge variant="secondary">
-                {campaign.channel === "official" ? "Oficial" : "Não oficial"}
+                {campaign.channel === "official" ? "Oficial" : "WhatsApp Web"}
               </Badge>
               <Badge variant={STATUS_BADGE[campaign.status].variant}>
                 {STATUS_BADGE[campaign.status].label}
               </Badge>
+              {campaign.scheduledAt && campaign.status === "draft" && (
+                <Badge variant="secondary">
+                  Agendada para{" "}
+                  {new Date(campaign.scheduledAt).toLocaleString("pt-BR", {
+                    day: "2-digit",
+                    month: "2-digit",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </Badge>
+              )}
             </div>
           </div>
         </div>

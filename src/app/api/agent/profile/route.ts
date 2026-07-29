@@ -2,7 +2,7 @@ import { z } from "zod";
 import { apiError, parseBody, withAuth } from "@/lib/api";
 import { getDb, schema } from "@/lib/db";
 import { scoped } from "@/lib/db/tenant";
-import { isAiConfigured } from "@/lib/env";
+import { resolveAiConfig } from "@/server/ai/config";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +15,7 @@ export const GET = withAuth(async (session) => {
     .limit(1);
   const p = rows[0];
   if (!p) return apiError(404, "not_found", "Perfil do agente não encontrado");
+  const aiConfig = await resolveAiConfig(session.organizationId);
   return Response.json({
     profile: {
       enabled: p.enabled,
@@ -24,7 +25,7 @@ export const GET = withAuth(async (session) => {
       escalationRules: p.escalationRules,
       greeting: p.greeting,
     },
-    aiConfigured: isAiConfigured(),
+    aiConfigured: aiConfig !== null,
   });
 });
 

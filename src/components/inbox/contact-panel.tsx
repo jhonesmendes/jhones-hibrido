@@ -239,14 +239,14 @@ export function ContactPanel({
             <p className="text-[13px] font-medium">Canal de envio</p>
             <p className="text-[11px] text-text-3">
               {conversation.channel === "unofficial"
-                ? "Gateway não oficial · sem janela de 24h"
+                ? "WhatsApp Web · sem janela de 24h"
                 : "WhatsApp Cloud API oficial"}
             </p>
             <div className="mt-2 flex gap-1.5">
               {(
                 [
                   { id: "official", label: "Oficial" },
-                  { id: "unofficial", label: "Não oficial" },
+                  { id: "unofficial", label: "WhatsApp Web" },
                 ] as const
               ).map((ch) => (
                 <button

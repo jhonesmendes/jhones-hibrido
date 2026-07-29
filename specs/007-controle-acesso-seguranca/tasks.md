@@ -211,60 +211,85 @@ vivo: já não cria órfão.
 
 ## Phase 6: User Story 4 - SMTP e recuperação de senha (Priority: P3)
 
-- [ ] T050 [US4] `src/lib/mail/smtp.ts`: `sendMail(organizationId, { to,
-  subject, html/text })` — busca `smtp_config` ativo, decifra a senha
-  (`lib/crypto`), monta transporte `nodemailer`, envia; lança erro tipado
-  claro se não configurado ou se o envio falhar (nunca falha silenciosa).
-- [ ] T051 [US4] `src/app/api/settings/smtp/route.ts`: GET (dados mascarados,
-  sem senha em claro), PUT (salva cifrado, owner only), POST `?action=test`
-  (envia e-mail de teste para o owner, retorna erro claro se falhar).
-- [ ] T052 [US4] `src/components/settings/smtp-client.tsx` +
-  `src/app/(app)/settings/email/page.tsx`: formulário + botão "Testar
-  configuração" + Salvar (owner only).
-- [ ] T053 [US4] `src/server/auth/password-reset.ts`:
-  `requestPasswordReset(email)` (cria `password_reset_token`, 1h; tenta
-  `sendMail`; se SMTP ausente/falhar, registra o pedido pendente para o
-  owner ver — sem expor se o email existe, resposta genérica sempre);
-  `consumePasswordReset(token, newPassword)` atômico + troca a senha via
-  Better Auth.
-- [ ] T054 [US4] `src/app/api/auth/forgot-password/route.ts` POST +
-  `src/app/api/auth/reset-password/route.ts` POST.
-- [ ] T055 [US4] `src/app/reset-password/page.tsx`: formulário de nova senha
-  a partir do token da URL, erro claro se expirado/usado.
-- [ ] T056 [US4] Painel do owner: lista de solicitações de reset pendentes
-  sem SMTP (reaproveita `team-client.tsx` ou card dedicado) com ação "gerar
-  link" (reexpõe a URL de `reset-password` para o owner copiar/enviar
-  manualmente).
-- [ ] T057 [US4] [P] `tests/unit/password-reset.test.ts`: token válido,
-  expirado (>1h), já usado, consumo atômico.
-- [ ] T058 [US4] [P] `tests/unit/smtp.test.ts`: transporte mockado —
-  sucesso, credenciais inválidas (erro claro), SMTP inativo/ausente
-  (degrada sem lançar para o chamador de request-reset).
+- [X] T050 [US4] `src/lib/mail/smtp.ts`: `sendMail`.
+- [X] T051 [US4] `src/app/api/settings/smtp/route.ts`: GET/PUT/POST(teste).
+  PUT: senha opcional no update (mantém a cifra anterior se omitida).
+- [X] T052 [US4] `src/components/settings/smtp-client.tsx` +
+  `src/app/(app)/settings/email/page.tsx` — inclui também o card de
+  solicitações pendentes (T056) na mesma tela.
+- [X] T053 [US4] `src/server/auth/password-reset.ts`:
+  `requestPasswordReset`, `consumePasswordReset`, mais dois helpers não
+  previstos originalmente e necessários para T056: `listPendingResets` e
+  `generateManualResetLink` — decisão de design: o token original nunca é
+  recuperável (só o hash é persistido, como convite), então "gerar link" do
+  owner precisa criar um token NOVO (invalidando o pendente), não reexibir
+  o antigo.
+- [X] T054 [US4] `src/app/api/auth/forgot-password/route.ts` (+ rate limit
+  3/hora por e-mail) e `src/app/api/auth/reset-password/route.ts`.
+- [X] T055 [US4] `src/app/(auth)/reset-password/page.tsx` + `.../forgot-password/page.tsx`
+  (novo, faltava na spec original) + link "Esqueci minha senha" em
+  `login/page.tsx`.
+- [X] T056 [US4] `GET /api/settings/password-resets` (lista) + `POST
+  /api/settings/password-resets/[memberId]` (gera link) — UI dentro de
+  `smtp-client.tsx`, não um componente separado.
+- [X] T057 [US4] [P] `tests/unit/password-reset.test.ts` — 9 testes.
+- [X] T058 [US4] [P] `tests/unit/smtp.test.ts` — 3 testes (nodemailer
+  mockado).
 
 **Independent Test**: sem SMTP, solicitar reset como membro, confirmar que o
 owner vê a solicitação e gera um link funcional; com SMTP de teste
 configurado, confirmar envio automático.
 
-**Checkpoint**: recuperação de senha funcional nos dois caminhos (US4).
+**Checkpoint — verificado ao vivo em 2026-07-28**:
+
+| # | Cenário | Resultado |
+|---|---|---|
+| 1 | GET SMTP sem configuração | `{config: null}` |
+| 2 | PUT salva configuração | 200, persistido |
+| 3 | GET confirma persistência sem senha em claro na resposta | OK |
+| 4 | POST testar contra host inexistente | 422, erro claro (`getaddrinfo ENOTFOUND`), **não trava** |
+| 5 | Agent solicita "esqueci minha senha" (sem SMTP funcional) | 200 genérico |
+| 6 | Owner vê a solicitação pendente no painel | 1 pendência, nome/e-mail corretos |
+| 7 | E-mail inexistente também responde OK (não revela existência) | 200 genérico |
+| 8 | Owner gera link manual | 201, URL com token novo |
+| 9 | Consumir o link troca a senha de verdade | 200 |
+| 10 | Pendência some do painel após o consumo | `pending: []` |
+| 11 | Login com a senha ANTIGA | 401 |
+| 12 | Login com a senha NOVA | 200 |
+
+12/12 em verde — a troca de senha foi verificada round-trip completo (senha
+antiga para de funcionar, nova funciona), não só "o endpoint respondeu 200".
 
 ---
 
 ## Phase 7: User Story 5 - Auditoria (Priority: P4)
 
-- [ ] T060 [US5] Encaixar `logAudit(...)` nos pontos já existentes: login
-  (hook `after` de `/sign-in/email` em `src/lib/auth/index.ts`), conexão/
-  desconexão de canal (`src/server/baileys/manager.ts`,
-  `src/app/api/settings/channels/route.ts`, rota de credenciais Meta),
-  disparo de campanha (`src/app/api/campaigns/[id]/send/route.ts`, já tocado
-  em T020), mudança de permissões/papel/status (T030), mudança de SMTP
-  (T051).
-- [ ] T061 [US5] `src/app/api/settings/audit/route.ts` GET: filtra por
-  `memberId`/`action`, paginado, owner/admin only.
-- [ ] T062 [US5] `src/components/settings/audit-client.tsx` +
-  `src/app/(app)/audit/page.tsx`: lista filtrável, acesso restrito no
-  server component.
-- [ ] T063 [US5] [P] `tests/unit/audit.test.ts`: `logAudit` grava os campos
-  corretos; rota GET filtra corretamente por membro/ação.
+- [X] T060 [US5] `logAudit(...)` encaixado em: login (T013, já feito),
+  `channel.connected`/`channel.disconnected`
+  (`src/app/api/settings/channels/route.ts`), `campaign.sent`
+  (`campaigns/[id]/send/route.ts`), `settings.role_changed` (T030, já
+  feito), `settings.smtp_changed` (T051, já feito), `invite.created`/
+  `invite.used` (US3, já feito).
+- [X] T061 [US5] `src/app/api/settings/audit/route.ts` GET: filtra por
+  `memberId`/`action`, `LIMIT 50`, owner/admin only.
+- [X] T062 [US5] `src/components/settings/audit-client.tsx` +
+  `src/app/(app)/audit/page.tsx` (gate no server component: `redirect
+  ("/inbox")` se não for owner/admin) + link "Auditoria" em `app-nav.tsx`
+  (visível só para owner/admin).
+- [X] T063 [US5] [P] `tests/unit/audit.test.ts` — 4 testes: campos
+  corretos, extração de IP/user-agent de um `Request` real, `memberId`
+  nulo aceito, nunca lança mesmo com o insert falhando.
+
+**Checkpoint — verificado ao vivo em 2026-07-28**:
+
+| # | Cenário | Resultado |
+|---|---|---|
+| 1 | Login gera `user.login` | presente, IP `::1` capturado |
+| 2 | Gerar convite gera `invite.created` com `metadata.role` | presente |
+| 3 | Editar permissão gera `settings.role_changed` com o patch em `metadata` | presente |
+| 4 | `memberId` de um autor já removido aparece `null` (não quebra) | confirmado com entradas de self-tests anteriores |
+| 5 | Filtro `?action=invite.created` retorna só esse tipo | OK |
+| 6 | Agent (não owner/admin) tenta ver a auditoria | 403 |
 
 **Independent Test**: convidar um membro (T041) e confirmar que aparece na
 tela de auditoria com autor/data corretos.
@@ -275,16 +300,32 @@ tela de auditoria com autor/data corretos.
 
 ## Phase 8: Polish
 
-- [ ] T070 [P] Gate técnico completo: `pnpm typecheck && pnpm lint && pnpm
-  build && pnpm test`.
-- [ ] T071 Self-test de comportamento ao vivo (Princípio IX, Playwright):
-  US1 (chamada de API sem permissão → 403 real), US2 (editar permissão na
-  UI e confirmar efeito), US3 (gerar convite → abrir em janela anônima →
-  criar conta → confirmar papel), US4 caminho A (sem SMTP → solicitar reset
-  → aviso aparece para o owner → link manual funciona) e caminho B (SMTP de
-  teste configurado → reset chega por e-mail), US5 (ação auditável aparece
-  na tela). Todos os caminhos são automatizáveis nesta feature — nenhum
-  depende de hardware externo.
+- [X] T070 [P] Gate técnico completo: `pnpm typecheck && pnpm lint && pnpm
+  build && pnpm test` — 29 arquivos de teste, 191 testes, tudo verde. Build
+  gera as 75 rotas esperadas (17 novas desta feature).
+- [X] T071 Self-test de comportamento ao vivo — **adaptado**: esta sessão não
+  tinha uma ferramenta de navegador/Playwright disponível (verificado via
+  busca de ferramentas). Substituído por HTTP real contra o dev server +
+  cookies de sessão reais (mesmo método usado nos 4 checkpoints anteriores),
+  cobrindo TODA a lógica de servidor de US1-US5 (~40 asserções ao vivo no
+  total entre os 4 checkpoints). O que ficou **pendente de verificação
+  humana/Playwright** (não reportado como testado): a renderização visual
+  dos componentes novos — `EditMemberDialog`, `InviteDialog`, `SmtpClient`,
+  `AuditClient`, e as páginas `/forgot-password` e `/reset-password`. O
+  dono revisará isso separadamente.
+
+## Resumo dos achados corrigidos durante os self-tests
+
+1. `withAuth` sobrescrevia toda mensagem de `UnauthorizedError` para "Não
+   autenticado", escondendo "Conta desativada" de quem já tinha sessão
+   aberta — corrigido para repassar `err.message`.
+2. `accept-invite` podia deixar um `user` órfão (sem `member`) quando o
+   token já estava usado mas o e-mail era novo — corrigido com checagem
+   rápida antes de criar a conta + limpeza best-effort no `catch`.
+3. Duas correções na própria spec durante o planejamento (antes de codar):
+   convite por token é complementar à criação direta já existente (não
+   substitui); `member_channel` não precisa de `channel_id` (só há um canal
+   de cada tipo por organização).
 
 ## Dependencies & Execution Order
 

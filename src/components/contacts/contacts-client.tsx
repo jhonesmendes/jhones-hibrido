@@ -17,6 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { HelpLink } from "@/components/docs/help-link";
 
 export function ContactsClient() {
   const router = useRouter();
@@ -100,7 +101,10 @@ export function ContactsClient() {
   return (
     <div className="flex h-full flex-col">
       <header className="flex items-center justify-between gap-4 border-b px-6 py-4">
-        <h2 className="font-semibold">Contatos</h2>
+        <div className="flex items-center gap-1.5">
+          <h2 className="font-semibold">Contatos</h2>
+          <HelpLink slug="contatos" />
+        </div>
         <div className="flex items-center gap-3">
           <label className="flex items-center gap-2 text-xs text-muted-foreground">
             <input

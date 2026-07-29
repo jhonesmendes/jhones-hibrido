@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Link2, Settings2, UserPlus } from "lucide-react";
+import { Link2, Settings2, UserPlus, X } from "lucide-react";
 import { ContactAvatar } from "@/components/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PERMISSIONS, type Permission, type Role } from "@/lib/auth/permissions";
+import { HelpLink } from "@/components/docs/help-link";
 
 type ChannelAccess = { canView: boolean; canSend: boolean };
 
@@ -29,8 +30,27 @@ const ROLE_LABEL: Record<Role, string> = {
   agent: "Agente",
 };
 
+type PendingInvite = {
+  id: string;
+  email: string | null;
+  role: "admin" | "agent";
+  expiresAt: string;
+  createdAt: string;
+  expired: boolean;
+};
+
+function formatExpiresIn(expiresAt: string): string {
+  const ms = new Date(expiresAt).getTime() - Date.now();
+  if (ms <= 0) return "expirado";
+  const days = Math.floor(ms / (24 * 60 * 60 * 1000));
+  if (days >= 1) return `Expira em ${days} dia${days === 1 ? "" : "s"}`;
+  const hours = Math.max(1, Math.floor(ms / (60 * 60 * 1000)));
+  return `Expira em ${hours}h`;
+}
+
 export function TeamClient() {
   const [members, setMembers] = useState<Member[]>([]);
+  const [invites, setInvites] = useState<PendingInvite[]>([]);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [tempPassword, setTempPassword] = useState("");
@@ -47,9 +67,24 @@ export function TeamClient() {
     setMembers(data.members);
   }, []);
 
+  const refetchInvites = useCallback(async () => {
+    const res = await fetch("/api/settings/invites").catch(() => null);
+    if (!res?.ok) return;
+    const data = (await res.json()) as { invites: PendingInvite[] };
+    setInvites(data.invites);
+  }, []);
+
   useEffect(() => {
     void refetch();
-  }, [refetch]);
+    void refetchInvites();
+  }, [refetch, refetchInvites]);
+
+  async function revokeInvite(id: string) {
+    const res = await fetch(`/api/settings/invites/${id}`, { method: "DELETE" }).catch(
+      () => null
+    );
+    if (res?.ok) void refetchInvites();
+  }
 
   function generatePassword() {
     const alphabet =
@@ -85,8 +120,24 @@ export function TeamClient() {
     void refetch();
   }
 
+  const pendingCount = invites.filter((i) => !i.expired).length;
+
   return (
     <div className="max-w-2xl space-y-6">
+      <div className="flex items-center justify-end">
+        <HelpLink slug="equipe" />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="rounded-lg border bg-card px-4 py-3">
+          <p className="text-xs text-muted-foreground">Total de membros</p>
+          <p className="text-xl font-medium">{members.length}</p>
+        </div>
+        <div className="rounded-lg border bg-card px-4 py-3">
+          <p className="text-xs text-muted-foreground">Convites pendentes</p>
+          <p className="text-xl font-medium">{pendingCount}</p>
+        </div>
+      </div>
+
       <Card>
         <CardHeader>
           <CardTitle>Criar conta de equipe</CardTitle>
@@ -198,6 +249,38 @@ export function TeamClient() {
         ))}
       </div>
 
+      {invites.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Convites pendentes
+          </p>
+          {invites.map((inv) => (
+            <div
+              key={inv.id}
+              className="flex items-center gap-3 rounded-lg border bg-card px-4 py-3"
+            >
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm">{inv.email ?? "Qualquer e-mail"}</p>
+                <p className="text-xs text-muted-foreground">
+                  {formatExpiresIn(inv.expiresAt)} · papel: {ROLE_LABEL[inv.role]}
+                </p>
+              </div>
+              <Badge variant={inv.expired ? "destructive" : "secondary"}>
+                {inv.expired ? "expirado" : "pendente"}
+              </Badge>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Revogar convite"
+                onClick={() => void revokeInvite(inv.id)}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+
       {editing && (
         <EditMemberDialog
           member={editing}
@@ -209,12 +292,23 @@ export function TeamClient() {
         />
       )}
 
-      {inviting && <InviteDialog onClose={() => setInviting(false)} />}
+      {inviting && (
+        <InviteDialog
+          onClose={() => setInviting(false)}
+          onCreated={() => void refetchInvites()}
+        />
+      )}
     </div>
   );
 }
 
-function InviteDialog({ onClose }: { onClose: () => void }) {
+function InviteDialog({
+  onClose,
+  onCreated,
+}: {
+  onClose: () => void;
+  onCreated: () => void;
+}) {
   const [role, setRole] = useState<"admin" | "agent">("agent");
   const [email, setEmail] = useState("");
   const [expiresIn, setExpiresIn] = useState<"24h" | "7d" | "30d">("7d");
@@ -245,6 +339,7 @@ function InviteDialog({ onClose }: { onClose: () => void }) {
     }
     const data = (await res.json()) as { url: string };
     setUrl(data.url);
+    onCreated();
   }
 
   return (
@@ -450,7 +545,7 @@ function EditMemberDialog({
             {(["official", "unofficial"] as const).map((type) => (
               <div key={type} className="mb-2 flex items-center gap-4 text-sm">
                 <span className="w-28 shrink-0">
-                  {type === "official" ? "Oficial" : "Não oficial"}
+                  {type === "official" ? "Oficial" : "WhatsApp Web"}
                 </span>
                 <label className="flex items-center gap-1.5">
                   <input

@@ -43,11 +43,20 @@ function isInternalSignup(): boolean {
 
 const RATE_LIMITED_PATHS = new Set(["/sign-in/email", "/sign-up/email"]);
 
+// `next dev` cai para outra porta quando a padrão já está ocupada (aqui,
+// pelo próprio compose de produção do dono no host) — sem isso, o Better
+// Auth rejeita a origem com 403 assim que a porta muda.
+const DEV_TRUSTED_ORIGINS =
+  process.env.NODE_ENV !== "production"
+    ? Array.from({ length: 20 }, (_, i) => `http://localhost:${3000 + i}`)
+    : undefined;
+
 function createAuth() {
   const env = getEnv();
   return betterAuth({
     baseURL: env.APP_BASE_URL,
     secret: env.BETTER_AUTH_SECRET,
+    trustedOrigins: DEV_TRUSTED_ORIGINS,
     database: drizzleAdapter(getDb(), {
       provider: "pg",
       schema: {

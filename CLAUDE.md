@@ -24,13 +24,14 @@ externas: o trabalho em segundo plano (agente, Laboratório) é in-process.
 
 | Quer mudar… | Mexa em… |
 |---|---|
-| O cérebro/provedor LLM | `src/lib/ai/` (adaptador compatível com OpenRouter, `chatJson<T>`) |
+| O cérebro/provedor LLM | `src/lib/ai/` (adaptador compatível com OpenRouter, `chatJson<T>`) · resolução de config (env vs. override por org) em `src/server/ai/config.ts` · UI em Configurações → Inteligência IA |
 | O comportamento/prompt do agente | `src/server/ai/prompts.ts` |
 | As ações que o agente pode tomar | `src/server/ai/actions.ts` + execução em `src/server/ai/pipeline.ts` |
 | As personas ou o juiz do Laboratório | `src/server/lab/personas.ts` · `src/server/lab/judge.ts` |
 | O canal WhatsApp oficial (Graph API) | `src/lib/meta/` (cliente único) + `src/server/whatsapp/` |
 | O canal WhatsApp não oficial (motor Baileys nativo) | `src/server/baileys/` (conexão direta ao protocolo, sem gateway de terceiros) |
 | Campanhas (disparo em massa, oficial e não oficial) | `src/server/campaigns/` + `src/lib/campaigns/` (roadmap em andamento) |
+| Automações N8N (listar/executar workflows do operador) | `src/server/n8n/` (cliente REST + config por org) · UI na aba Automações de Campanhas |
 | Campos/tabelas | `src/lib/db/schema.ts` → `pnpm db:generate` → migração nova em `drizzle/` |
 | A ingestão/envio de mensagens | `src/server/inbox/` (ingest idempotente, send com guard de sandbox, janela de 24h) |
 | UI | `src/components/` + `src/app/(app)/` |
@@ -43,12 +44,17 @@ produção.
 
 Veja [.specify/memory/constitution.md](.specify/memory/constitution.md).
 
-- **Soberania (II, v2.0.0)**: dependências de runtime SOMENTE canal WhatsApp —
+- **Soberania (II, v2.2.0)**: dependências de runtime SOMENTE canal WhatsApp —
   Cloud API oficial e/ou canal não oficial (Baileys/Evolution), coexistindo por
-  organização — + provedor LLM compatível com OpenRouter opcional. PROIBIDO na
-  v1 introduzir S3/R2, e-mail, Stripe, Google ou outros serviços externos. Auth e
-  BD self-hosted. O canal não oficial é risco de conta, não fuga de
-  soberania — é governado com guardrails (ver Princípio IX), não é proibido.
+  organização — + provedor LLM compatível com OpenRouter opcional + servidor
+  SMTP opcional (do próprio operador) + servidor N8N opcional (do próprio
+  operador/agência, auto-hospedado, usado só para listar/executar workflows e
+  ver histórico de execuções a partir da aba Automações em Campanhas). PROIBIDO
+  na v1 introduzir S3/R2, SaaS de e-mail transacional de terceiro, Stripe,
+  Google, N8N como SaaS de terceiro ou qualquer outro serviço externo não
+  auto-hospedado pelo operador. Auth e BD self-hosted. O canal não oficial é
+  risco de conta, não fuga de soberania — é governado com guardrails (ver
+  Princípio IX), não é proibido.
 - **Foco Vertical (VIII, v2.0.0)**: admite-se disparo em massa (Campanhas,
   oficial e não oficial) como extensão de "converter conversas". Continua
   fora: scraping de números, fluxos visuais genéricos.
@@ -77,6 +83,12 @@ OPENROUTER_API_TOKEN=sk-or-...
 OPENROUTER_MODEL=anthropic/claude-sonnet-4.5
 OPENROUTER_JUDGE_MODEL=anthropic/claude-haiku-4.5   # opcional: juez más barato
 ```
+
+**N8N (Automações, Princípio II categoria 4)**: diferente do OpenRouter, NÃO é
+env var — segue o mesmo padrão do SMTP/IA: URL + API key por organização,
+cifradas em `n8n_config` (`src/server/n8n/config.ts`), configuráveis pela UI
+em Campanhas → Automações N8N (ou por quem tem owner/admin). Sem configurar,
+a aba degrada para uma tela de setup — nunca trava o resto do produto.
 
 Para o self-test local existe também o modo de testes interno (mocks) —
 veja `specs/001-vocero-core/quickstart.md`. Nunca ative mocks em produção.

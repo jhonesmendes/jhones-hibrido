@@ -5,12 +5,16 @@ export type AuditAction =
   | "user.login"
   | "invite.created"
   | "invite.used"
+  | "invite.revoked"
   | "channel.connected"
   | "channel.disconnected"
   | "campaign.sent"
   | "settings.permissions_changed"
   | "settings.role_changed"
-  | "settings.smtp_changed";
+  | "settings.smtp_changed"
+  | "settings.ai_changed"
+  | "settings.n8n_changed"
+  | "n8n.workflow_executed";
 
 /**
  * Registra uma ação crítica (FR-019). Nunca lança: um problema no log de

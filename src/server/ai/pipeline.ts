@@ -1,8 +1,9 @@
 import { asc, desc, eq } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { newId } from "@/lib/db/ids";
-import { getEnv, isAiConfigured } from "@/lib/env";
+import { getEnv } from "@/lib/env";
 import { chatJson, type ChatMessage } from "@/lib/ai";
+import { resolveAiConfig } from "@/server/ai/config";
 import { publish } from "@/server/events/bus";
 import { isWindowOpen } from "@/server/inbox/window";
 import { SendError, sendText } from "@/server/inbox/send";
@@ -83,8 +84,6 @@ async function executeTurn(conversationId: string): Promise<void> {
  * debounce 0 e sem passar pelo coalesce).
  */
 export async function runAgentTurn(conversationId: string): Promise<void> {
-  if (!isAiConfigured()) return;
-
   const db = getDb();
   const convRows = await db
     .select()
@@ -97,6 +96,9 @@ export async function runAgentTurn(conversationId: string): Promise<void> {
 
   // Condições de silêncio: handoff ativo ou IA desligada na conversa.
   if (conversation.handoffAt || !conversation.aiEnabled) return;
+
+  const aiConfig = await resolveAiConfig(organizationId);
+  if (!aiConfig) return;
 
   const profileRows = await db
     .select()
@@ -114,7 +116,7 @@ export async function runAgentTurn(conversationId: string): Promise<void> {
     .from(schema.message)
     .where(eq(schema.message.conversationId, conversationId))
     .orderBy(desc(schema.message.createdAt))
-    .limit(20);
+    .limit(aiConfig.contextMessages);
   history.reverse();
   const lastInbound = [...history].reverse().find((m) => m.direction === "in");
   if (!lastInbound) return;
@@ -155,7 +157,7 @@ export async function runAgentTurn(conversationId: string): Promise<void> {
       })),
   ];
 
-  const result = await chatJson(AgentAction, messages);
+  const result = await chatJson(AgentAction, messages, { config: aiConfig });
   if (!result.ok) {
     if (result.error === "not_configured") return;
     // Falha persistente do provedor ou saída impossível → escalar (FR-022).

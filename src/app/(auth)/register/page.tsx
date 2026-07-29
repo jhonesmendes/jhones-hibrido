@@ -8,6 +8,16 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PERMISSIONS } from "@/lib/auth/permissions";
+
+function formatExpiresIn(expiresAt: string): string {
+  const ms = new Date(expiresAt).getTime() - Date.now();
+  if (ms <= 0) return "expirando agora";
+  const days = Math.floor(ms / (24 * 60 * 60 * 1000));
+  if (days >= 1) return `Expira em ${days} dia${days === 1 ? "" : "s"}`;
+  const hours = Math.max(1, Math.floor(ms / (60 * 60 * 1000)));
+  return `Expira em ${hours}h`;
+}
 
 const ROLE_LABEL: Record<string, string> = {
   admin: "Administrador",
@@ -113,7 +123,14 @@ function PublicRegisterForm({ onDone }: { onDone: () => void }) {
 type InviteCheck =
   | { status: "loading" }
   | { status: "invalid"; message: string }
-  | { status: "valid"; email: string | null; role: string };
+  | {
+      status: "valid";
+      email: string | null;
+      role: string;
+      expiresAt: string;
+      inviterName: string | null;
+      permissions: string[];
+    };
 
 function InviteRegisterForm({ token }: { token: string }) {
   const router = useRouter();
@@ -129,7 +146,13 @@ function InviteRegisterForm({ token }: { token: string }) {
     fetch(`/api/auth/invite?token=${encodeURIComponent(token)}`)
       .then(async (res) => {
         const data = (await res.json().catch(() => null)) as
-          | { email: string | null; role: string }
+          | {
+              email: string | null;
+              role: string;
+              expiresAt: string;
+              inviterName: string | null;
+              permissions: string[];
+            }
           | { error?: { message?: string } }
           | null;
         if (cancelled) return;
@@ -140,8 +163,21 @@ function InviteRegisterForm({ token }: { token: string }) {
           setCheck({ status: "invalid", message });
           return;
         }
-        const valid = data as { email: string | null; role: string };
-        setCheck({ status: "valid", email: valid.email, role: valid.role });
+        const valid = data as {
+          email: string | null;
+          role: string;
+          expiresAt: string;
+          inviterName: string | null;
+          permissions: string[];
+        };
+        setCheck({
+          status: "valid",
+          email: valid.email,
+          role: valid.role,
+          expiresAt: valid.expiresAt,
+          inviterName: valid.inviterName,
+          permissions: valid.permissions,
+        });
         if (valid.email) setEmail(valid.email);
       })
       .catch(() => {
@@ -213,6 +249,30 @@ function InviteRegisterForm({ token }: { token: string }) {
         </CardDescription>
       </CardHeader>
       <CardContent>
+        <div className="mb-4 rounded-md border border-emerald-800/40 bg-emerald-950/30 px-3 py-2 text-sm text-emerald-400">
+          <p className="font-medium">Convite válido</p>
+          <p className="text-xs text-emerald-400/80">
+            {formatExpiresIn(check.expiresAt)}
+            {check.inviterName ? ` · Convidado por ${check.inviterName}` : ""}
+          </p>
+        </div>
+        {check.permissions.length > 0 && (
+          <div className="mb-4 rounded-md border border-border bg-muted/30 px-3 py-2">
+            <p className="mb-1.5 text-xs font-medium text-muted-foreground">
+              SUAS PERMISSÕES INICIAIS
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {check.permissions.map((key) => (
+                <span
+                  key={key}
+                  className="rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary"
+                >
+                  {PERMISSIONS[key as keyof typeof PERMISSIONS] ?? key}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
         <form onSubmit={onSubmit} className="space-y-4">
           <div className="space-y-1.5">
             <Label htmlFor="invite-name">Seu nome</Label>

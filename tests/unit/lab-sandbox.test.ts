@@ -81,6 +81,7 @@ describe("sandbox del Laboratorio en el pipeline del agente", () => {
     selectQueue.length = 0;
     inserts.length = 0;
     vi.stubEnv("OPENROUTER_API_TOKEN", "token-test");
+    vi.stubEnv("OPENROUTER_MODEL", "model-test");
   });
 
   it("turno sobre conversación is_test → persiste la respuesta y NO llama a Graph", async () => {
@@ -96,6 +97,7 @@ describe("sandbox del Laboratorio en el pipeline del agente", () => {
     };
     selectQueue.push(
       [testConversation], // conversación
+      [], // ai_config (ninguna fila salva → cae al fallback de env)
       [{ id: "agp_1", organizationId: "org_1", enabled: false, name: "Asistente", tone: null, instructions: null, escalationRules: null, greeting: null }], // perfil (apagado: el Lab evalúa igual)
       [
         {

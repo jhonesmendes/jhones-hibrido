@@ -72,7 +72,7 @@ export async function startCampaign(
     if (channel.status !== "connected") {
       throw new CampaignSendError(
         "not_ready",
-        "O canal não oficial não está mais conectado"
+        "O WhatsApp Web não está mais conectado"
       );
     }
   }
@@ -126,12 +126,21 @@ async function runCampaign(
 
       let messageId: string;
       if (campaign.channel === "official") {
-        const variables = (recipient.variables as Record<string, string>) ?? {};
+        const byIndex = (recipient.variables as Record<string, string>) ?? {};
+        // Chaves "1","2",... na ordem — ver createCampaign (canal oficial).
+        const maxIndex = Object.keys(byIndex).reduce(
+          (max, k) => Math.max(max, Number(k) || 0),
+          0
+        );
+        const variables = Array.from(
+          { length: maxIndex },
+          (_, i) => byIndex[String(i + 1)] ?? ""
+        );
         const result = await sendTemplate({
           organizationId,
           conversationId: conversation.id,
           templateId: campaign.templateId!,
-          variable: variables["1"],
+          variables,
         });
         messageId = result.messageId;
       } else {

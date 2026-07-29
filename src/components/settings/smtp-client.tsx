@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { HelpLink } from "@/components/docs/help-link";
 
 type SmtpConfig = {
   host: string;
@@ -131,6 +132,9 @@ export function SmtpClient() {
 
   return (
     <div className="max-w-2xl space-y-6">
+      <div className="flex items-center justify-end">
+        <HelpLink slug="email" />
+      </div>
       <Card>
         <CardHeader>
           <CardTitle>Servidor SMTP</CardTitle>

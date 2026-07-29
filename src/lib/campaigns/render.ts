@@ -21,3 +21,16 @@ export function extractVariables(template: string): string[] {
   const matches = template.matchAll(VARIABLE_NAME_REGEX);
   return [...new Set([...matches].map((m) => m[1]!))];
 }
+
+const VARIABLE_NUMBERED_REGEX = /\{\{\s*(\d+)\s*\}\}/g;
+
+/** Igual a renderBody (server/whatsapp/templates.ts), mas client-safe — pré-visualização de modelo oficial no wizard de campanhas. */
+export function renderNumberedMessage(
+  template: string,
+  variablesOrdered: string[]
+): string {
+  return template.replace(
+    VARIABLE_NUMBERED_REGEX,
+    (_, idx: string) => variablesOrdered[Number(idx) - 1] ?? ""
+  );
+}

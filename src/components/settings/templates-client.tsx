@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { HelpLink } from "@/components/docs/help-link";
 
 const STATUS_BADGE: Record<
   TemplateDto["status"],
@@ -68,10 +69,13 @@ export function TemplatesClient() {
           botão Sincronizar (indispensável no modo agência, onde os eventos de
           modelos não chegam ao webhook da instância).
         </p>
-        <Button variant="outline" size="sm" disabled={syncing} onClick={() => void sync()}>
-          <RefreshCw className={`h-4 w-4 ${syncing ? "animate-spin" : ""}`} />
-          Sincronizar
-        </Button>
+        <div className="flex shrink-0 items-center gap-2">
+          <HelpLink slug="modelos" />
+          <Button variant="outline" size="sm" disabled={syncing} onClick={() => void sync()}>
+            <RefreshCw className={`h-4 w-4 ${syncing ? "animate-spin" : ""}`} />
+            Sincronizar
+          </Button>
+        </div>
       </div>
       {syncMsg && <p className="text-xs text-muted-foreground">{syncMsg}</p>}
 
@@ -143,8 +147,8 @@ function CreateForm({ onCreated }: { onCreated: () => void }) {
       <CardHeader>
         <CardTitle>Novo modelo</CardTitle>
         <CardDescription>
-          Corpo com no máximo UMA variável <code>{"{{1}}"}</code> (v1). É
-          enviado para aprovação da Meta ao criar.
+          Variáveis <code>{"{{1}}"}</code>, <code>{"{{2}}"}</code>… sequenciais,
+          sem pular números. É enviado para aprovação da Meta ao criar.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">

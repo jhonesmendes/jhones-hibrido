@@ -33,6 +33,11 @@ const envSchema = z.object({
     .int()
     .min(1000)
     .default(5 * 60 * 1000),
+  CAMPAIGN_SCHEDULER_INTERVAL_MS: z.coerce
+    .number()
+    .int()
+    .min(1000)
+    .default(30 * 1000),
   WA_MOCK_ENABLED: z.string().optional(),
   NODE_ENV: z.string().default("development"),
 });

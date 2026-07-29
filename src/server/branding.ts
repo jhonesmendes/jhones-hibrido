@@ -26,22 +26,24 @@ export async function getBranding(
   const db = getDb();
   const rows = organizationId
     ? await db
-        .select({ metadata: schema.organization.metadata })
+        .select({ metadata: schema.organization.metadata, logo: schema.organization.logo })
         .from(schema.organization)
         .where(eq(schema.organization.id, organizationId))
         .limit(1)
     : // Sem sessão (login, layout raiz): a única organização da instância.
       await db
-        .select({ metadata: schema.organization.metadata })
+        .select({ metadata: schema.organization.metadata, logo: schema.organization.logo })
         .from(schema.organization)
         .limit(1);
   if (!rows[0]) return DEFAULT_BRANDING;
   const meta = parseMetadata(rows[0].metadata);
-  return normalizeBranding(
-    (meta.branding as Partial<Branding> | undefined) ?? null
-  );
+  return normalizeBranding({
+    ...((meta.branding as Partial<Branding> | undefined) ?? null),
+    logo: rows[0].logo,
+  });
 }
 
+/** Logo cifrado em `organization.logo` (coluna dedicada); nome/acento em metadata. */
 export async function saveBranding(
   organizationId: string,
   branding: Branding
@@ -53,9 +55,10 @@ export async function saveBranding(
     .where(eq(schema.organization.id, organizationId))
     .limit(1);
   const meta = parseMetadata(rows[0]?.metadata ?? null);
-  meta.branding = normalizeBranding(branding);
+  const normalized = normalizeBranding(branding);
+  meta.branding = { name: normalized.name, accent: normalized.accent };
   await db
     .update(schema.organization)
-    .set({ metadata: JSON.stringify(meta) })
+    .set({ metadata: JSON.stringify(meta), logo: normalized.logo })
     .where(eq(schema.organization.id, organizationId));
 }

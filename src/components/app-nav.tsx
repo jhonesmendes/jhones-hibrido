@@ -4,9 +4,11 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
+  BookOpen,
   FlaskConical,
   Inbox,
   Kanban,
+  ListChecks,
   LogOut,
   Megaphone,
   Settings,
@@ -61,19 +63,25 @@ export function AppNav({
 
   return (
     <aside className="flex w-56 shrink-0 flex-col border-r bg-subtle px-3 pb-3.5 pt-4">
-      {/* Brand white-label */}
+      {/* Brand white-label — o ícone do cliente substitui a inicial; o
+          crédito "Vocero CRM" embaixo fica sempre visível. */}
       <div className="mb-4 flex items-center gap-2.5 px-2">
         <span
-          className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-sm bg-brand text-[15px] font-bold text-white"
+          className="flex h-[30px] w-[30px] shrink-0 items-center justify-center overflow-hidden rounded-sm bg-brand text-[15px] font-bold text-white"
           aria-hidden
         >
-          {branding.name.charAt(0).toUpperCase()}
+          {branding.logo ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={branding.logo} alt="" className="h-full w-full object-cover" />
+          ) : (
+            branding.name.charAt(0).toUpperCase()
+          )}
         </span>
         <span className="min-w-0">
           <span className="block truncate text-[16px] font-[650] leading-tight tracking-tight">
             {branding.name}
           </span>
-          <span className="block text-[11px] text-text-3">CRM · WhatsApp</span>
+          <span className="block text-[11px] text-text-3">Vocero CRM · WhatsApp</span>
         </span>
       </div>
 
@@ -117,6 +125,46 @@ export function AppNav({
       <div className="mb-1.5 px-0.5">
         <ThemeToggle />
       </div>
+
+      {(role === "owner" || role === "admin") && (
+        <Link
+          href="/audit"
+          className={cn(
+            "flex items-center gap-[11px] rounded-sm px-2.5 py-2 text-sm font-medium transition-colors",
+            pathname.startsWith("/audit")
+              ? "bg-brand-tint font-semibold text-brand-text"
+              : "text-text-2 hover:bg-accent"
+          )}
+        >
+          <ListChecks
+            className={cn(
+              "h-[18px] w-[18px]",
+              pathname.startsWith("/audit") ? "text-brand" : "text-text-3"
+            )}
+            strokeWidth={1.7}
+          />
+          Auditoria
+        </Link>
+      )}
+
+      <Link
+        href="/documentacao"
+        className={cn(
+          "flex items-center gap-[11px] rounded-sm px-2.5 py-2 text-sm font-medium transition-colors",
+          pathname.startsWith("/documentacao")
+            ? "bg-brand-tint font-semibold text-brand-text"
+            : "text-text-2 hover:bg-accent"
+        )}
+      >
+        <BookOpen
+          className={cn(
+            "h-[18px] w-[18px]",
+            pathname.startsWith("/documentacao") ? "text-brand" : "text-text-3"
+          )}
+          strokeWidth={1.7}
+        />
+        Documentação
+      </Link>
 
       <Link
         href="/settings"

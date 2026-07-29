@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { chatJson } from "@/lib/ai";
+import { chatJson, type ResolvedAiConfig } from "@/lib/ai";
 import { buildJudgePrompt } from "@/server/ai/prompts";
 
 /** Veredito estruturado do juiz (FR-032, contrato ai.md). */
@@ -32,6 +32,7 @@ export async function judgeCase(input: {
   transcript: { role: "cliente" | "agente"; text: string }[];
   kbText: string;
   behaviorText: string;
+  aiConfig: ResolvedAiConfig;
 }): Promise<JudgeOutcome> {
   const { system, user } = buildJudgePrompt({
     persona: input.personaKey,
@@ -45,7 +46,7 @@ export async function judgeCase(input: {
       { role: "system", content: system },
       { role: "user", content: user },
     ],
-    { judge: true }
+    { judge: true, config: input.aiConfig }
   );
   if (!result.ok) {
     // Diagnóstico operacional: o caso fica visível como judge_failed e aqui

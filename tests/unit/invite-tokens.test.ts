@@ -24,20 +24,32 @@ vi.mock("@/lib/db", () => {
   const memberPermission = { __name: "memberPermission" };
   const memberChannel = { __name: "memberChannel" };
   const inviteToken = { __name: "inviteToken" };
+  const user = { __name: "user", name: "Convite Testador" };
 
   function tableName(table: unknown): string {
     return (table as { __name: string }).__name;
   }
 
-  function select() {
+  /**
+   * `joined=false`: linha crua do invite (usado dentro da transação de
+   * consumeInviteToken, sem join). `joined=true`: shape
+   * `{ invite, inviterName }` (checkInviteToken faz innerJoin com
+   * member/user para trazer o nome de quem convidou).
+   */
+  function makeChain(joined: boolean) {
+    const rows = () =>
+      invite ? [joined ? { invite, inviterName: user.name } : invite] : [];
     return {
-      from: () => ({
-        where: () =>
-          Object.assign(Promise.resolve(invite ? [invite] : []), {
-            limit: () => Promise.resolve(invite ? [invite] : []),
-          }),
-      }),
+      innerJoin: () => makeChain(true),
+      where: () =>
+        Object.assign(Promise.resolve(rows()), {
+          limit: () => Promise.resolve(rows()),
+        }),
     };
+  }
+
+  function select() {
+    return { from: () => makeChain(false) };
   }
 
   function makeTx() {
@@ -72,7 +84,7 @@ vi.mock("@/lib/db", () => {
       transaction: async (fn: (tx: ReturnType<typeof makeTx>) => Promise<unknown>) =>
         fn(makeTx()),
     }),
-    schema: { member, memberPermission, memberChannel, inviteToken },
+    schema: { member, memberPermission, memberChannel, inviteToken, user },
   };
 });
 
@@ -143,10 +155,17 @@ describe("checkInviteToken", () => {
     expect(result).toEqual({ ok: false, code: "used" });
   });
 
-  it("token válido → ok com email/role", async () => {
+  it("token válido → ok com email/role/inviterName/permissions", async () => {
     invite = baseInvite({ email: "a@b.com", role: "admin" });
     const result = await checkInviteToken(TOKEN);
-    expect(result).toEqual({ ok: true, email: "a@b.com", role: "admin" });
+    expect(result).toMatchObject({
+      ok: true,
+      email: "a@b.com",
+      role: "admin",
+      inviterName: "Convite Testador",
+      permissions: [],
+    });
+    expect(result.ok && result.expiresAt).toBeInstanceOf(Date);
   });
 });
 

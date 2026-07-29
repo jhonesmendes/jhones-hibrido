@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { TemplateDto } from "@/lib/types";
+import { countTemplateVariables } from "@/lib/templates";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,7 +20,7 @@ export function TemplateSender({
 }) {
   const [templates, setTemplates] = useState<TemplateDto[] | null>(null);
   const [selectedId, setSelectedId] = useState<string>("");
-  const [variable, setVariable] = useState("");
+  const [variables, setVariables] = useState<string[]>([]);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -59,7 +60,11 @@ export function TemplateSender({
   }
 
   const selected = templates.find((t) => t.id === selectedId) ?? null;
-  const needsVariable = selected ? /\{\{\s*1\s*\}\}/.test(selected.body) : false;
+  const variableCount = selected ? countTemplateVariables(selected.body) : 0;
+  const variablesReady =
+    variableCount === 0 ||
+    (variables.length >= variableCount &&
+      variables.slice(0, variableCount).every((v) => v.trim()));
 
   async function send() {
     if (!selected || sending) return;
@@ -72,7 +77,7 @@ export function TemplateSender({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           templateId: selected.id,
-          variable: needsVariable ? variable : undefined,
+          variables: variableCount > 0 ? variables : undefined,
         }),
       }
     );
@@ -85,7 +90,7 @@ export function TemplateSender({
       return;
     }
     setSelectedId("");
-    setVariable("");
+    setVariables([]);
     onSent();
   }
 
@@ -112,22 +117,31 @@ export function TemplateSender({
           {selected.body}
         </p>
       )}
-      {needsVariable && (
-        <div className="space-y-1.5">
-          <Label htmlFor="template-variable">Valor da variável {"{{1}}"}</Label>
-          <Input
-            id="template-variable"
-            value={variable}
-            onChange={(e) => setVariable(e.target.value)}
-            placeholder="ex.: o nome do cliente"
-          />
+      {variableCount > 0 && (
+        <div className="space-y-2">
+          {Array.from({ length: variableCount }, (_, i) => (
+            <div key={i} className="space-y-1.5">
+              <Label htmlFor={`template-variable-${i}`}>
+                Valor da variável {`{{${i + 1}}}`}
+              </Label>
+              <Input
+                id={`template-variable-${i}`}
+                value={variables[i] ?? ""}
+                onChange={(e) =>
+                  setVariables((prev) => {
+                    const next = [...prev];
+                    next[i] = e.target.value;
+                    return next;
+                  })
+                }
+                placeholder={i === 0 ? "ex.: o nome do cliente" : undefined}
+              />
+            </div>
+          ))}
         </div>
       )}
       {error && <p className="text-xs text-destructive">{error}</p>}
-      <Button
-        onClick={() => void send()}
-        disabled={!selected || sending || (needsVariable && !variable.trim())}
-      >
+      <Button onClick={() => void send()} disabled={!selected || sending || !variablesReady}>
         {sending ? "Enviando…" : "Enviar modelo"}
       </Button>
     </div>
