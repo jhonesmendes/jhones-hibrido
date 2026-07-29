@@ -1,4 +1,4 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { newId } from "@/lib/db/ids";
 import { scoped } from "@/lib/db/tenant";
@@ -40,6 +40,8 @@ type RecipientSource =
       stageId?: string | null;
       /** Filtra pelo canal da CONVERSA do contato — independente do canal de envio da campanha. */
       originChannel?: "official" | "unofficial" | null;
+      /** Contatos escolhidos manualmente na UI — unidos ao filtro acima. */
+      contactIds?: string[];
     };
 
 type CreateOfficialInput = {
@@ -62,10 +64,16 @@ export type CreateCampaignInput = CreateOfficialInput | CreateUnofficialInput;
 
 type Recipient = { phone: string; variables: Record<string, string> };
 
-/** Contatos do CRM (não arquivados) filtrados por etapa do pipeline e/ou canal da conversa. */
+/** Contatos do CRM (não arquivados) filtrados por etapa do pipeline e/ou canal
+ * da conversa, com a opção de UNIR contatos escolhidos manualmente por id
+ * (seleção individual na UI), independente do filtro. */
 export async function resolveCrmContacts(
   organizationId: string,
-  filter: { stageId?: string | null; channel?: "official" | "unofficial" | null }
+  filter: {
+    stageId?: string | null;
+    channel?: "official" | "unofficial" | null;
+    extraContactIds?: string[];
+  }
 ): Promise<{ phone: string; name: string }[]> {
   const db = getDb();
   const conditions = [
@@ -88,9 +96,23 @@ export async function resolveCrmContacts(
     )
     .where(and(...conditions));
 
-  // Dedup por telefone: se por algum motivo o contato casar mais de uma vez.
   const byPhone = new Map<string, { phone: string; name: string }>();
   for (const r of rows) byPhone.set(r.phone, r);
+
+  if (filter.extraContactIds && filter.extraContactIds.length > 0) {
+    const extraRows = await db
+      .select({ phone: schema.contact.phone, name: schema.contact.name })
+      .from(schema.contact)
+      .where(
+        and(
+          eq(schema.contact.organizationId, organizationId),
+          isNull(schema.contact.archivedAt),
+          inArray(schema.contact.id, filter.extraContactIds)
+        )
+      );
+    for (const r of extraRows) byPhone.set(r.phone, r);
+  }
+
   return [...byPhone.values()];
 }
 
@@ -133,6 +155,7 @@ async function resolveRecipients(
   const contacts = await resolveCrmContacts(organizationId, {
     stageId: input.stageId,
     channel: input.originChannel ?? null,
+    extraContactIds: input.contactIds,
   });
   return {
     validRows: contacts.map((c) => {

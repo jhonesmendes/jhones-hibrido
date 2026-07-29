@@ -20,6 +20,7 @@ const crmSourceSchema = z.object({
   source: z.literal("crm"),
   stageId: z.string().min(1).nullable().optional(),
   originChannel: z.enum(["official", "unofficial"]).nullable().optional(),
+  contactIds: z.array(z.string().min(1)).max(5000).optional(),
 });
 
 const officialBase = z.object({

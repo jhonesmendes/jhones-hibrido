@@ -15,7 +15,7 @@ import {
   Users,
   X,
 } from "lucide-react";
-import type { CampaignDto, StageDto, TemplateDto } from "@/lib/types";
+import type { CampaignDto, ContactDto, StageDto, TemplateDto } from "@/lib/types";
 import { extractVariables, renderNumberedMessage, renderMessage } from "@/lib/campaigns/render";
 import { countTemplateVariables } from "@/lib/templates";
 import { Button } from "@/components/ui/button";
@@ -75,6 +75,11 @@ export function NewCampaignWizard({
   const [crmOriginChannel, setCrmOriginChannel] = useState<"" | "official" | "unofficial">("");
   const [crmCount, setCrmCount] = useState<CrmCount | null>(null);
   const [crmLoading, setCrmLoading] = useState(false);
+  const [manualQuery, setManualQuery] = useState("");
+  const [manualResults, setManualResults] = useState<ContactDto[]>([]);
+  const [manualSelected, setManualSelected] = useState<Map<string, ContactDto>>(
+    new Map()
+  );
 
   // Step 3 — configurar envio
   const [sendIntervalMs, setSendIntervalMs] = useState(5000);
@@ -115,6 +120,30 @@ export function NewCampaignWizard({
       .then((d: CrmCount | null) => setCrmCount(d))
       .finally(() => setCrmLoading(false));
   }, [recipientTab, crmStageId, crmOriginChannel]);
+
+  useEffect(() => {
+    if (recipientTab !== "crm") return;
+    const t = setTimeout(() => {
+      const params = new URLSearchParams();
+      if (manualQuery.trim()) params.set("q", manualQuery.trim());
+      fetch(`/api/contacts?${params}`)
+        .then((r) => (r.ok ? r.json() : { contacts: [] }))
+        .then((d: { contacts?: ContactDto[] }) =>
+          setManualResults((d.contacts ?? []).slice(0, 20))
+        )
+        .catch(() => {});
+    }, 200);
+    return () => clearTimeout(t);
+  }, [recipientTab, manualQuery]);
+
+  function toggleManualContact(c: ContactDto) {
+    setManualSelected((prev) => {
+      const next = new Map(prev);
+      if (next.has(c.id)) next.delete(c.id);
+      else next.set(c.id, c);
+      return next;
+    });
+  }
 
   const selectedTemplate = templates.find((t) => t.id === templateId) ?? null;
   const officialVariableCount = selectedTemplate
@@ -158,10 +187,12 @@ export function NewCampaignWizard({
   const step2Valid =
     recipientTab === "csv"
       ? Boolean(csvText && preview && preview.total > 0)
-      : Boolean(crmCount && crmCount.count > 0);
+      : Boolean((crmCount && crmCount.count > 0) || manualSelected.size > 0);
 
   const totalRecipients =
-    recipientTab === "csv" ? preview?.total ?? 0 : crmCount?.count ?? 0;
+    recipientTab === "csv"
+      ? preview?.total ?? 0
+      : (crmCount?.count ?? 0) + manualSelected.size;
 
   const estimatedSeconds =
     channel === "unofficial" ? Math.ceil((totalRecipients * sendIntervalMs) / 1000) : 0;
@@ -194,6 +225,8 @@ export function NewCampaignWizard({
             source: "crm" as const,
             stageId: crmStageId || null,
             originChannel: crmOriginChannel || null,
+            contactIds:
+              manualSelected.size > 0 ? [...manualSelected.keys()] : undefined,
           };
     const body =
       channel === "official"
@@ -328,6 +361,11 @@ export function NewCampaignWizard({
               setCrmOriginChannel={setCrmOriginChannel}
               crmCount={crmCount}
               crmLoading={crmLoading}
+              manualQuery={manualQuery}
+              setManualQuery={setManualQuery}
+              manualResults={manualResults}
+              manualSelected={manualSelected}
+              toggleManualContact={toggleManualContact}
             />
           )}
 
@@ -584,6 +622,11 @@ function Step2({
   setCrmOriginChannel,
   crmCount,
   crmLoading,
+  manualQuery,
+  setManualQuery,
+  manualResults,
+  manualSelected,
+  toggleManualContact,
 }: {
   channel: "official" | "unofficial";
   selectedTemplate: TemplateDto | null;
@@ -605,6 +648,11 @@ function Step2({
   setCrmOriginChannel: (v: "" | "official" | "unofficial") => void;
   crmCount: CrmCount | null;
   crmLoading: boolean;
+  manualQuery: string;
+  setManualQuery: (v: string) => void;
+  manualResults: ContactDto[];
+  manualSelected: Map<string, ContactDto>;
+  toggleManualContact: (c: ContactDto) => void;
 }) {
   const summaryText = channel === "official" ? selectedTemplate?.body ?? "" : messageTemplate;
   const summaryVars = channel === "official" ? officialVariableCount : messageVariables.length;
@@ -814,7 +862,79 @@ function Step2({
             <p className="text-2xl font-semibold">
               {crmLoading ? "…" : (crmCount?.count ?? 0)}
             </p>
-            <p className="text-xs text-muted-foreground">contato(s) selecionado(s)</p>
+            <p className="text-xs text-muted-foreground">
+              contato(s) pelo filtro
+              {manualSelected.size > 0
+                ? ` · +${manualSelected.size} selecionado(s) manualmente`
+                : ""}
+            </p>
+          </div>
+
+          <div className="space-y-2 rounded-md border p-3">
+            <Label htmlFor="manual-contact-search">
+              Selecionar contatos manualmente (opcional)
+            </Label>
+            <div className="relative">
+              <Users className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+              <input
+                id="manual-contact-search"
+                value={manualQuery}
+                onChange={(e) => setManualQuery(e.target.value)}
+                placeholder="Nome ou telefone…"
+                className="flex h-9 w-full rounded-md border border-input bg-card pl-8 pr-3 text-sm"
+              />
+            </div>
+            <div className="max-h-40 space-y-1 overflow-y-auto">
+              {manualResults.length === 0 && (
+                <p className="py-2 text-center text-xs text-muted-foreground">
+                  {manualQuery.trim()
+                    ? "Nenhum contato encontrado."
+                    : "Digite pra buscar contatos do CRM."}
+                </p>
+              )}
+              {manualResults.map((c) => (
+                <label
+                  key={c.id}
+                  className={cn(
+                    "flex cursor-pointer items-center gap-2.5 rounded-md border px-2.5 py-1.5 text-sm",
+                    manualSelected.has(c.id)
+                      ? "border-brand bg-brand-tint"
+                      : "border-transparent hover:bg-accent"
+                  )}
+                >
+                  <input
+                    type="checkbox"
+                    checked={manualSelected.has(c.id)}
+                    onChange={() => toggleManualContact(c)}
+                    className="shrink-0"
+                  />
+                  <span className="min-w-0 flex-1 truncate">{c.name}</span>
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    {c.phone}
+                  </span>
+                </label>
+              ))}
+            </div>
+            {manualSelected.size > 0 && (
+              <div className="flex flex-wrap gap-1.5 border-t pt-2">
+                {[...manualSelected.values()].map((c) => (
+                  <span
+                    key={c.id}
+                    className="flex items-center gap-1 rounded-full bg-brand-tint px-2 py-0.5 text-xs text-brand-text"
+                  >
+                    {c.name}
+                    <button
+                      type="button"
+                      onClick={() => toggleManualContact(c)}
+                      aria-label={`Remover ${c.name}`}
+                      className="hover:text-destructive"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
 
           <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
