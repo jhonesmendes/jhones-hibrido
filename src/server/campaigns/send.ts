@@ -12,7 +12,7 @@ import { renderMessage } from "@/lib/campaigns/render";
 import { getCampaign } from "@/server/campaigns/queries";
 
 export class CampaignSendError extends Error {
-  code: "not_found" | "not_draft" | "not_sending" | "not_ready";
+  code: "not_found" | "not_draft" | "not_sending" | "not_ready" | "in_progress";
   constructor(code: CampaignSendError["code"], message: string) {
     super(message);
     this.name = "CampaignSendError";
@@ -25,6 +25,7 @@ const CAMPAIGN_SEND_ERROR_STATUS: Record<CampaignSendError["code"], number> = {
   not_draft: 409,
   not_sending: 409,
   not_ready: 422,
+  in_progress: 409,
 };
 
 export function campaignSendErrorStatus(err: CampaignSendError): number {
@@ -247,4 +248,23 @@ export async function cancelCampaign(
     .update(schema.campaign)
     .set({ cancelRequested: true })
     .where(eq(schema.campaign.id, campaignId));
+}
+
+/** Exclui uma campanha criada errada (rascunho, agendada, cancelada ou já
+ * concluída) — nunca uma em disparo ativo (cancele primeiro). Destinatários
+ * são removidos em cascata (FK `campaign_recipient.campaign_id`). */
+export async function deleteCampaign(
+  organizationId: string,
+  campaignId: string
+): Promise<void> {
+  const db = getDb();
+  const campaign = await getCampaign(organizationId, campaignId);
+  if (!campaign) throw new CampaignSendError("not_found", "Campanha não encontrada");
+  if (campaign.status === "sending") {
+    throw new CampaignSendError(
+      "in_progress",
+      "Cancele o disparo em andamento antes de excluir a campanha"
+    );
+  }
+  await db.delete(schema.campaign).where(eq(schema.campaign.id, campaignId));
 }

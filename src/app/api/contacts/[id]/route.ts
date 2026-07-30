@@ -34,6 +34,8 @@ export const GET = withAuth(async (session, _req: Request, ctx: Params) => {
 
 const patchSchema = z.object({
   name: z.string().trim().min(1).max(120).optional(),
+  reference: z.string().trim().max(200).nullable().optional(),
+  comment: z.string().trim().max(2000).nullable().optional(),
   notes: z.string().max(4000).nullable().optional(),
   archived: z.boolean().optional(),
 });
@@ -45,6 +47,8 @@ export const PATCH = withAuth(async (session, req: Request, ctx: Params) => {
 
   const set: Record<string, unknown> = { updatedAt: new Date() };
   if (body.data.name !== undefined) set.name = body.data.name;
+  if (body.data.reference !== undefined) set.reference = body.data.reference;
+  if (body.data.comment !== undefined) set.comment = body.data.comment;
   if (body.data.notes !== undefined) set.notes = body.data.notes;
   if (body.data.archived !== undefined) {
     set.archivedAt = body.data.archived ? new Date() : null;

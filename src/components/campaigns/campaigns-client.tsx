@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Megaphone, Plus, Workflow } from "lucide-react";
+import { Megaphone, Plus, Trash2, Workflow } from "lucide-react";
 import type { CampaignDto } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -27,6 +27,7 @@ export function CampaignsClient() {
   const [tab, setTab] = useState<"campanhas" | "n8n">("campanhas");
   const [campaigns, setCampaigns] = useState<CampaignDto[] | null>(null);
   const [creating, setCreating] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const refetch = useCallback(async () => {
     const res = await fetch("/api/campaigns").catch(() => null);
@@ -38,6 +39,29 @@ export function CampaignsClient() {
   useEffect(() => {
     void refetch();
   }, [refetch]);
+
+  async function deleteCampaign(id: string, name: string) {
+    if (
+      !confirm(
+        `Excluir a campanha "${name}"? Essa ação não pode ser desfeita.`
+      )
+    ) {
+      return;
+    }
+    setDeletingId(id);
+    const res = await fetch(`/api/campaigns/${id}`, { method: "DELETE" }).catch(
+      () => null
+    );
+    setDeletingId(null);
+    if (!res?.ok) {
+      const data = (await res?.json().catch(() => null)) as {
+        error?: { message?: string };
+      } | null;
+      alert(data?.error?.message ?? "Não foi possível excluir a campanha");
+      return;
+    }
+    void refetch();
+  }
 
   return (
     <div className="flex h-full flex-col">
@@ -99,40 +123,55 @@ export function CampaignsClient() {
         ) : (
           <ul className="space-y-2">
             {campaigns.map((c) => (
-              <li key={c.id}>
+              <li
+                key={c.id}
+                className="flex items-center gap-2 rounded-lg border bg-card px-4 py-3 transition-colors hover:bg-accent"
+              >
                 <Link
                   href={`/campanhas/${c.id}`}
-                  className="flex items-center gap-4 rounded-lg border bg-card px-4 py-3 transition-colors hover:bg-accent"
+                  className="min-w-0 flex-1"
                 >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="truncate text-sm font-medium">
-                        {c.name}
-                      </span>
+                  <div className="flex items-center gap-2">
+                    <span className="truncate text-sm font-medium">
+                      {c.name}
+                    </span>
+                    <Badge variant="secondary">
+                      {c.channel === "official" ? "Oficial" : "WhatsApp Web"}
+                    </Badge>
+                    <Badge variant={STATUS_BADGE[c.status].variant}>
+                      {STATUS_BADGE[c.status].label}
+                    </Badge>
+                    {c.scheduledAt && c.status === "draft" && (
                       <Badge variant="secondary">
-                        {c.channel === "official" ? "Oficial" : "WhatsApp Web"}
+                        Agendada para{" "}
+                        {new Date(c.scheduledAt).toLocaleString("pt-BR", {
+                          day: "2-digit",
+                          month: "2-digit",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
                       </Badge>
-                      <Badge variant={STATUS_BADGE[c.status].variant}>
-                        {STATUS_BADGE[c.status].label}
-                      </Badge>
-                      {c.scheduledAt && c.status === "draft" && (
-                        <Badge variant="secondary">
-                          Agendada para{" "}
-                          {new Date(c.scheduledAt).toLocaleString("pt-BR", {
-                            day: "2-digit",
-                            month: "2-digit",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </Badge>
-                      )}
-                    </div>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {c.total} destinatário(s) · {c.sent} enviado(s) ·{" "}
-                      {c.failed} falhou(aram)
-                    </p>
+                    )}
                   </div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {c.total} destinatário(s) · {c.sent} enviado(s) ·{" "}
+                    {c.failed} falhou(aram)
+                  </p>
                 </Link>
+                {c.status !== "sending" && (
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      void deleteCampaign(c.id, c.name);
+                    }}
+                    disabled={deletingId === c.id}
+                    aria-label="Excluir campanha"
+                    title="Excluir campanha"
+                    className="shrink-0 rounded-md p-2 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                  >
+                    <Trash2 className="h-4 w-4" strokeWidth={1.7} />
+                  </button>
+                )}
               </li>
             ))}
           </ul>

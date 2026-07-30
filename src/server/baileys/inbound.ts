@@ -1,6 +1,7 @@
 import type { WASocket, WAMessage, proto } from "@whiskeysockets/baileys";
 import { downloadMediaMessage } from "@whiskeysockets/baileys";
 import { ingestInboundMessage } from "@/server/inbox/ingest";
+import { refreshContactAvatar } from "@/server/baileys/avatar";
 import { ensureBrNinthDigit } from "@/lib/utils";
 
 const MEDIA_TYPES = new Set(["image", "audio", "video", "document", "sticker"]);
@@ -156,5 +157,16 @@ export async function handleIncomingMessages(
       mediaUrl: null,
       media,
     });
+
+    if (!msg.key.fromMe) {
+      void refreshContactAvatar(
+        organizationId,
+        sock,
+        remoteJid,
+        jidToPhone(remoteJid)
+      ).catch((err) =>
+        console.error("[baileys] falha ao buscar foto de perfil:", err)
+      );
+    }
   }
 }

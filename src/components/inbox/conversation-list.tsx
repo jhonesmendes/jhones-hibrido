@@ -1,7 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { MessageSquarePlus, Search, Sparkles, UserRound, Zap } from "lucide-react";
+import {
+  Bell,
+  BellOff,
+  MessageSquarePlus,
+  Search,
+  Sparkles,
+  UserRound,
+  Zap,
+} from "lucide-react";
 import type { ConversationDto } from "@/lib/types";
 import { cn, formatPhone, normalizePhoneInput } from "@/lib/utils";
 import { ContactAvatar } from "@/components/avatar";
@@ -64,6 +72,8 @@ export function ConversationList({
   onSelect,
   onSeeded,
   onStartConversation,
+  notificationPermission,
+  onEnableNotifications,
 }: {
   conversations: ConversationDto[] | null;
   selectedId: string | null;
@@ -75,6 +85,8 @@ export function ConversationList({
    * reintentável.
    */
   onStartConversation: (phone: string) => Promise<boolean>;
+  notificationPermission: NotificationPermission | "unsupported";
+  onEnableNotifications: () => void;
 }) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<"all" | "unread">("all");
@@ -138,6 +150,39 @@ export function ConversationList({
           <h2 className="text-[17px] font-[650] tracking-tight">Caixa de entrada</h2>
           <span className="text-sm text-text-3">{conversations.length}</span>
           <HelpLink slug="inbox" />
+          {notificationPermission !== "unsupported" && (
+            <button
+              onClick={notificationPermission === "default" ? onEnableNotifications : undefined}
+              disabled={notificationPermission !== "default"}
+              aria-label={
+                notificationPermission === "granted"
+                  ? "Notificações ativadas"
+                  : notificationPermission === "denied"
+                    ? "Notificações bloqueadas pelo navegador"
+                    : "Ativar notificações de mensagem nova"
+              }
+              title={
+                notificationPermission === "granted"
+                  ? "Notificações ativadas"
+                  : notificationPermission === "denied"
+                    ? "Notificações bloqueadas — habilite nas permissões do navegador"
+                    : "Ativar notificações de mensagem nova"
+              }
+              className={cn(
+                "ml-auto flex h-6 w-6 items-center justify-center rounded-md text-text-3",
+                notificationPermission === "default" &&
+                  "cursor-pointer hover:bg-accent hover:text-foreground",
+                notificationPermission === "granted" && "text-brand-text",
+                notificationPermission === "denied" && "cursor-not-allowed opacity-60"
+              )}
+            >
+              {notificationPermission === "denied" ? (
+                <BellOff className="h-4 w-4" strokeWidth={1.7} />
+              ) : (
+                <Bell className="h-4 w-4" strokeWidth={1.7} />
+              )}
+            </button>
+          )}
         </div>
         <div className="flex items-center gap-2 rounded-md border bg-secondary px-3 py-[7px] transition-colors focus-within:border-brand focus-within:bg-background focus-within:ring-[3px] focus-within:ring-brand-soft">
           <Search className="h-4 w-4 shrink-0 text-text-3" strokeWidth={1.7} />

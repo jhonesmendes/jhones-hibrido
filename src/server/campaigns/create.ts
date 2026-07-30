@@ -65,15 +65,12 @@ export type CreateCampaignInput = CreateOfficialInput | CreateUnofficialInput;
 type Recipient = { phone: string; variables: Record<string, string> };
 
 /** Contatos do CRM (não arquivados) filtrados por etapa do pipeline e/ou canal
- * da conversa, com a opção de UNIR contatos escolhidos manualmente por id
- * (seleção individual na UI), independente do filtro. */
+ * da conversa. "Sem filtro" (nem stageId nem channel) casa com TODOS os
+ * contatos — por isso a seleção manual (`resolveContactsByIds`) nunca passa
+ * por aqui, pra não acabar re-incluindo a base inteira. */
 export async function resolveCrmContacts(
   organizationId: string,
-  filter: {
-    stageId?: string | null;
-    channel?: "official" | "unofficial" | null;
-    extraContactIds?: string[];
-  }
+  filter: { stageId?: string | null; channel?: "official" | "unofficial" | null }
 ): Promise<{ phone: string; name: string }[]> {
   const db = getDb();
   const conditions = [
@@ -98,21 +95,29 @@ export async function resolveCrmContacts(
 
   const byPhone = new Map<string, { phone: string; name: string }>();
   for (const r of rows) byPhone.set(r.phone, r);
+  return [...byPhone.values()];
+}
 
-  if (filter.extraContactIds && filter.extraContactIds.length > 0) {
-    const extraRows = await db
-      .select({ phone: schema.contact.phone, name: schema.contact.name })
-      .from(schema.contact)
-      .where(
-        and(
-          eq(schema.contact.organizationId, organizationId),
-          isNull(schema.contact.archivedAt),
-          inArray(schema.contact.id, filter.extraContactIds)
-        )
-      );
-    for (const r of extraRows) byPhone.set(r.phone, r);
-  }
+/** Contatos escolhidos manualmente na UI, por id — SEM nenhum outro filtro
+ * (é a seleção exclusiva, ver resolveRecipients). */
+async function resolveContactsByIds(
+  organizationId: string,
+  contactIds: string[]
+): Promise<{ phone: string; name: string }[]> {
+  const db = getDb();
+  const rows = await db
+    .select({ phone: schema.contact.phone, name: schema.contact.name })
+    .from(schema.contact)
+    .where(
+      and(
+        eq(schema.contact.organizationId, organizationId),
+        isNull(schema.contact.archivedAt),
+        inArray(schema.contact.id, contactIds)
+      )
+    );
 
+  const byPhone = new Map<string, { phone: string; name: string }>();
+  for (const r of rows) byPhone.set(r.phone, r);
   return [...byPhone.values()];
 }
 
@@ -152,11 +157,17 @@ async function resolveRecipients(
     };
   }
 
-  const contacts = await resolveCrmContacts(organizationId, {
-    stageId: input.stageId,
-    channel: input.originChannel ?? null,
-    extraContactIds: input.contactIds,
-  });
+  // Seleção manual é EXCLUSIVA quando presente: ignora o filtro de
+  // etapa/canal por completo. Sem isso, deixar o filtro no padrão "Todas as
+  // etapas" (que já casa com todo mundo) somava ao selecionado manualmente
+  // e disparava a campanha pra base inteira em vez de só quem foi escolhido.
+  const contacts =
+    input.contactIds && input.contactIds.length > 0
+      ? await resolveContactsByIds(organizationId, input.contactIds)
+      : await resolveCrmContacts(organizationId, {
+          stageId: input.stageId,
+          channel: input.originChannel ?? null,
+        });
   return {
     validRows: contacts.map((c) => {
       const variables: Record<string, string> =

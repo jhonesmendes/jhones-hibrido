@@ -44,6 +44,8 @@ const createSchema = z.object({
     .string()
     .trim()
     .regex(/^\d{7,15}$/, "Telefone em dígitos, com código do país (ex.: 5511912345678)"),
+  reference: z.string().trim().max(200).optional(),
+  comment: z.string().trim().max(2000).optional(),
   notes: z.string().max(4000).optional(),
 });
 
@@ -59,6 +61,8 @@ export const POST = withAuth(async (session, req: Request) => {
       organizationId: session.organizationId,
       name: body.data.name,
       phone: body.data.phone,
+      reference: body.data.reference ?? null,
+      comment: body.data.comment ?? null,
       notes: body.data.notes ?? null,
     })
     .onConflictDoNothing({

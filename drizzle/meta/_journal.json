@@ -85,6 +85,20 @@
       "when": 1785340800004,
       "tag": "0011_media_metadata",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1785351804731,
+      "tag": "0012_contact_extra_fields",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1785359841121,
+      "tag": "0013_contact_avatar",
+      "breakpoints": true
     }
   ]
 }

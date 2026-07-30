@@ -187,12 +187,18 @@ export function NewCampaignWizard({
   const step2Valid =
     recipientTab === "csv"
       ? Boolean(csvText && preview && preview.total > 0)
-      : Boolean((crmCount && crmCount.count > 0) || manualSelected.size > 0);
+      : Boolean(
+          manualSelected.size > 0 || (crmCount && crmCount.count > 0)
+        );
 
+  // Seleção manual é EXCLUSIVA: se houver contatos escolhidos à mão, o
+  // filtro de etapa/canal é ignorado (ver create.ts) — o total reflete isso.
   const totalRecipients =
     recipientTab === "csv"
       ? preview?.total ?? 0
-      : (crmCount?.count ?? 0) + manualSelected.size;
+      : manualSelected.size > 0
+        ? manualSelected.size
+        : crmCount?.count ?? 0;
 
   const estimatedSeconds =
     channel === "unofficial" ? Math.ceil((totalRecipients * sendIntervalMs) / 1000) : 0;
@@ -824,7 +830,13 @@ function Step2({
         </div>
       ) : (
         <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-2">
+          <fieldset
+            disabled={manualSelected.size > 0}
+            className={cn(
+              "grid grid-cols-2 gap-2",
+              manualSelected.size > 0 && "opacity-50"
+            )}
+          >
             <div className="space-y-1.5">
               <Label htmlFor="crm-stage">Etapa do pipeline</Label>
               <select
@@ -856,17 +868,20 @@ function Step2({
                 <option value="unofficial">WhatsApp Web</option>
               </select>
             </div>
-          </div>
+          </fieldset>
 
           <div className="rounded-md border bg-secondary/30 p-4 text-center">
             <p className="text-2xl font-semibold">
-              {crmLoading ? "…" : (crmCount?.count ?? 0)}
+              {manualSelected.size > 0
+                ? manualSelected.size
+                : crmLoading
+                  ? "…"
+                  : (crmCount?.count ?? 0)}
             </p>
             <p className="text-xs text-muted-foreground">
-              contato(s) pelo filtro
               {manualSelected.size > 0
-                ? ` · +${manualSelected.size} selecionado(s) manualmente`
-                : ""}
+                ? "contato(s) selecionado(s) manualmente — filtro acima ignorado"
+                : "contato(s) pelo filtro"}
             </p>
           </div>
 
@@ -874,6 +889,11 @@ function Step2({
             <Label htmlFor="manual-contact-search">
               Selecionar contatos manualmente (opcional)
             </Label>
+            <p className="text-xs text-muted-foreground">
+              Ao escolher pelo menos um contato aqui, a campanha envia SÓ pra
+              quem foi selecionado nesta lista — o filtro de etapa/canal
+              acima é ignorado.
+            </p>
             <div className="relative">
               <Users className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
               <input

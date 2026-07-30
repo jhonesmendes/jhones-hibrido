@@ -7,6 +7,13 @@ import { cn } from "@/lib/utils";
 import { ContactAvatar } from "@/components/avatar";
 import type { ConversationDto, MessageDto } from "@/lib/types";
 import { useEvents } from "@/components/use-events";
+import {
+  getNotificationPermission,
+  playNotificationSound,
+  requestNotificationPermission,
+  showMessageNotification,
+} from "@/lib/notifications";
+import { mediaLabel } from "./helpers";
 import { ConversationList } from "./conversation-list";
 import { MessageThread } from "./message-thread";
 import { Composer } from "./composer";
@@ -22,9 +29,17 @@ export function InboxClient() {
   // É incrementado a cada evento SSE que pode mudar a etapa/lead ou o
   // estado do agente: o painel de detalhes observa isso e refaz o fetch ao vivo.
   const [detailRev, setDetailRev] = useState(0);
+  const [notifPermission, setNotifPermission] = useState<
+    NotificationPermission | "unsupported"
+  >("default");
 
   useEffect(() => {
     setPanelOpen(localStorage.getItem("vocero.panelOpen") !== "false");
+    setNotifPermission(getNotificationPermission());
+  }, []);
+
+  const enableNotifications = useCallback(() => {
+    void requestNotificationPermission().then(setNotifPermission);
   }, []);
   const togglePanel = useCallback((open: boolean) => {
     setPanelOpen(open);
@@ -80,8 +95,13 @@ export function InboxClient() {
 
   useEvents({
     onMessageNew: ({ conversationId, message }) => {
+      const m = message as MessageDto;
+      const isFocusedOnThisConversation =
+        selectedIdRef.current === conversationId &&
+        typeof document !== "undefined" &&
+        !document.hidden;
+
       if (selectedIdRef.current === conversationId) {
-        const m = message as MessageDto;
         setMessages((prev) =>
           prev.some((x) => x.id === m.id) ? prev : [...prev, m]
         );
@@ -91,6 +111,25 @@ export function InboxClient() {
           body: JSON.stringify({ markRead: true }),
         });
       }
+
+      // Alerta (som + notificação do navegador) igual ao WhatsApp Web: só
+      // pra mensagem recebida (não pro nosso próprio eco) e só quando não
+      // se está olhando exatamente essa conversa em foco.
+      if (m.direction === "in" && !isFocusedOnThisConversation) {
+        playNotificationSound();
+        const contact = conversations?.find((c) => c.id === conversationId)
+          ?.contact;
+        const body =
+          m.type === "text" || m.type === "template"
+            ? (m.text ?? "")
+            : mediaLabel(m.type);
+        showMessageNotification(
+          contact?.name ?? "Nova mensagem",
+          body,
+          contact ? `/api/contacts/${contact.id}/avatar` : undefined
+        );
+      }
+
       void refetchConversations();
       // Uma mensagem recebida nova pode criar/mover o lead: atualiza o painel.
       setDetailRev((v) => v + 1);
@@ -159,6 +198,50 @@ export function InboxClient() {
     [refetchMessages, refetchConversations]
   );
 
+  const sendMedia = useCallback(
+    async (
+      file: File,
+      channel?: "official" | "unofficial"
+    ): Promise<string | null> => {
+      if (!selectedIdRef.current) return "Nenhuma conversa selecionada";
+      const dataBase64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = reader.result as string;
+          resolve(result.slice(result.indexOf(",") + 1));
+        };
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+      }).catch(() => null);
+      if (dataBase64 === null) return "Não foi possível ler o arquivo";
+
+      const res = await fetch(
+        `/api/conversations/${selectedIdRef.current}/media`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            dataBase64,
+            mimeType: file.type || "application/octet-stream",
+            filename: file.name,
+            channel,
+          }),
+        }
+      ).catch(() => null);
+      if (!res) return "Sem conexão com o servidor";
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as {
+          error?: { message?: string };
+        } | null;
+        return data?.error?.message ?? "Não foi possível enviar o arquivo";
+      }
+      if (selectedIdRef.current) void refetchMessages(selectedIdRef.current);
+      void refetchConversations();
+      return null;
+    },
+    [refetchMessages, refetchConversations]
+  );
+
   const startConversation = useCallback(
     async (phone: string): Promise<boolean> => {
       const res = await fetch("/api/conversations", {
@@ -201,6 +284,8 @@ export function InboxClient() {
           onSelect={select}
           onSeeded={() => void refetchConversations()}
           onStartConversation={startConversation}
+          notificationPermission={notifPermission}
+          onEnableNotifications={enableNotifications}
         />
       </section>
 
@@ -245,6 +330,7 @@ export function InboxClient() {
             <Composer
               conversation={selected}
               onSend={sendText}
+              onSendMedia={sendMedia}
               onSent={() => {
                 if (selectedIdRef.current)
                   void refetchMessages(selectedIdRef.current);

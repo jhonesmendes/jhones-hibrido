@@ -2,12 +2,13 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Check, ChevronRight, Sparkles, UserRound } from "lucide-react";
-import type { ConversationDto, StageDto } from "@/lib/types";
+import { Check, ChevronRight, Sparkles, UserPlus, UserRound } from "lucide-react";
+import type { ContactDto, ConversationDto, StageDto } from "@/lib/types";
 import { cn, formatPhone } from "@/lib/utils";
 import { ContactAvatar } from "@/components/avatar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { ContactFormDialog } from "@/components/contacts/contact-form-dialog";
 
 const HANDOFF_LABELS: Record<string, string> = {
   cliente: "O cliente pediu um humano",
@@ -35,6 +36,8 @@ export function ContactPanel({
   const [notes, setNotes] = useState("");
   const [notesLoaded, setNotesLoaded] = useState(false);
   const [savingNotes, setSavingNotes] = useState(false);
+  const [contactDetail, setContactDetail] = useState<ContactDto | null>(null);
+  const [editingContact, setEditingContact] = useState(false);
   const [stages, setStages] = useState<StageDto[]>([]);
   const [currentStageId, setCurrentStageId] = useState<string | null>(null);
   const [leadId, setLeadId] = useState<string | null>(null);
@@ -58,6 +61,7 @@ export function ContactPanel({
     ]).catch(() => [null, null, null]);
     if (detail) {
       setNotes(detail.contact?.notes ?? "");
+      setContactDetail(detail.contact ?? null);
       setCurrentStageId(detail.stage?.id ?? null);
       setLeadId(detail.lead?.id ?? null);
     }
@@ -141,7 +145,7 @@ export function ContactPanel({
               seed={conversation.contact.id}
               size="md"
             />
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-[650]">
                 {conversation.contact.name}
               </p>
@@ -149,6 +153,14 @@ export function ContactPanel({
                 {formatPhone(conversation.contact.phone)}
               </p>
             </div>
+            <button
+              onClick={() => setEditingContact(true)}
+              aria-label="Cadastrar/editar contato"
+              title="Cadastrar/editar contato"
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-text-3 hover:bg-accent hover:text-brand-text"
+            >
+              <UserPlus className="h-4 w-4" strokeWidth={1.7} />
+            </button>
           </div>
 
           {conversation.handoffAt && (
@@ -340,6 +352,29 @@ export function ContactPanel({
           </Button>
         </section>
       </div>
+
+      {editingContact && (
+        <ContactFormDialog
+          mode="edit"
+          initial={contactDetail ?? { name: conversation.contact.name, phone: conversation.contact.phone }}
+          onClose={() => setEditingContact(false)}
+          onSubmit={async (values) => {
+            await fetch(`/api/contacts/${contactId}`, {
+              method: "PATCH",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                name: values.name,
+                reference: values.reference || null,
+                comment: values.comment || null,
+                notes: values.notes || null,
+              }),
+            }).catch(() => null);
+            setNotes(values.notes);
+            void refetch();
+            return null;
+          }}
+        />
+      )}
     </div>
   );
 }

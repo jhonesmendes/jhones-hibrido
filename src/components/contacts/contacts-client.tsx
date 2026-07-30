@@ -8,6 +8,7 @@ import {
   Download,
   MessageSquareText,
   Search,
+  UserPlus,
   Upload,
 } from "lucide-react";
 import type { ContactDto } from "@/lib/types";
@@ -16,8 +17,11 @@ import { ContactAvatar } from "@/components/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { HelpLink } from "@/components/docs/help-link";
+import {
+  ContactFormDialog,
+  type ContactFormValues,
+} from "@/components/contacts/contact-form-dialog";
 
 export function ContactsClient() {
   const router = useRouter();
@@ -25,6 +29,7 @@ export function ContactsClient() {
   const [query, setQuery] = useState("");
   const [showArchived, setShowArchived] = useState(false);
   const [editing, setEditing] = useState<ContactDto | null>(null);
+  const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -66,6 +71,28 @@ export function ContactsClient() {
       body: JSON.stringify(body),
     }).catch(() => null);
     void refetch();
+  }
+
+  async function createContact(values: ContactFormValues): Promise<string | null> {
+    const res = await fetch("/api/contacts", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        name: values.name,
+        phone: values.phone,
+        reference: values.reference || undefined,
+        comment: values.comment || undefined,
+        notes: values.notes || undefined,
+      }),
+    }).catch(() => null);
+    if (!res?.ok) {
+      const data = (await res?.json().catch(() => null)) as {
+        error?: { message?: string };
+      } | null;
+      return data?.error?.message ?? "Não foi possível criar o contato";
+    }
+    void refetch();
+    return null;
   }
 
   async function importCsv(file: File) {
@@ -150,6 +177,10 @@ export function ContactsClient() {
             <Upload className="h-4 w-4" />
             {importing ? "Importando…" : "Importar CSV"}
           </Button>
+          <Button size="sm" onClick={() => setCreating(true)}>
+            <UserPlus className="h-4 w-4" />
+            Novo contato
+          </Button>
         </div>
       </header>
 
@@ -231,77 +262,30 @@ export function ContactsClient() {
         )}
       </div>
 
+      {creating && (
+        <ContactFormDialog
+          mode="create"
+          onClose={() => setCreating(false)}
+          onSubmit={createContact}
+        />
+      )}
+
       {editing && (
-        <EditDialog
-          contact={editing}
+        <ContactFormDialog
+          mode="edit"
+          initial={editing}
           onClose={() => setEditing(null)}
-          onSave={async (patchBody) => {
-            await patch(editing.id, patchBody);
-            setEditing(null);
+          onSubmit={async (values) => {
+            await patch(editing.id, {
+              name: values.name,
+              reference: values.reference || null,
+              comment: values.comment || null,
+              notes: values.notes || null,
+            });
+            return null;
           }}
         />
       )}
-    </div>
-  );
-}
-
-function EditDialog({
-  contact,
-  onClose,
-  onSave,
-}: {
-  contact: ContactDto;
-  onClose: () => void;
-  onSave: (patch: { name: string; notes: string }) => Promise<void>;
-}) {
-  const [name, setName] = useState(contact.name);
-  const [notes, setNotes] = useState(contact.notes ?? "");
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-md rounded-lg border bg-card p-5 shadow-xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h3 className="mb-4 font-semibold">Editar contato</h3>
-        <div className="space-y-3">
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium" htmlFor="edit-name">
-              Nome
-            </label>
-            <Input
-              id="edit-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium" htmlFor="edit-notes">
-              Notas
-            </label>
-            <Textarea
-              id="edit-notes"
-              rows={4}
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-            />
-          </div>
-        </div>
-        <div className="mt-4 flex justify-end gap-2">
-          <Button variant="ghost" onClick={onClose}>
-            Cancelar
-          </Button>
-          <Button
-            disabled={!name.trim()}
-            onClick={() => void onSave({ name: name.trim(), notes })}
-          >
-            Salvar
-          </Button>
-        </div>
-      </div>
     </div>
   );
 }

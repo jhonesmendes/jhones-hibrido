@@ -53,6 +53,8 @@ export type ContactDto = {
   id: string;
   name: string;
   phone: string;
+  reference: string | null;
+  comment: string | null;
   notes: string | null;
   archivedAt: string | null;
 };

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { BadgeCheck, Clock3, Send, Wifi } from "lucide-react";
+import { BadgeCheck, Clock3, Mic, Paperclip, Send, Square, Wifi } from "lucide-react";
 import type { ConversationDto, TemplateDto } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { formatRemaining } from "./helpers";
@@ -14,18 +14,27 @@ const CHANNEL_LABEL: Record<ChannelType, string> = {
   unofficial: "WhatsApp Web",
 };
 
+/** Mesmo teto do backend (`src/app/api/conversations/[id]/media/route.ts`). */
+const MAX_MEDIA_FILE_BYTES = 16 * 1024 * 1024;
+
 export function Composer({
   conversation,
   onSend,
+  onSendMedia,
   onSent,
 }: {
   conversation: ConversationDto;
   onSend: (text: string, channel?: ChannelType) => Promise<string | null>;
+  onSendMedia: (file: File, channel?: ChannelType) => Promise<string | null>;
   onSent: () => void;
 }) {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [recording, setRecording] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordedChunksRef = useRef<Blob[]>([]);
   const [templates, setTemplates] = useState<TemplateDto[]>([]);
   const [pickerIndex, setPickerIndex] = useState(0);
   const [pickerDismissed, setPickerDismissed] = useState(false);
@@ -125,6 +134,58 @@ export function Composer({
     }
     setText("");
     if (taRef.current) taRef.current.style.height = "auto";
+  }
+
+  async function submitFile(file: File) {
+    if (sending) return;
+    if (file.size > MAX_MEDIA_FILE_BYTES) {
+      setError("Arquivo maior que o permitido (16MB)");
+      return;
+    }
+    setSending(true);
+    setError(null);
+    const err = await onSendMedia(file, channelOverride ?? undefined);
+    setSending(false);
+    if (err) setError(err);
+  }
+
+  function onFilePicked(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (file) void submitFile(file);
+  }
+
+  async function startRecording() {
+    setError(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      recordedChunksRef.current = [];
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) recordedChunksRef.current.push(e.data);
+      };
+      recorder.onstop = () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const blob = new Blob(recordedChunksRef.current, {
+          type: recorder.mimeType || "audio/webm",
+        });
+        const file = new File([blob], `audio-${Date.now()}.webm`, {
+          type: blob.type,
+        });
+        void submitFile(file);
+      };
+      mediaRecorderRef.current = recorder;
+      recorder.start();
+      setRecording(true);
+    } catch {
+      setError("Não foi possível acessar o microfone");
+    }
+  }
+
+  function stopRecording() {
+    mediaRecorderRef.current?.stop();
+    mediaRecorderRef.current = null;
+    setRecording(false);
   }
 
   // O canal não oficial não tem janela de 24h; um override pontual para ele
@@ -230,6 +291,25 @@ export function Composer({
           </div>
         )}
         <div className="flex items-end gap-2 rounded-md border bg-background px-3 py-2 transition-shadow focus-within:border-brand focus-within:ring-[3px] focus-within:ring-brand-soft">
+          <input
+            ref={fileInputRef}
+            type="file"
+            onChange={onFilePicked}
+            className="hidden"
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={sending || recording}
+            aria-label="Anexar arquivo"
+            title="Anexar arquivo"
+            className={cn(
+              "flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[9px] text-text-3 hover:bg-accent hover:text-foreground",
+              (sending || recording) && "opacity-40"
+            )}
+          >
+            <Paperclip className="h-4 w-4" strokeWidth={1.7} />
+          </button>
           <textarea
             ref={taRef}
             placeholder="Escreva uma resposta… (dica: use / para inserir um modelo)"
@@ -272,17 +352,39 @@ export function Composer({
             }}
             className="max-h-[120px] w-full resize-none bg-transparent text-sm leading-relaxed outline-none placeholder:text-text-3"
           />
-          <button
-            onClick={() => void submit()}
-            disabled={sending || text.trim().length === 0}
-            aria-label="Enviar"
-            className={cn(
-              "flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[9px] bg-brand text-white transition-opacity hover:bg-brand-hover",
-              (sending || !text.trim()) && "opacity-40"
-            )}
-          >
-            <Send className="h-4 w-4" strokeWidth={1.7} />
-          </button>
+          {text.trim().length === 0 ? (
+            <button
+              onClick={() => void (recording ? stopRecording() : startRecording())}
+              disabled={sending}
+              aria-label={recording ? "Parar gravação" : "Gravar áudio"}
+              title={recording ? "Parar gravação" : "Gravar áudio"}
+              className={cn(
+                "flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[9px] transition-opacity",
+                recording
+                  ? "animate-pulse bg-destructive text-white"
+                  : "text-text-3 hover:bg-accent hover:text-foreground",
+                sending && "opacity-40"
+              )}
+            >
+              {recording ? (
+                <Square className="h-4 w-4" strokeWidth={1.7} />
+              ) : (
+                <Mic className="h-4 w-4" strokeWidth={1.7} />
+              )}
+            </button>
+          ) : (
+            <button
+              onClick={() => void submit()}
+              disabled={sending || text.trim().length === 0}
+              aria-label="Enviar"
+              className={cn(
+                "flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[9px] bg-brand text-white transition-opacity hover:bg-brand-hover",
+                (sending || !text.trim()) && "opacity-40"
+              )}
+            >
+              <Send className="h-4 w-4" strokeWidth={1.7} />
+            </button>
+          )}
         </div>
       </div>
       <div className="mt-1.5 flex items-center justify-between">

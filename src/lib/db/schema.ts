@@ -117,7 +117,15 @@ export const contact = pgTable(
       .references(() => organization.id, { onDelete: "cascade" }),
     phone: text("phone").notNull(),
     name: text("name").notNull(),
+    reference: text("reference"),
+    comment: text("comment"),
     notes: text("notes"),
+    // Foto de perfil — só o canal WhatsApp Web consegue buscar (Baileys);
+    // a Cloud API oficial da Meta não expõe foto de contato. Cache local
+    // (sem S3/R2) porque a URL do CDN do WhatsApp é temporária.
+    avatarBase64: text("avatar_base64"),
+    avatarMimeType: text("avatar_mime_type"),
+    avatarUpdatedAt: timestamp("avatar_updated_at"),
     archivedAt: timestamp("archived_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),

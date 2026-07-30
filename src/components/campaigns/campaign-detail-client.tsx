@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Ban, Send } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ArrowLeft, Ban, Send, Trash2 } from "lucide-react";
 import type { CampaignDto, CampaignRecipientDto } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -28,6 +29,7 @@ const RECIPIENT_BADGE: Record<
 };
 
 export function CampaignDetailClient({ id }: { id: string }) {
+  const router = useRouter();
   const [campaign, setCampaign] = useState<CampaignDto | null>(null);
   const [recipients, setRecipients] = useState<CampaignRecipientDto[]>([]);
   const [notFound, setNotFound] = useState(false);
@@ -95,6 +97,30 @@ export function CampaignDetailClient({ id }: { id: string }) {
     void refetch();
   }
 
+  async function remove() {
+    if (
+      !confirm(
+        `Excluir a campanha "${campaign?.name}"? Essa ação não pode ser desfeita.`
+      )
+    ) {
+      return;
+    }
+    setActing(true);
+    setActionError(null);
+    const res = await fetch(`/api/campaigns/${id}`, {
+      method: "DELETE",
+    }).catch(() => null);
+    setActing(false);
+    if (!res?.ok) {
+      const data = (await res?.json().catch(() => null)) as {
+        error?: { message?: string };
+      } | null;
+      setActionError(data?.error?.message ?? "Não foi possível excluir");
+      return;
+    }
+    router.push("/campanhas");
+  }
+
   if (notFound) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-text-3">
@@ -160,6 +186,16 @@ export function CampaignDetailClient({ id }: { id: string }) {
             >
               <Ban className="h-4 w-4" strokeWidth={1.7} />
               {acting ? "Cancelando…" : "Cancelar"}
+            </Button>
+          )}
+          {campaign.status !== "sending" && (
+            <Button
+              variant="ghost"
+              disabled={acting}
+              onClick={() => void remove()}
+            >
+              <Trash2 className="h-4 w-4" strokeWidth={1.7} />
+              Excluir
             </Button>
           )}
         </div>

@@ -49,45 +49,47 @@ export function AuditClient() {
   }, [refetch]);
 
   return (
-    <div className="max-w-3xl space-y-4">
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle>Auditoria</CardTitle>
-            <HelpLink slug="auditoria" />
-          </div>
-          <CardDescription>Ações críticas da organização.</CardDescription>
-        </CardHeader>
-        <CardContent className="flex gap-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="audit-member">ID do membro</Label>
-            <Input
-              id="audit-member"
-              value={memberFilter}
-              onChange={(e) => setMemberFilter(e.target.value)}
-              placeholder="opcional"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="audit-action">Ação</Label>
-            <select
-              id="audit-action"
-              value={actionFilter}
-              onChange={(e) => setActionFilter(e.target.value)}
-              className="h-9 w-56 rounded-md border bg-background px-3 text-sm"
-            >
-              <option value="">Todas</option>
-              {Object.entries(ACTION_LABEL).map(([key, label]) => (
-                <option key={key} value={key}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </div>
-        </CardContent>
-      </Card>
+    <div className="flex h-full flex-col overflow-hidden p-6">
+      <div className="max-w-3xl space-y-4">
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle>Auditoria</CardTitle>
+              <HelpLink slug="auditoria" />
+            </div>
+            <CardDescription>Ações críticas da organização.</CardDescription>
+          </CardHeader>
+          <CardContent className="flex gap-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="audit-member">ID do membro</Label>
+              <Input
+                id="audit-member"
+                value={memberFilter}
+                onChange={(e) => setMemberFilter(e.target.value)}
+                placeholder="opcional"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="audit-action">Ação</Label>
+              <select
+                id="audit-action"
+                value={actionFilter}
+                onChange={(e) => setActionFilter(e.target.value)}
+                className="h-9 w-56 rounded-md border bg-background px-3 text-sm"
+              >
+                <option value="">Todas</option>
+                {Object.entries(ACTION_LABEL).map(([key, label]) => (
+                  <option key={key} value={key}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
-      <div className="space-y-2">
+      <div className="mt-4 max-w-3xl flex-1 space-y-2 overflow-y-auto pb-6">
         {entries.length === 0 && (
           <p className="text-sm text-muted-foreground">Nenhum registro.</p>
         )}
