@@ -155,8 +155,8 @@ export function AiClient() {
   }
 
   return (
-    <div className="max-w-2xl space-y-6 p-6">
-      <div className="flex items-center justify-between">
+    <div className="max-w-2xl space-y-6 p-4 md:p-6">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <div className="flex items-center gap-1.5">
             <h2 className="font-semibold">Inteligência IA</h2>
@@ -182,7 +182,7 @@ export function AiClient() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
             {PRESETS.map((p) => (
               <button
                 key={p.key}
@@ -268,7 +268,7 @@ export function AiClient() {
           <CardTitle className="text-sm">Modelo</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="ai-model">Modelo principal</Label>
               <Input
@@ -292,7 +292,7 @@ export function AiClient() {
               />
             </div>
           </div>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div className="space-y-1.5">
               <Label htmlFor="ai-temperature">Temperatura</Label>
               <Input

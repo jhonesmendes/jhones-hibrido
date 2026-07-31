@@ -59,7 +59,7 @@ export function AuditClient() {
             </div>
             <CardDescription>Ações críticas da organização.</CardDescription>
           </CardHeader>
-          <CardContent className="flex gap-4">
+          <CardContent className="flex flex-wrap gap-4">
             <div className="space-y-1.5">
               <Label htmlFor="audit-member">ID do membro</Label>
               <Input

@@ -833,7 +833,7 @@ function Step2({
           <fieldset
             disabled={manualSelected.size > 0}
             className={cn(
-              "grid grid-cols-2 gap-2",
+              "grid grid-cols-1 gap-2 sm:grid-cols-2",
               manualSelected.size > 0 && "opacity-50"
             )}
           >
@@ -1103,7 +1103,7 @@ function Step3({
           </button>
         </div>
         {when === "schedule" && (
-          <div className="grid grid-cols-2 gap-2 px-4 pb-4">
+          <div className="grid grid-cols-1 gap-2 px-4 pb-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="sched-date">Data</Label>
               <Input

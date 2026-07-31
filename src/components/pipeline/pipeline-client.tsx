@@ -83,12 +83,12 @@ export function PipelineClient() {
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex items-center justify-between border-b px-6 py-4">
+      <header className="flex flex-col gap-3 border-b px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-4">
         <div className="flex items-center gap-1.5">
           <h2 className="font-semibold">Pipeline</h2>
           <HelpLink slug="pipeline" />
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button
             variant="outline"
             size="sm"

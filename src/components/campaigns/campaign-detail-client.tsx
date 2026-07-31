@@ -140,7 +140,7 @@ export function CampaignDetailClient({ id }: { id: string }) {
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex items-center justify-between gap-4 border-b px-6 py-4">
+      <header className="flex flex-col gap-3 border-b px-4 py-3 md:flex-row md:items-center md:justify-between md:gap-4 md:px-6 md:py-4">
         <div className="flex items-center gap-3">
           <Link
             href="/campanhas"
@@ -149,7 +149,7 @@ export function CampaignDetailClient({ id }: { id: string }) {
             <ArrowLeft className="h-4 w-4" strokeWidth={1.7} />
           </Link>
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <h2 className="font-semibold">{campaign.name}</h2>
               <Badge variant="secondary">
                 {campaign.channel === "official" ? "Oficial" : "WhatsApp Web"}
@@ -207,41 +207,43 @@ export function CampaignDetailClient({ id }: { id: string }) {
         </p>
       )}
 
-      <div className="flex gap-4 border-b px-6 py-4">
+      <div className="flex flex-wrap gap-4 border-b px-4 py-3 md:px-6 md:py-4">
         <Stat label="Total" value={campaign.total} />
         <Stat label="Enviados" value={campaign.sent} />
         <Stat label="Falharam" value={campaign.failed} />
         <Stat label="Pendentes" value={Math.max(pending, 0)} />
       </div>
 
-      <div className="flex-1 overflow-y-auto p-6">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b text-left text-xs text-text-3">
-              <th className="pb-2 font-medium">Telefone</th>
-              <th className="pb-2 font-medium">Status</th>
-              <th className="pb-2 font-medium">Detalhe</th>
-            </tr>
-          </thead>
-          <tbody>
-            {recipients.map((r) => (
-              <tr key={r.id} className="border-b border-border/70">
-                <td className="py-2 font-mono text-xs">+{r.phone}</td>
-                <td className="py-2">
-                  <Badge variant={RECIPIENT_BADGE[r.status].variant}>
-                    {RECIPIENT_BADGE[r.status].label}
-                  </Badge>
-                </td>
-                <td className="py-2 text-xs text-text-3">
-                  {r.error ??
-                    Object.entries(r.variables)
-                      .map(([k, v]) => `${k}=${v}`)
-                      .join(", ")}
-                </td>
+      <div className="flex-1 overflow-y-auto p-4 md:p-6">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[480px] text-sm">
+            <thead>
+              <tr className="border-b text-left text-xs text-text-3">
+                <th className="pb-2 font-medium">Telefone</th>
+                <th className="pb-2 font-medium">Status</th>
+                <th className="pb-2 font-medium">Detalhe</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {recipients.map((r) => (
+                <tr key={r.id} className="border-b border-border/70">
+                  <td className="py-2 font-mono text-xs">+{r.phone}</td>
+                  <td className="py-2">
+                    <Badge variant={RECIPIENT_BADGE[r.status].variant}>
+                      {RECIPIENT_BADGE[r.status].label}
+                    </Badge>
+                  </td>
+                  <td className="py-2 text-xs text-text-3">
+                    {r.error ??
+                      Object.entries(r.variables)
+                        .map(([k, v]) => `${k}=${v}`)
+                        .join(", ")}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

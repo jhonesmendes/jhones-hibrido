@@ -11,17 +11,23 @@ import {
   ListChecks,
   LogOut,
   Megaphone,
+  Menu,
   Settings,
   Sparkles,
   Users,
   Workflow,
+  X,
 } from "lucide-react";
 import type { Branding } from "@/lib/branding";
 import { cn, initials } from "@/lib/utils";
 import { signOut } from "@/lib/auth/client";
 import { useEvents } from "@/components/use-events";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { ensurePushSubscription, getNotificationPermission } from "@/lib/notifications";
+import {
+  ensurePushSubscription,
+  ensureServiceWorker,
+  getNotificationPermission,
+} from "@/lib/notifications";
 
 const NAV = [
   { href: "/inbox", label: "Caixa de entrada", icon: Inbox, badge: true },
@@ -45,6 +51,12 @@ export function AppNav({
   const pathname = usePathname();
   const router = useRouter();
   const [unread, setUnread] = useState(0);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  // Fecha o drawer ao trocar de rota (navegação por um link do menu).
+  useEffect(() => {
+    setDrawerOpen(false);
+  }, [pathname]);
 
   async function refetchUnread() {
     const res = await fetch("/api/conversations").catch(() => null);
@@ -57,9 +69,11 @@ export function AppNav({
 
   useEffect(() => {
     void refetchUnread();
-    // Reforça a inscrição de push em qualquer tela (não só na Caixa de
-    // entrada) sempre que a permissão já foi concedida antes — cobre o
-    // caso de o navegador ter perdido a inscrição (ex.: SW atualizado).
+    // Registra o SW sempre (habilita "Instalar app" no Chrome mesmo sem
+    // notificações ativadas). Reforça a inscrição de push em qualquer tela
+    // (não só na Caixa de entrada) sempre que a permissão já foi concedida
+    // antes — cobre o caso de o navegador ter perdido a inscrição.
+    void ensureServiceWorker();
     if (getNotificationPermission() === "granted") void ensurePushSubscription();
   }, []);
 
@@ -69,8 +83,63 @@ export function AppNav({
   });
 
   return (
-    <aside className="flex w-56 shrink-0 flex-col border-r bg-subtle px-3 pb-3.5 pt-4">
-      {/* Brand white-label — o ícone do cliente substitui a inicial; o
+    <>
+      {/* Barra superior mobile: hambúrguer + marca. Some em md+ (a sidebar
+          completa assume). */}
+      <header className="flex items-center gap-2.5 border-b bg-subtle px-3 py-2.5 md:hidden">
+        <button
+          onClick={() => setDrawerOpen(true)}
+          aria-label="Abrir menu"
+          className="rounded-sm p-1.5 text-text-2 hover:bg-accent"
+        >
+          <Menu className="h-5 w-5" strokeWidth={1.8} />
+        </button>
+        <span
+          className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-brand text-[13px] font-bold text-white"
+          aria-hidden
+        >
+          {branding.logo ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={branding.logo} alt="" className="h-full w-full object-cover" />
+          ) : (
+            branding.name.charAt(0).toUpperCase()
+          )}
+        </span>
+        <span className="truncate text-[15px] font-[650] leading-tight tracking-tight">
+          {branding.name}
+        </span>
+        {unread > 0 && (
+          <span className="ml-auto flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-brand px-1.5 text-[10.5px] font-semibold text-white">
+            {unread}
+          </span>
+        )}
+      </header>
+
+      {/* Fundo do drawer mobile */}
+      {drawerOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/40 md:hidden"
+          onClick={() => setDrawerOpen(false)}
+          aria-hidden
+        />
+      )}
+
+      <aside
+        className={cn(
+          "fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r bg-subtle px-3 pb-3.5 pt-4 transition-transform duration-200",
+          drawerOpen ? "translate-x-0" : "-translate-x-full",
+          "md:static md:z-auto md:w-56 md:shrink-0 md:translate-x-0"
+        )}
+      >
+        <button
+          onClick={() => setDrawerOpen(false)}
+          aria-label="Fechar menu"
+          className="mb-2 self-end rounded-sm p-1.5 text-text-3 hover:bg-accent md:hidden"
+        >
+          <X className="h-5 w-5" strokeWidth={1.8} />
+        </button>
+
+        {/* Brand white-label — o ícone do cliente substitui a inicial; o
           crédito "Vocero CRM" embaixo fica sempre visível. */}
       <div className="mb-4 flex items-center gap-2.5 px-2">
         <span
@@ -215,6 +284,7 @@ export function AppNav({
           <LogOut className="h-4 w-4" strokeWidth={1.7} />
         </button>
       </div>
-    </aside>
+      </aside>
+    </>
   );
 }

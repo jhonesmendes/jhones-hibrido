@@ -16,13 +16,13 @@ export default async function AppLayout({
   });
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
+    <div className="flex h-screen flex-col overflow-hidden bg-background md:flex-row">
       <AppNav
         branding={branding}
         userName={authSession?.user.name ?? "Usuario"}
         role={session.role}
       />
-      <main className="min-w-0 flex-1 overflow-hidden">{children}</main>
+      <main className="min-h-0 min-w-0 flex-1 overflow-hidden">{children}</main>
     </div>
   );
 }

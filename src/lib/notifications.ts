@@ -11,6 +11,15 @@
  * ao vivo via SSE).
  */
 
+/**
+ * Registra o Service Worker (idempotente) independente de push — é também
+ * o que habilita o botão "Instalar app" do Chrome (exige SW + manifest).
+ */
+export async function ensureServiceWorker(): Promise<void> {
+  if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
+  await navigator.serviceWorker.register("/sw.js").catch(() => null);
+}
+
 export function getNotificationPermission(): NotificationPermission | "unsupported" {
   if (typeof window === "undefined" || !("Notification" in window)) {
     return "unsupported";

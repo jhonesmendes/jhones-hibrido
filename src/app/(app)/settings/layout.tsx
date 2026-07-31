@@ -8,9 +8,9 @@ export default function SettingsLayout({
       <header className="border-b px-6 py-4">
         <h2 className="font-semibold">Configurações</h2>
       </header>
-      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 flex-1 flex-col md:flex-row">
         <SettingsNav />
-        <div className="min-w-0 flex-1 overflow-y-auto p-6">{children}</div>
+        <div className="min-w-0 flex-1 overflow-y-auto p-4 md:p-6">{children}</div>
       </div>
     </div>
   );

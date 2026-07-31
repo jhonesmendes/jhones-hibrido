@@ -107,6 +107,83 @@
   }
 }
 
+/*
+  Papel de parede da área de mensagens: 4 texturas sutis escolhíveis pelo
+  usuário (WallpaperPicker), persistidas em localStorage e aplicadas via
+  atributo `data-wallpaper` na <html>. Os "doodles" (ícones/emojis/objetos)
+  são um único SVG cor neutra (#9aa0a6) com opacidade baixa embutida — a
+  mesma imagem funciona em claro e escuro, como o wallpaper real do
+  WhatsApp. Padrão ("icons") é o valor de :root — nenhum atributo necessário.
+*/
+:root {
+  --pattern-icons: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cg fill='none' stroke='%239aa0a6' stroke-width='4' stroke-linecap='round' stroke-linejoin='round' opacity='0.14'%3E%3Cpath d='M14 20h34a6 6 0 0 1 6 6v18a6 6 0 0 1-6 6H30l-8 8v-8h-8a6 6 0 0 1-6-6V26a6 6 0 0 1 6-6z'/%3E%3Crect x='96' y='18' width='42' height='30' rx='4'/%3E%3Ccircle cx='117' cy='33' r='9'/%3E%3Crect x='108' y='12' width='16' height='7' rx='2'/%3E%3Cpath d='M20 96c0-8 6-14 14-14s14 6 14 14v20c0 5-4 9-9 9s-9-4-9-9v-16c0-2 2-4 4-4s4 2 4 4v14'/%3E%3Crect x='104' y='92' width='26' height='44' rx='5'/%3E%3Cline x1='112' y1='128' x2='122' y2='128'/%3E%3Crect x='54' y='60' width='40' height='28' rx='3'/%3E%3Cpath d='M54 62l20 16 20-16'/%3E%3Cpath d='M138 70l6 6 12-14'/%3E%3C/g%3E%3C/svg%3E");
+  --pattern-emojis: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cg fill='none' stroke='%239aa0a6' stroke-width='4' stroke-linecap='round' stroke-linejoin='round' opacity='0.14'%3E%3Ccircle cx='30' cy='30' r='18'/%3E%3Ccircle cx='24' cy='26' r='2' fill='%239aa0a6'/%3E%3Ccircle cx='36' cy='26' r='2' fill='%239aa0a6'/%3E%3Cpath d='M21 35c3 4 15 4 18 0'/%3E%3Cpath d='M118 20c-4-6-14-4-14 3 0 8 14 16 14 16s14-8 14-16c0-7-10-9-14-3z'/%3E%3Cpath d='M40 100l4 9 10 1-7 7 2 10-9-5-9 5 2-10-7-7 10-1z'/%3E%3Cpath d='M100 130v-22h6l10-18 4 2-4 16h16a4 4 0 0 1 4 5l-6 17a5 5 0 0 1-5 4H106a6 6 0 0 1-6-4z'/%3E%3Cpath d='M60 120c-8 0-14-6-14-14 0-8 8-12 6-20 6 2 10 8 9 14 4-3 5-9 3-13 8 4 12 12 12 19 0 8-6 14-16 14z'/%3E%3C/g%3E%3C/svg%3E");
+  --pattern-objects: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cg fill='none' stroke='%239aa0a6' stroke-width='4' stroke-linecap='round' stroke-linejoin='round' opacity='0.14'%3E%3Crect x='14' y='96' width='34' height='20' rx='2'/%3E%3Cpath d='M48 102h14l8 8v6H48z'/%3E%3Ccircle cx='26' cy='118' r='5'/%3E%3Ccircle cx='60' cy='118' r='5'/%3E%3Cpath d='M96 30h30M118 20l10 10-10 10'/%3E%3Cpath d='M100 90h26l10 10v34h-36z'/%3E%3Cpath d='M126 90v10h10'/%3E%3Cline x1='106' y1='112' x2='128' y2='112'/%3E%3Cline x1='106' y1='120' x2='128' y2='120'/%3E%3Cpath d='M20 60a24 24 0 0 1 34 0M27 68a13 13 0 0 1 20 0'/%3E%3Ccircle cx='37' cy='76' r='2.5' fill='%239aa0a6'/%3E%3Ccircle cx='130' cy='50' r='2.5' fill='%239aa0a6'/%3E%3Ccircle cx='140' cy='50' r='2.5' fill='%239aa0a6'/%3E%3Ccircle cx='150' cy='50' r='2.5' fill='%239aa0a6'/%3E%3Ccircle cx='130' cy='60' r='2.5' fill='%239aa0a6'/%3E%3Ccircle cx='140' cy='60' r='2.5' fill='%239aa0a6'/%3E%3Ccircle cx='150' cy='60' r='2.5' fill='%239aa0a6'/%3E%3C/g%3E%3C/svg%3E");
+
+  --wallpaper-image: var(--pattern-icons);
+  --wallpaper-size: 160px 160px;
+}
+:root[data-wallpaper="lines"] {
+  --wallpaper-image:
+    repeating-linear-gradient(
+      45deg,
+      color-mix(in srgb, var(--border-strong) 45%, transparent) 0 1px,
+      transparent 1px 18px
+    ),
+    repeating-linear-gradient(
+      -45deg,
+      color-mix(in srgb, var(--border-strong) 45%, transparent) 0 1px,
+      transparent 1px 18px
+    );
+  --wallpaper-size: auto;
+}
+:root[data-wallpaper="emojis"] {
+  --wallpaper-image: var(--pattern-emojis);
+  --wallpaper-size: 160px 160px;
+}
+:root[data-wallpaper="objects"] {
+  --wallpaper-image: var(--pattern-objects);
+  --wallpaper-size: 160px 160px;
+}
+
+.chat-wallpaper {
+  background-color: var(--chat-bg);
+  background-image: var(--wallpaper-image);
+  background-size: var(--wallpaper-size);
+}
+
+/* Miniaturas da galeria de texturas (WallpaperPicker): mesmas imagens acima,
+   com o tile reduzido para caber legível num swatch de ~48px. */
+.wallpaper-swatch-icons {
+  background-color: var(--chat-bg);
+  background-image: var(--pattern-icons);
+  background-size: 90px 90px;
+}
+.wallpaper-swatch-lines {
+  background-color: var(--chat-bg);
+  background-image:
+    repeating-linear-gradient(
+      45deg,
+      color-mix(in srgb, var(--border-strong) 45%, transparent) 0 1px,
+      transparent 1px 9px
+    ),
+    repeating-linear-gradient(
+      -45deg,
+      color-mix(in srgb, var(--border-strong) 45%, transparent) 0 1px,
+      transparent 1px 9px
+    );
+}
+.wallpaper-swatch-emojis {
+  background-color: var(--chat-bg);
+  background-image: var(--pattern-emojis);
+  background-size: 90px 90px;
+}
+.wallpaper-swatch-objects {
+  background-color: var(--chat-bg);
+  background-image: var(--pattern-objects);
+  background-size: 90px 90px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

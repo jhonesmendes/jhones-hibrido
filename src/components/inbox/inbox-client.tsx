@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { PanelRight } from "lucide-react";
+import { ChevronLeft, PanelRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ContactAvatar } from "@/components/avatar";
 import type { ConversationDto, MessageDto } from "@/lib/types";
@@ -18,6 +18,7 @@ import { ConversationList } from "./conversation-list";
 import { MessageThread } from "./message-thread";
 import { Composer } from "./composer";
 import { ContactPanel } from "./contact-panel";
+import { WallpaperPicker } from "./wallpaper-picker";
 
 export function InboxClient() {
   const [conversations, setConversations] = useState<ConversationDto[] | null>(
@@ -34,7 +35,11 @@ export function InboxClient() {
   >("default");
 
   useEffect(() => {
-    setPanelOpen(localStorage.getItem("vocero.panelOpen") !== "false");
+    // A preferência salva é de desktop (painel lateral fixo); no mobile o
+    // painel vira overlay em tela cheia, então começa fechado — o usuário
+    // abre pelo botão de detalhes quando quiser.
+    const isDesktop = window.matchMedia("(min-width: 768px)").matches;
+    setPanelOpen(isDesktop ? localStorage.getItem("vocero.panelOpen") !== "false" : false);
     setNotifPermission(getNotificationPermission());
   }, []);
 
@@ -46,7 +51,10 @@ export function InboxClient() {
   }, []);
   const togglePanel = useCallback((open: boolean) => {
     setPanelOpen(open);
-    localStorage.setItem("vocero.panelOpen", String(open));
+    // Só persiste a preferência para telas de desktop (ver efeito acima).
+    if (window.matchMedia("(min-width: 768px)").matches) {
+      localStorage.setItem("vocero.panelOpen", String(open));
+    }
   }, []);
   const selectedIdRef = useRef<string | null>(null);
   selectedIdRef.current = selectedId;
@@ -155,18 +163,23 @@ export function InboxClient() {
     },
   });
 
-  // Esc fecha a conversa aberta (mesmo atalho do WhatsApp Web) — respeita
-  // `defaultPrevented`, então não interfere no Esc que o composer já usa
-  // pra fechar o dropdown de templates.
+  // Fecha a conversa aberta: usado pelo Esc (desktop, atalho do WhatsApp
+  // Web) e pelo botão "voltar" da thread no mobile.
+  const closeThread = useCallback(() => {
+    setSelectedId(null);
+    setMessages([]);
+  }, []);
+
+  // Esc fecha a conversa aberta — respeita `defaultPrevented`, então não
+  // interfere no Esc que o composer já usa pra fechar o dropdown de templates.
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key !== "Escape" || e.defaultPrevented) return;
-      setSelectedId(null);
-      setMessages([]);
+      closeThread();
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  }, [closeThread]);
 
   const selected = conversations?.find((c) => c.id === selectedId) ?? null;
 
@@ -277,7 +290,12 @@ export function InboxClient() {
 
   return (
     <div className="flex h-full">
-      <section className="w-[360px] shrink-0 overflow-hidden border-r">
+      <section
+        className={cn(
+          "shrink-0 overflow-hidden border-r",
+          selected ? "hidden w-[360px] md:block" : "w-full md:w-[360px]"
+        )}
+      >
         <ConversationList
           conversations={conversations}
           selectedId={selectedId}
@@ -289,11 +307,23 @@ export function InboxClient() {
         />
       </section>
 
-      <section className="flex min-w-0 flex-1 flex-col">
+      <section
+        className={cn(
+          "min-w-0 flex-1 flex-col",
+          selected ? "flex" : "hidden md:flex"
+        )}
+      >
         {selected ? (
           <>
             <header className="flex items-center justify-between border-b bg-background px-4 py-2.5">
               <div className="flex items-center gap-3">
+                <button
+                  onClick={closeThread}
+                  aria-label="Voltar para a lista de conversas"
+                  className="-ml-1 rounded-sm p-1.5 text-text-3 hover:bg-accent hover:text-foreground md:hidden"
+                >
+                  <ChevronLeft className="h-5 w-5" strokeWidth={1.8} />
+                </button>
                 <ContactAvatar
                   name={selected.contact.name}
                   seed={selected.contact.id}
@@ -316,15 +346,18 @@ export function InboxClient() {
                   </p>
                 </div>
               </div>
-              {!panelOpen && (
-                <button
-                  onClick={() => togglePanel(true)}
-                  aria-label="Mostrar detalhes"
-                  className="rounded-sm border p-1.5 text-text-3 hover:bg-accent hover:text-foreground"
-                >
-                  <PanelRight className="h-4 w-4" strokeWidth={1.7} />
-                </button>
-              )}
+              <div className="flex items-center gap-1.5">
+                <WallpaperPicker />
+                {!panelOpen && (
+                  <button
+                    onClick={() => togglePanel(true)}
+                    aria-label="Mostrar detalhes"
+                    className="rounded-sm border p-1.5 text-text-3 hover:bg-accent hover:text-foreground"
+                  >
+                    <PanelRight className="h-4 w-4" strokeWidth={1.7} />
+                  </button>
+                )}
+              </div>
             </header>
             <MessageThread messages={messages} />
             <Composer
@@ -339,7 +372,7 @@ export function InboxClient() {
             />
           </>
         ) : (
-          <div className="flex flex-1 items-center justify-center bg-chat text-sm text-text-3">
+          <div className="chat-wallpaper flex flex-1 items-center justify-center text-sm text-text-3">
             Escolha uma conversa para ver as mensagens
           </div>
         )}
@@ -347,12 +380,14 @@ export function InboxClient() {
 
       <section
         className={cn(
-          "shrink-0 overflow-hidden border-l transition-[width] duration-[220ms]",
-          panelOpen && selected ? "w-[320px]" : "w-0 border-l-0"
+          "overflow-hidden border-l bg-background transition-[width] duration-[220ms]",
+          panelOpen && selected
+            ? "fixed inset-0 z-40 md:static md:z-auto md:w-[320px] md:shrink-0"
+            : "hidden md:block md:w-0 md:shrink-0 md:border-l-0"
         )}
       >
         {selected && (
-          <div className="h-full w-[320px]">
+          <div className="h-full w-full md:w-[320px]">
             <ContactPanel
               conversation={selected}
               refreshKey={detailRev}

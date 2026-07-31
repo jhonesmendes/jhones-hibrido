@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist } from "next/font/google";
 import { accentCssVariables, DEFAULT_BRANDING } from "@/lib/branding";
 import { getBranding } from "@/server/branding";
@@ -18,6 +18,20 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title: `${branding.name} — CRM de WhatsApp`,
     description: "CRM de WhatsApp com agente de IA e Laboratório de autoavaliação",
+    appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: branding.name },
+    // `icon` precisa ser repetido aqui: definir `icons` explicitamente
+    // suprime o <link rel="icon"> que o Next injetaria sozinho a partir de
+    // `icon.tsx` (convenção de arquivo) — sem isso o favicon some.
+    icons: { icon: "/icon", apple: "/icon-192" },
+  };
+}
+
+export async function generateViewport(): Promise<Viewport> {
+  const branding = await getBranding().catch(() => DEFAULT_BRANDING);
+  return {
+    width: "device-width",
+    initialScale: 1,
+    themeColor: branding.accent,
   };
 }
 
@@ -39,6 +53,15 @@ export default async function RootLayout({
               `(function(){try{var m=localStorage.getItem("vocero-theme");` +
               `var d=m==="dark"||(m!=="light"&&window.matchMedia("(prefers-color-scheme: dark)").matches);` +
               `if(d)document.documentElement.classList.add("dark");}catch(e){}})();`,
+          }}
+        />
+        {/* Textura do fundo de mensagens (dots/grid/diagonal/plain): aplicada
+            ANTES da hidratação para não piscar a textura padrão. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              `(function(){try{var w=localStorage.getItem("vocero-chat-wallpaper");` +
+              `if(w&&w!=="icons")document.documentElement.setAttribute("data-wallpaper",w);}catch(e){}})();`,
           }}
         />
       </head>

@@ -196,7 +196,7 @@ export function MessageThread({ messages }: { messages: MessageDto[] }) {
   return (
     <div
       ref={scrollRef}
-      className="flex flex-1 flex-col gap-[3px] overflow-y-auto bg-chat px-[6%] py-5"
+      className="chat-wallpaper flex flex-1 flex-col gap-[3px] overflow-y-auto px-[6%] py-5"
     >
       {messages.map((m, i) => {
         const prev = messages[i - 1];

@@ -4,6 +4,11 @@
 
 let activeConversationId = null;
 
+// Sem cache/offline (ver comentário acima): o listener existe só porque o
+// Chrome exige um handler de `fetch` registrado para oferecer "Instalar
+// app". Nunca intercepta — deixa a rede seguir o caminho normal.
+self.addEventListener("fetch", () => {});
+
 self.addEventListener("message", (event) => {
   if (event.data && event.data.type === "active-conversation") {
     activeConversationId = event.data.conversationId ?? null;
