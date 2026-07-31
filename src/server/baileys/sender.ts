@@ -21,9 +21,13 @@ export class BaileysSendError extends Error {
  */
 async function resolveJid(
   sock: NonNullable<ReturnType<typeof getSocket>>,
-  phone: string
+  target: string
 ): Promise<string> {
-  const results = await sock.onWhatsApp(`${phone}@s.whatsapp.net`);
+  // Grupo: o JID já é exato (vem do próprio contato) — `onWhatsApp` é uma
+  // busca de número individual, não existe equivalente pra grupo.
+  if (target.endsWith("@g.us")) return target;
+
+  const results = await sock.onWhatsApp(`${target}@s.whatsapp.net`);
   const match = results?.find((r) => r.exists);
   if (!match) {
     throw new BaileysSendError(
@@ -34,10 +38,11 @@ async function resolveJid(
   return match.jid;
 }
 
-/** Envia texto livre pelo motor nativo; devolve o ID da mensagem. */
+/** Envia texto livre pelo motor nativo; devolve o ID da mensagem.
+ * `target` é um telefone (individual) ou um JID de grupo (`...@g.us`). */
 export async function sendText(
   organizationId: string,
-  phone: string,
+  target: string,
   text: string
 ): Promise<string> {
   const sock = getSocket(organizationId);
@@ -52,7 +57,7 @@ export async function sendText(
   }
 
   try {
-    const jid = await resolveJid(sock, phone);
+    const jid = await resolveJid(sock, target);
     const result = await sock.sendMessage(jid, { text });
     if (!result?.key.id) {
       throw new BaileysSendError(
@@ -70,10 +75,11 @@ export async function sendText(
   }
 }
 
-/** Envia mídia (imagem/documento/áudio/vídeo) pelo motor nativo; devolve o ID da mensagem. */
+/** Envia mídia (imagem/documento/áudio/vídeo) pelo motor nativo; devolve o ID da mensagem.
+ * `target` é um telefone (individual) ou um JID de grupo (`...@g.us`). */
 export async function sendMedia(
   organizationId: string,
-  phone: string,
+  target: string,
   file: { buffer: Buffer; mimeType: string; filename: string | null; caption?: string }
 ): Promise<string> {
   const sock = getSocket(organizationId);
@@ -86,7 +92,7 @@ export async function sendMedia(
   }
 
   try {
-    const jid = await resolveJid(sock, phone);
+    const jid = await resolveJid(sock, target);
     const content = buildBaileysMediaContent(file);
     const result = await sock.sendMessage(jid, content);
     if (!result?.key.id) {

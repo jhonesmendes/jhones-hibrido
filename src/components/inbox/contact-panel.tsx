@@ -150,17 +150,21 @@ export function ContactPanel({
                 {conversation.contact.name}
               </p>
               <p className="text-xs text-text-3">
-                {formatPhone(conversation.contact.phone)}
+                {conversation.contact.kind === "group"
+                  ? "Grupo"
+                  : formatPhone(conversation.contact.phone)}
               </p>
             </div>
-            <button
-              onClick={() => setEditingContact(true)}
-              aria-label="Cadastrar/editar contato"
-              title="Cadastrar/editar contato"
-              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-text-3 hover:bg-accent hover:text-brand-text"
-            >
-              <UserPlus className="h-4 w-4" strokeWidth={1.7} />
-            </button>
+            {conversation.contact.kind !== "group" && (
+              <button
+                onClick={() => setEditingContact(true)}
+                aria-label="Cadastrar/editar contato"
+                title="Cadastrar/editar contato"
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-text-3 hover:bg-accent hover:text-brand-text"
+              >
+                <UserPlus className="h-4 w-4" strokeWidth={1.7} />
+              </button>
+            )}
           </div>
 
           {conversation.handoffAt && (

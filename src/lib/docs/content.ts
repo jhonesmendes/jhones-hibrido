@@ -118,6 +118,10 @@ export const DOC_SECTIONS: DocSection[] = [
           { name: "Quem pode configurar", desc: "só owner/admin editam a conexão; qualquer um com permissão de ver campanhas enxerga a lista de workflows." },
         ],
       },
+      {
+        type: "tip",
+        text: "Painel embutido não carrega, dando \"conexão recusada\" só dentro do iframe (mas abre normal numa aba nova)? O N8N (ou o proxy reverso na frente dele) está mandando um header que bloqueia incorporação em outro domínio. No Nginx Proxy Manager, no Proxy Host do N8N → aba Advanced, adicione: proxy_hide_header X-Frame-Options; add_header Content-Security-Policy \"frame-ancestors 'self' https://SEU-DOMINIO-DO-VOCERO;\" always; — troque pelo domínio real do seu CRM. Isso remove o bloqueio e libera só o seu próprio domínio pra exibir o painel.",
+      },
     ],
   },
   {

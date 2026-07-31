@@ -115,7 +115,14 @@ export const contact = pgTable(
     organizationId: text("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
+    /** "phone" guarda o número (individual) ou o ID numérico do JID de
+     * grupo — sem o sufixo `@g.us` (canal não oficial apenas: a Cloud API
+     * oficial não suporta grupos). Continua único por org, então serve
+     * como o mesmo identificador estável nos dois casos. */
     phone: text("phone").notNull(),
+    kind: text("kind", { enum: ["individual", "group"] })
+      .notNull()
+      .default("individual"),
     name: text("name").notNull(),
     reference: text("reference"),
     comment: text("comment"),
@@ -744,6 +751,33 @@ export const passwordResetToken = pgTable("password_reset_token", {
   usedAt: timestamp("used_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
+
+/**
+ * Inscrição Web Push (Constituição I): permite notificar o membro mesmo com
+ * o navegador fechado, usando só o padrão nativo Push API + VAPID do
+ * próprio navegador — sem depender de um servidor de push de terceiro
+ * escolhido pelo operador (o endpoint é do serviço de push do próprio
+ * navegador do usuário, inerente ao protocolo Web Push). `p256dh`/`auth` não
+ * são segredos do operador: são as chaves públicas de criptografia da
+ * inscrição, exigidas pelo padrão para o servidor cifrar o payload.
+ */
+export const pushSubscription = pgTable(
+  "push_subscription",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    memberId: text("member_id")
+      .notNull()
+      .references(() => member.id, { onDelete: "cascade" }),
+    endpoint: text("endpoint").notNull().unique(),
+    p256dh: text("p256dh").notNull(),
+    auth: text("auth").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("push_subscription_org_idx").on(t.organizationId)]
+);
 
 /** Registro imutável de ações críticas — nunca UPDATE/DELETE de aplicação. */
 export const auditLog = pgTable(

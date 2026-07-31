@@ -8,6 +8,7 @@ import {
   Search,
   Sparkles,
   UserRound,
+  Users,
   Zap,
 } from "lucide-react";
 import type { ConversationDto } from "@/lib/types";
@@ -89,7 +90,7 @@ export function ConversationList({
   onEnableNotifications: () => void;
 }) {
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<"all" | "unread">("all");
+  const [filter, setFilter] = useState<"all" | "unread" | "groups">("all");
   const [starting, setStarting] = useState(false);
 
   const loading = conversationsProp === null;
@@ -104,8 +105,13 @@ export function ConversationList({
       )
     : conversations;
   const unreadCount = searched.filter((c) => c.unreadCount > 0).length;
+  const groupsCount = searched.filter((c) => c.contact.kind === "group").length;
   const visible =
-    filter === "unread" ? searched.filter((c) => c.unreadCount > 0) : searched;
+    filter === "unread"
+      ? searched.filter((c) => c.unreadCount > 0)
+      : filter === "groups"
+        ? searched.filter((c) => c.contact.kind === "group")
+        : searched;
 
   // Busca parece um telefone → atalho "iniciar conversa" (como no WhatsApp).
   const phoneCandidate = normalizePhoneInput(query);
@@ -200,6 +206,7 @@ export function ConversationList({
           [
             { id: "all", label: "Todas", count: searched.length },
             { id: "unread", label: "Não lidas", count: unreadCount },
+            { id: "groups", label: "Grupos", count: groupsCount },
           ] as const
         ).map((f) => (
           <button
@@ -262,11 +269,14 @@ export function ConversationList({
                       <span className="flex items-center justify-between gap-2">
                         <span
                           className={cn(
-                            "truncate text-sm",
+                            "flex min-w-0 items-center gap-1 truncate text-sm",
                             unread ? "font-[680]" : "font-semibold"
                           )}
                         >
-                          {c.contact.name}
+                          {c.contact.kind === "group" && (
+                            <Users className="h-3.5 w-3.5 shrink-0 text-text-3" strokeWidth={1.7} />
+                          )}
+                          <span className="truncate">{c.contact.name}</span>
                         </span>
                         <span
                           className={cn(

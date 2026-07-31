@@ -76,6 +76,9 @@ export async function resolveCrmContacts(
   const conditions = [
     eq(schema.contact.organizationId, organizationId),
     isNull(schema.contact.archivedAt),
+    // Grupo não é destinatário de campanha (disparo em massa é sobre
+    // contatos individuais; o "telefone" de um grupo nem é um número real).
+    eq(schema.contact.kind, "individual"),
     filter.stageId ? eq(schema.lead.stageId, filter.stageId) : undefined,
     filter.channel ? eq(schema.conversation.channel, filter.channel) : undefined,
   ].filter((c) => c !== undefined);
@@ -112,6 +115,7 @@ async function resolveContactsByIds(
       and(
         eq(schema.contact.organizationId, organizationId),
         isNull(schema.contact.archivedAt),
+        eq(schema.contact.kind, "individual"),
         inArray(schema.contact.id, contactIds)
       )
     );

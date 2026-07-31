@@ -14,12 +14,14 @@ import {
   Settings,
   Sparkles,
   Users,
+  Workflow,
 } from "lucide-react";
 import type { Branding } from "@/lib/branding";
 import { cn, initials } from "@/lib/utils";
 import { signOut } from "@/lib/auth/client";
 import { useEvents } from "@/components/use-events";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { ensurePushSubscription, getNotificationPermission } from "@/lib/notifications";
 
 const NAV = [
   { href: "/inbox", label: "Caixa de entrada", icon: Inbox, badge: true },
@@ -28,6 +30,7 @@ const NAV = [
   { href: "/campanhas", label: "Campanhas", icon: Megaphone },
   { href: "/agent", label: "Agente", icon: Sparkles },
   { href: "/lab", label: "Laboratório", icon: FlaskConical },
+  { href: "/n8n-panel", label: "Painel N8N", icon: Workflow },
 ] as const;
 
 export function AppNav({
@@ -54,6 +57,10 @@ export function AppNav({
 
   useEffect(() => {
     void refetchUnread();
+    // Reforça a inscrição de push em qualquer tela (não só na Caixa de
+    // entrada) sempre que a permissão já foi concedida antes — cobre o
+    // caso de o navegador ter perdido a inscrição (ex.: SW atualizado).
+    if (getNotificationPermission() === "granted") void ensurePushSubscription();
   }, []);
 
   useEvents({

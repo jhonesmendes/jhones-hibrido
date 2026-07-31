@@ -1,10 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import {
   AlertTriangle,
   CheckCircle2,
-  ExternalLink,
   History,
   Play,
   Plug,
@@ -113,10 +113,18 @@ export function N8nAutomationsClient() {
         <div className="h-2 w-2 shrink-0 rounded-full bg-fill-success" />
         Conectado ao N8N{existingConfig ? ` em ${existingConfig.baseUrl}` : ""} ·{" "}
         {workflows.length} workflow(s) encontrado(s)
+        {existingConfig && (
+          <Link
+            href="/n8n-panel"
+            className="ml-auto flex items-center gap-1 text-primary hover:underline"
+          >
+            <History className="h-3 w-3" /> Abrir painel N8N
+          </Link>
+        )}
         {canConfigure && (
           <button
             type="button"
-            className="ml-auto text-primary hover:underline"
+            className="text-primary hover:underline"
             onClick={() => setEditingConfig(true)}
           >
             Editar configuração
@@ -176,38 +184,6 @@ export function N8nAutomationsClient() {
           );
         })}
       </div>
-
-      {existingConfig && (
-        <>
-          <p className="mb-2 mt-6 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            <History className="h-3.5 w-3.5" /> Painel N8N
-          </p>
-          <div className="overflow-hidden rounded-md border">
-            <div className="flex items-center justify-between border-b bg-secondary/30 px-3 py-2">
-              <span className="text-xs text-muted-foreground">
-                {existingConfig.baseUrl}
-              </span>
-              <a
-                href={existingConfig.baseUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-center gap-1 text-xs text-primary hover:underline"
-              >
-                <ExternalLink className="h-3 w-3" /> Abrir em tela cheia
-              </a>
-            </div>
-            <iframe
-              src={existingConfig.baseUrl}
-              title="Painel N8N"
-              className="h-[420px] w-full"
-            />
-            <p className="border-t bg-secondary/20 p-2 text-center text-[11px] text-muted-foreground">
-              Se o painel não aparecer acima, o N8N pode estar bloqueando incorporação
-              (X-Frame-Options) — use &quot;Abrir em tela cheia&quot;.
-            </p>
-          </div>
-        </>
-      )}
     </div>
   );
 }

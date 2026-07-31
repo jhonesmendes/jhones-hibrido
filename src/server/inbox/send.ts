@@ -87,8 +87,14 @@ export async function sendText(input: {
   // mensagem recebida (sticky); um override pontual do composer vale só
   // para este envio, sem alterar o roteamento automático de entradas.
   const effectiveChannel = input.channelOverride ?? row.conversation.channel;
+  if (row.contact.kind === "group" && effectiveChannel !== "unofficial") {
+    throw new SendError(
+      "meta_error",
+      "Grupo: só existe no canal não oficial (WhatsApp Web), a Cloud API oficial não suporta grupos"
+    );
+  }
   if (effectiveChannel === "unofficial") {
-    return sendViaUnofficial(input, row.contact.phone);
+    return sendViaUnofficial(input, row.contact);
   }
 
   if (!isWindowOpen(row.conversation.lastInboundAt)) {
@@ -187,8 +193,14 @@ export async function sendMedia(input: {
   const effectiveChannel = input.channelOverride ?? row.conversation.channel;
   const kind = mediaKindFromMime(input.mimeType);
 
+  if (row.contact.kind === "group" && effectiveChannel !== "unofficial") {
+    throw new SendError(
+      "meta_error",
+      "Grupo: só existe no canal não oficial (WhatsApp Web), a Cloud API oficial não suporta grupos"
+    );
+  }
   if (effectiveChannel === "unofficial") {
-    return sendMediaViaUnofficial(input, row.contact.phone, kind);
+    return sendMediaViaUnofficial(input, row.contact, kind);
   }
 
   if (!isWindowOpen(row.conversation.lastInboundAt)) {
@@ -292,16 +304,20 @@ async function sendMediaViaUnofficial(
     filename?: string | null;
     caption?: string;
   },
-  contactPhone: string,
+  contact: { phone: string; kind: string },
   kind: MediaKind
 ): Promise<SendResult> {
   const db = getDb();
+  const target =
+    contact.kind === "group"
+      ? `${contact.phone}@g.us`
+      : normalizeRecipient(contact.phone);
 
   let providerMessageId: string;
   try {
     providerMessageId = await sendBaileysMedia(
       input.organizationId,
-      normalizeRecipient(contactPhone),
+      target,
       {
         buffer: input.buffer,
         mimeType: input.mimeType,
@@ -389,15 +405,19 @@ async function sendViaUnofficial(
     text: string;
     aiGenerated?: boolean;
   },
-  contactPhone: string
+  contact: { phone: string; kind: string }
 ): Promise<SendResult> {
   const db = getDb();
+  const target =
+    contact.kind === "group"
+      ? `${contact.phone}@g.us`
+      : normalizeRecipient(contact.phone);
 
   let providerMessageId: string;
   try {
     providerMessageId = await sendBaileysText(
       input.organizationId,
-      normalizeRecipient(contactPhone),
+      target,
       input.text
     );
   } catch (err) {

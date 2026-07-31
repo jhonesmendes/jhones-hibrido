@@ -5,7 +5,7 @@ import { isWindowOpen, windowRemainingMs } from "@/server/inbox/window";
 
 export type ConversationDto = {
   id: string;
-  contact: { id: string; name: string; phone: string };
+  contact: { id: string; name: string; phone: string; kind: "individual" | "group" };
   assignedTo: string | null;
   stageName: string | null;
   /** Canal activo: official (Cloud API) o unofficial (gateway). */
@@ -133,7 +133,12 @@ export function serializeConversation(
   const unofficial = c.channel === "unofficial";
   return {
     id: c.id,
-    contact: { id: contact.id, name: contact.name, phone: contact.phone },
+    contact: {
+      id: contact.id,
+      name: contact.name,
+      phone: contact.phone,
+      kind: contact.kind,
+    },
     assignedTo: c.assignedTo,
     stageName,
     channel: c.channel,

@@ -19,8 +19,50 @@ function jidToPhone(jid: string): string {
   return ensureBrNinthDigit(raw);
 }
 
-function isGroupOrBroadcast(jid: string): boolean {
-  return jid.endsWith("@g.us") || jid === "status@broadcast";
+function isGroupJid(jid: string): boolean {
+  return jid.endsWith("@g.us");
+}
+
+function isBroadcast(jid: string): boolean {
+  return jid === "status@broadcast";
+}
+
+/** ID numérico do grupo, sem o sufixo `@g.us` — vira `contact.phone` (a
+ * Cloud API oficial não tem conceito de grupo, então isso só existe no
+ * canal não oficial). */
+function groupJidToId(jid: string): string {
+  return jid.replace(/@g\.us$/, "");
+}
+
+/**
+ * `sock.groupMetadata` consulta o WhatsApp a cada chamada — sem cache, um
+ * grupo movimentado martelaria o servidor a cada mensagem. Só é preciso no
+ * momento em que o grupo (contato) é criado pela primeira vez; depois disso
+ * o nome já está salvo e some da conversa quando alguém o edita é aceitável
+ * (mesmo comportamento do nome de um contato individual sincronizado 1x).
+ */
+async function fetchGroupName(
+  sock: WASocket,
+  groupJid: string
+): Promise<string | null> {
+  try {
+    const meta = await sock.groupMetadata(groupJid);
+    return meta.subject || null;
+  } catch (err) {
+    console.error("[baileys] falha ao buscar nome do grupo:", err);
+    return null;
+  }
+}
+
+const groupNameCache = new Map<string, { name: string | null; at: number }>();
+const GROUP_NAME_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+
+async function getGroupName(sock: WASocket, groupJid: string): Promise<string | null> {
+  const cached = groupNameCache.get(groupJid);
+  if (cached && Date.now() - cached.at < GROUP_NAME_CACHE_TTL_MS) return cached.name;
+  const name = await fetchGroupName(sock, groupJid);
+  groupNameCache.set(groupJid, { name, at: Date.now() });
+  return name;
 }
 
 /**
@@ -42,6 +84,37 @@ async function resolvePhoneJid(
   return sock.signalRepository.lidMapping.getPNForLID(remoteJid);
 }
 
+/** Resume um cartão de contato (vCard) compartilhado — sem isso a mensagem
+ * fica sem texto nenhum pra mostrar (não há mídia baixável aqui). */
+function formatVcardContact(
+  displayName: string | null | undefined,
+  vcard: string | null | undefined
+): string | null {
+  const name = displayName?.trim() || null;
+  const phone = vcard?.match(/TEL[^:]*:(.+)/)?.[1]?.trim() || null;
+  if (name && phone) return `${name} — ${phone}`;
+  return name ?? phone;
+}
+
+function extractContactsSummary(
+  message: proto.IMessage | null | undefined
+): string | null {
+  if (message?.contactMessage) {
+    return formatVcardContact(
+      message.contactMessage.displayName,
+      message.contactMessage.vcard
+    );
+  }
+  if (message?.contactsArrayMessage) {
+    const names = (message.contactsArrayMessage.contacts ?? [])
+      .map((c) => c.displayName)
+      .filter((n): n is string => Boolean(n?.trim()));
+    if (names.length > 0) return names.join(", ");
+    return message.contactsArrayMessage.displayName ?? null;
+  }
+  return null;
+}
+
 function extractText(message: proto.IMessage | null | undefined): string | null {
   if (!message) return null;
   return (
@@ -50,7 +123,7 @@ function extractText(message: proto.IMessage | null | undefined): string | null 
     message.imageMessage?.caption ??
     message.videoMessage?.caption ??
     message.documentMessage?.caption ??
-    null
+    extractContactsSummary(message)
   );
 }
 
@@ -63,6 +136,7 @@ function extractType(message: proto.IMessage | null | undefined): string | null 
   if (message.documentMessage) return "document";
   if (message.stickerMessage) return "sticker";
   if (message.locationMessage) return "location";
+  if (message.contactMessage || message.contactsArrayMessage) return "contacts";
   return null;
 }
 
@@ -127,10 +201,13 @@ export async function handleIncomingMessages(
 ): Promise<void> {
   for (const msg of messages) {
     const rawJid = msg.key.remoteJid;
-    if (!rawJid || isGroupOrBroadcast(rawJid)) continue;
+    if (!rawJid || isBroadcast(rawJid)) continue;
     if (!msg.message) continue; // notificação de protocolo, sem conteúdo
 
-    const remoteJid = await resolvePhoneJid(sock, rawJid);
+    const isGroup = isGroupJid(rawJid);
+    // Num grupo o remetente real é `participant`; `remoteJid` é a thread
+    // (o grupo) em si — resolver LID só faz sentido no caso individual.
+    const remoteJid = isGroup ? rawJid : await resolvePhoneJid(sock, rawJid);
     if (!remoteJid) {
       console.warn(
         `[baileys] LID ${rawJid} sem mapeamento de telefone conhecido ainda — mensagem descartada (deve resolver na próxima)`
@@ -143,29 +220,38 @@ export async function handleIncomingMessages(
     if (!msg.key.id) continue;
 
     const media = MEDIA_TYPES.has(type) ? await downloadMedia(msg) : null;
+    const text = extractText(msg.message);
+    const fromMe = msg.key.fromMe ?? false;
+
+    // Prefixa com quem falou dentro do grupo — sem isso, o operador vê só
+    // "mensagem" sem saber qual dos participantes escreveu.
+    const senderName = isGroup && !fromMe ? (msg.pushName ?? null) : null;
+    const displayText = senderName && text ? `*${senderName}:* ${text}` : text;
 
     await ingestInboundMessage({
       organizationId,
-      from: jidToPhone(remoteJid),
-      profileName: msg.key.fromMe ? null : (msg.pushName ?? null),
+      from: isGroup ? groupJidToId(rawJid) : jidToPhone(remoteJid),
+      profileName: isGroup
+        ? await getGroupName(sock, rawJid)
+        : fromMe
+          ? null
+          : (msg.pushName ?? null),
       waMessageId: baileysMessageId(msg.key.id),
       type,
-      text: extractText(msg.message),
+      text: displayText,
       timestamp: timestampToEpochSeconds(msg.messageTimestamp),
       channel: "unofficial",
-      fromMe: msg.key.fromMe ?? false,
+      fromMe,
       mediaUrl: null,
       media,
+      contactKind: isGroup ? "group" : "individual",
     });
 
-    if (!msg.key.fromMe) {
-      void refreshContactAvatar(
-        organizationId,
-        sock,
-        remoteJid,
-        jidToPhone(remoteJid)
-      ).catch((err) =>
-        console.error("[baileys] falha ao buscar foto de perfil:", err)
+    if (!fromMe) {
+      const avatarJid = isGroup ? rawJid : remoteJid;
+      const avatarPhone = isGroup ? groupJidToId(rawJid) : jidToPhone(remoteJid);
+      void refreshContactAvatar(organizationId, sock, avatarJid, avatarPhone).catch(
+        (err) => console.error("[baileys] falha ao buscar foto de perfil:", err)
       );
     }
   }

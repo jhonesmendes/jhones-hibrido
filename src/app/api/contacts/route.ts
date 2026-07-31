@@ -1,4 +1,4 @@
-import { desc, ilike, or } from "drizzle-orm";
+import { desc, eq, ilike, or } from "drizzle-orm";
 import { z } from "zod";
 import { apiError, parseBody, withAuth } from "@/lib/api";
 import { getDb, schema } from "@/lib/db";
@@ -21,6 +21,9 @@ export const GET = withAuth(async (session, req: Request) => {
       scoped(
         schema.contact.organizationId,
         session.organizationId,
+        // Grupos vivem só no Inbox — a página de Contatos é sobre leads
+        // individuais (Foco Vertical), não threads coletivas.
+        eq(schema.contact.kind, "individual"),
         q
           ? or(
               ilike(schema.contact.name, `%${q}%`),

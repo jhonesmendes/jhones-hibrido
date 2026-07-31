@@ -30,6 +30,7 @@ const prefixes = {
   n8nConfig: "n8n",
   passwordResetToken: "prt",
   auditLog: "aud",
+  pushSubscription: "push",
 } as const;
 
 export type IdKind = keyof typeof prefixes;

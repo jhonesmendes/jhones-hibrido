@@ -192,7 +192,8 @@ export function Composer({
   // libera texto livre mesmo com a janela oficial (sticky) fechada.
   const showFreeText = effectiveChannel === "unofficial" || conversation.windowOpen;
 
-  const channelSelector = bothConnected && (
+  // Grupo só existe no canal não oficial — nunca ofereça alternar pro oficial.
+  const channelSelector = bothConnected && conversation.contact.kind !== "group" && (
     <div className="mb-2.5 flex items-center gap-1.5">
       <span className="text-[11px] text-text-3">Enviar via:</span>
       {(["official", "unofficial"] as const).map((c) => (

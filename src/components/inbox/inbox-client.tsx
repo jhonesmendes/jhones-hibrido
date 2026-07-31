@@ -8,12 +8,12 @@ import { ContactAvatar } from "@/components/avatar";
 import type { ConversationDto, MessageDto } from "@/lib/types";
 import { useEvents } from "@/components/use-events";
 import {
+  ensurePushSubscription,
   getNotificationPermission,
   playNotificationSound,
   requestNotificationPermission,
-  showMessageNotification,
+  setActiveConversationForPush,
 } from "@/lib/notifications";
-import { mediaLabel } from "./helpers";
 import { ConversationList } from "./conversation-list";
 import { MessageThread } from "./message-thread";
 import { Composer } from "./composer";
@@ -39,7 +39,10 @@ export function InboxClient() {
   }, []);
 
   const enableNotifications = useCallback(() => {
-    void requestNotificationPermission().then(setNotifPermission);
+    void requestNotificationPermission().then((permission) => {
+      setNotifPermission(permission);
+      if (permission === "granted") void ensurePushSubscription();
+    });
   }, []);
   const togglePanel = useCallback((open: boolean) => {
     setPanelOpen(open);
@@ -75,6 +78,7 @@ export function InboxClient() {
       setSelectedId(id);
       setMessages([]);
       void refetchMessages(id);
+      setActiveConversationForPush(id);
       void fetch(`/api/conversations/${id}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
@@ -83,6 +87,12 @@ export function InboxClient() {
     },
     [refetchMessages]
   );
+
+  // Ao sair da Caixa de entrada, nenhuma conversa fica "em foco" — o
+  // Service Worker deve notificar qualquer mensagem recebida daqui em diante.
+  useEffect(() => {
+    return () => setActiveConversationForPush(null);
+  }, []);
 
   // Link direto a partir de Contatos/Pipeline: /inbox?contact=<id>
   const searchParams = useSearchParams();
@@ -112,22 +122,12 @@ export function InboxClient() {
         });
       }
 
-      // Alerta (som + notificação do navegador) igual ao WhatsApp Web: só
-      // pra mensagem recebida (não pro nosso próprio eco) e só quando não
-      // se está olhando exatamente essa conversa em foco.
+      // Som imediato pra mensagem recebida (não pro nosso próprio eco) fora
+      // da conversa em foco — a notificação do SO em si é responsabilidade
+      // do Service Worker (Web Push), que evita duplicar quando a conversa
+      // já está aberta em foco.
       if (m.direction === "in" && !isFocusedOnThisConversation) {
         playNotificationSound();
-        const contact = conversations?.find((c) => c.id === conversationId)
-          ?.contact;
-        const body =
-          m.type === "text" || m.type === "template"
-            ? (m.text ?? "")
-            : mediaLabel(m.type);
-        showMessageNotification(
-          contact?.name ?? "Nova mensagem",
-          body,
-          contact ? `/api/contacts/${contact.id}/avatar` : undefined
-        );
       }
 
       void refetchConversations();

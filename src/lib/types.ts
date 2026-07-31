@@ -2,7 +2,7 @@
 
 export type ConversationDto = {
   id: string;
-  contact: { id: string; name: string; phone: string };
+  contact: { id: string; name: string; phone: string; kind: "individual" | "group" };
   stageName: string | null;
   channel: "official" | "unofficial";
   aiEnabled: boolean;
@@ -53,6 +53,7 @@ export type ContactDto = {
   id: string;
   name: string;
   phone: string;
+  kind: "individual" | "group";
   reference: string | null;
   comment: string | null;
   notes: string | null;

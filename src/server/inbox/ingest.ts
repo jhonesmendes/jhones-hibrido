@@ -2,6 +2,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { newId } from "@/lib/db/ids";
 import { publish } from "@/server/events/bus";
+import { sendPushToOrganization } from "@/server/push/send";
 import { getCredentialsByPhoneNumberId } from "@/server/whatsapp/credentials";
 import { downloadMetaMedia, getMetaMediaMeta } from "@/lib/meta/client";
 import type { WebhookMedia, WebhookValue } from "@/server/inbox/webhook";
@@ -30,7 +31,8 @@ const SUPPORTED_TYPES = new Set([
 export async function getOrCreateContact(
   organizationId: string,
   phone: string,
-  name?: string | null
+  name?: string | null,
+  kind: "individual" | "group" = "individual"
 ) {
   const db = getDb();
   const inserted = await db
@@ -39,6 +41,7 @@ export async function getOrCreateContact(
       id: newId("contact"),
       organizationId,
       phone,
+      kind,
       name: name?.trim() || phone,
     })
     .onConflictDoNothing({
@@ -194,6 +197,8 @@ export async function ingestInboundMessage(input: {
   mediaUrl?: string | null;
   /** Bytes de mídia já baixados (sem URL de terceiro persistente). */
   media?: { mimeType: string; dataBase64: string; filename?: string | null } | null;
+  /** Grupo do canal não oficial (a Cloud API oficial não suporta grupos). */
+  contactKind?: "individual" | "group";
 }): Promise<void> {
   const db = getDb();
   const { organizationId } = input;
@@ -203,7 +208,8 @@ export async function ingestInboundMessage(input: {
   const { contact } = await getOrCreateContact(
     organizationId,
     input.from,
-    input.profileName
+    input.profileName,
+    input.contactKind ?? "individual"
   );
   const conversation = await getOrCreateConversation(
     organizationId,
@@ -263,9 +269,13 @@ export async function ingestInboundMessage(input: {
     )
     .where(eq(schema.conversation.id, conversation.id));
 
-  await onLeadActivity(organizationId, contact.id, waTimestamp);
-  if (!fromMe && MEDIA_TYPES.has(input.type)) {
-    await onInboundMedia(organizationId, contact.id);
+  // Grupo não é lead nem alvo de follow-up de pipeline (Foco Vertical): o
+  // pipeline é sobre converter conversas individuais, não threads coletivas.
+  if (contact.kind !== "group") {
+    await onLeadActivity(organizationId, contact.id, waTimestamp);
+    if (!fromMe && MEDIA_TYPES.has(input.type)) {
+      await onInboundMedia(organizationId, contact.id);
+    }
   }
 
   publish(organizationId, {
@@ -289,7 +299,20 @@ export async function ingestInboundMessage(input: {
     data: { conversation: { id: conversation.id } },
   });
 
-  if (!fromMe) await maybeRunAgentTurn(conversation.id);
+  if (!fromMe) {
+    sendPushToOrganization(organizationId, {
+      title: contact.name || input.from,
+      body: input.text?.trim() || MEDIA_PUSH_LABELS[input.type] || "Nova mensagem",
+      icon: `/api/contacts/${contact.id}/avatar`,
+      url: `/inbox?contact=${contact.id}`,
+      conversationId: conversation.id,
+    }).catch((err) => console.error("[push] falha ao notificar organização:", err));
+
+    // O agente de IA responde conversas individuais, não grupos: uma
+    // resposta automática numa thread coletiva sem pedido é intrusiva e
+    // foge do escopo do produto (converter conversas, não moderar grupos).
+    if (contact.kind !== "group") await maybeRunAgentTurn(conversation.id);
+  }
 }
 
 function toDate(timestamp: string): Date {
@@ -299,6 +322,16 @@ function toDate(timestamp: string): Date {
 }
 
 const MEDIA_TYPES = new Set(["image", "audio", "video", "document", "sticker"]);
+
+const MEDIA_PUSH_LABELS: Record<string, string> = {
+  image: "Imagem",
+  audio: "Áudio",
+  video: "Vídeo",
+  document: "Documento",
+  sticker: "Figurinha",
+  location: "Localização",
+  contacts: "Contato compartilhado",
+};
 
 /**
  * true se a mídia desta mensagem pode ser servida pelo proxy /api/media/[id]
