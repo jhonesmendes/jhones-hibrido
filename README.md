@@ -291,3 +291,5 @@ aprender a convertirte en Meta Tech Provider y monetizar con tu agencia de IA?
 de producción (webhook firmado, ingesta idempotente, cifrado de tokens) vienen
 de un proyecto de referencia privado en producción, portados y simplificados
 para este repo.
+
+git initi
