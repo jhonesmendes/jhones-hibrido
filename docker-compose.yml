@@ -1,6 +1,9 @@
+# ============================================================
+# Vocero CRM — app + Postgres
+# ============================================================
 services:
   app:
-    image: vocero-crm:latest
+    build: .
     ports:
       - "3000:3000"
     restart: unless-stopped
@@ -10,10 +13,14 @@ services:
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
       META_WEBHOOK_VERIFY_TOKEN: ${META_WEBHOOK_VERIFY_TOKEN}
+      META_APP_SECRET: ${META_APP_SECRET:-}
       META_GRAPH_API_VERSION: ${META_GRAPH_API_VERSION:-v25.0}
       OPENROUTER_API_TOKEN: ${OPENROUTER_API_TOKEN:-}
       OPENROUTER_BASE_URL: ${OPENROUTER_BASE_URL:-https://openrouter.ai/api}
       OPENROUTER_MODEL: ${OPENROUTER_MODEL:-}
+      OPENROUTER_JUDGE_MODEL: ${OPENROUTER_JUDGE_MODEL:-}
+      ALLOW_SIGNUP: ${ALLOW_SIGNUP:-}
+      AGENT_COALESCE_MS: ${AGENT_COALESCE_MS:-6000}
     depends_on:
       postgres:
         condition: service_healthy
@@ -28,18 +35,17 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: vocero
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - vocero_pg:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d vocero"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
-      start_period: 10s
+      interval: 10s
+      timeout: 5s
+      retries: 10
     networks:
       - vocero-net
 
 volumes:
-  postgres_data:
+  vocero_pg:
 
 networks:
   vocero-net:
