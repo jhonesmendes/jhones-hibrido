@@ -6,11 +6,13 @@ import { cn } from "@/lib/utils";
 
 const TABS = [
   { href: "/settings/channels", label: "Canais" },
+  { href: "/settings/departments", label: "Departamentos" },
   { href: "/settings/ai", label: "Inteligência IA" },
   { href: "/settings/branding", label: "Marca" },
   { href: "/settings/templates", label: "Modelos" },
   { href: "/settings/team", label: "Equipe" },
   { href: "/settings/email", label: "Email" },
+  { href: "/settings/preferences", label: "Preferências" },
 ] as const;
 
 export function SettingsNav() {

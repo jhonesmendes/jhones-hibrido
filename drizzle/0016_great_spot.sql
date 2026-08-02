@@ -1,0 +1,1 @@
+ALTER TABLE "member" ADD COLUMN "groups_in_inbox" boolean DEFAULT true NOT NULL;

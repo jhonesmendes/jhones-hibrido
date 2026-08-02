@@ -87,6 +87,25 @@ export const member = pgTable("member", {
   role: text("role").notNull().default("agent"),
   /** Membro inativo não consegue logar (FR-009). */
   isActive: boolean("is_active").notNull().default(true),
+  /** Preferência pessoal: mensagens de grupo aparecem misturadas na aba
+   * "Todas" da Caixa de Entrada (true, padrão) ou só na aba "Grupos". Não
+   * afeta ingestão/entrega — só o que este membro vê. */
+  groupsInInbox: boolean("groups_in_inbox").notNull().default(true),
+  /** Departamento ativo (v0.1) — preferência pessoal do membro, igual a
+   * `groupsInInbox`: não é estado de sessão do better-auth, é a fonte de
+   * verdade para qual departamento a Caixa de Entrada/Pipeline/Contatos
+   * mostram. Null = visão consolidada (normalmente só faz sentido para
+   * owner) ou organização ainda sem departamentos cadastrados. */
+  activeDepartmentId: text("active_department_id").references(
+    () => department.id,
+    { onDelete: "set null" }
+  ),
+  /** Perfil de agente IA padrão deste atendente (v0.1) — usado quando a
+   * conversa está atribuída a ele (`conversation.assignedTo`) e não tem
+   * override próprio. Null = não define padrão neste nível da cadeia. */
+  agentProfileId: text("agent_profile_id").references(() => agentProfile.id, {
+    onDelete: "set null",
+  }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -103,6 +122,92 @@ export const invitation = pgTable("invitation", {
     .notNull()
     .references(() => user.id, { onDelete: "cascade" }),
 });
+
+/**
+ * Departamento (v0.1) — terceiro nível de escopo entre organização e
+ * indivíduo: equipe com número(s) próprio(s), pipeline e agente IA
+ * próprios. Nada de nome de setor fixo no código — tudo vem daqui.
+ * `department_id` nas tabelas de domínio abaixo é NULLABLE de propósito:
+ * organizações sem departamento cadastrado continuam funcionando como
+ * hoje (owner vê tudo, filtro por dept é "sem restrição").
+ */
+export const department = pgTable(
+  "department",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    slug: text("slug").notNull(),
+    description: text("description"),
+    color: text("color").default("#1d4ed8"),
+    icon: text("icon").default("building"),
+    isActive: boolean("is_active").notNull().default(true),
+    /** Perfil de agente IA padrão deste departamento (v0.1, Etapa 6) — usado
+     * quando a conversa não tem override próprio nem vem de um atendente
+     * com perfil definido. Faz o papel do "pipeline.agent_profile_id" do
+     * desenho original: este projeto não modela pipelines nomeados
+     * separados, só `pipeline_stage` (já com `department_id`), então o
+     * departamento é o nível certo para pendurar esse padrão. */
+    agentProfileId: text("agent_profile_id").references(() => agentProfile.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("department_org_slug_uq").on(t.organizationId, t.slug)]
+);
+
+/** Vínculo de membro a departamento, com role específico do departamento. */
+export const memberDepartment = pgTable(
+  "member_department",
+  {
+    id: text("id").primaryKey(),
+    memberId: text("member_id")
+      .notNull()
+      .references(() => member.id, { onDelete: "cascade" }),
+    departmentId: text("department_id")
+      .notNull()
+      .references(() => department.id, { onDelete: "cascade" }),
+    /** admin | agent — dentro do departamento (independe do role de org). */
+    role: text("role", { enum: ["admin", "agent"] })
+      .notNull()
+      .default("agent"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("member_department_member_dept_uq").on(
+      t.memberId,
+      t.departmentId
+    ),
+  ]
+);
+
+/** Concessão/revogação individual de permissão por membro dentro de um
+ * departamento — mesmo padrão de `memberPermission`, com escopo de dept. */
+export const memberDepartmentPermission = pgTable(
+  "member_department_permission",
+  {
+    id: text("id").primaryKey(),
+    memberId: text("member_id")
+      .notNull()
+      .references(() => member.id, { onDelete: "cascade" }),
+    departmentId: text("department_id")
+      .notNull()
+      .references(() => department.id, { onDelete: "cascade" }),
+    permission: text("permission").notNull(),
+    granted: boolean("granted").notNull().default(true),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("member_department_permission_uq").on(
+      t.memberId,
+      t.departmentId,
+      t.permission
+    ),
+  ]
+);
 
 /* ============================================================
  * Domínio (toda tabela leva organization_id NOT NULL + índice org-first)
@@ -156,6 +261,11 @@ export const pipelineStage = pgTable(
     kind: text("kind", { enum: ["open", "won", "lost"] })
       .notNull()
       .default("open"),
+    /** Departamento dono da etapa (v0.1). Null = pipeline compartilhado
+     * entre toda a organização (comportamento atual, pré-departamentos). */
+    departmentId: text("department_id").references(() => department.id, {
+      onDelete: "set null",
+    }),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (t) => [index("stage_org_pos_idx").on(t.organizationId, t.position)]
@@ -206,6 +316,32 @@ export const conversation = pgTable(
     channel: text("channel", { enum: ["official", "unofficial"] })
       .notNull()
       .default("official"),
+    /** Departamento dono da conversa (v0.1). Null = organização ainda sem
+     * departamentos, ou conversa anterior à migração — visível a todos. */
+    departmentId: text("department_id").references(() => department.id, {
+      onDelete: "set null",
+    }),
+    /** Número oficial específico ao qual esta conversa está presa (v0.1,
+     * multi-número). Sticky igual a `channel`: atualizado para o número que
+     * recebeu a última mensagem, assim a resposta sai pelo mesmo número que
+     * o cliente escreveu. Null = organização com um único número oficial
+     * (ou nenhum ainda) — `sendText`/`sendMedia` caem no fallback padrão. */
+    metaCredentialId: text("meta_credential_id").references(
+      () => metaCredentials.id,
+      { onDelete: "set null" }
+    ),
+    /** Canal não oficial específico ao qual esta conversa está presa (v0.1,
+     * multi-sessão Baileys) — mesmo padrão sticky de `metaCredentialId`. */
+    unofficialChannelId: text("unofficial_channel_id").references(
+      () => unofficialChannel.id,
+      { onDelete: "set null" }
+    ),
+    /** Override manual do perfil de agente (v0.1) — maior prioridade na
+     * cadeia de resolução (conversa > atendente > departamento > padrão da
+     * org). Null = segue o padrão resolvido normalmente. */
+    agentProfileId: text("agent_profile_id").references(() => agentProfile.id, {
+      onDelete: "set null",
+    }),
     aiEnabled: boolean("ai_enabled").notNull().default(true),
     handoffAt: timestamp("handoff_at"),
     handoffReason: text("handoff_reason", {
@@ -266,6 +402,13 @@ export const message = pgTable(
   ]
 );
 
+/**
+ * Canal oficial (Cloud API da Meta). v0.1: N números por organização — a
+ * unique antiga era só em `organization_id`, hoje cada linha é um canal
+ * (`name`/`description` identificam qual é qual na UI). `department_id`
+ * nullable: canal ainda não vinculado a um departamento fica visível à
+ * organização toda (comportamento pré-departamentos).
+ */
 export const metaCredentials = pgTable(
   "meta_credentials",
   {
@@ -273,6 +416,11 @@ export const metaCredentials = pgTable(
     organizationId: text("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
+    departmentId: text("department_id").references(() => department.id, {
+      onDelete: "set null",
+    }),
+    name: text("name").notNull().default("Principal"),
+    description: text("description"),
     wabaId: text("waba_id").notNull(),
     phoneNumberId: text("phone_number_id").notNull(),
     displayPhoneNumber: text("display_phone_number"),
@@ -283,11 +431,11 @@ export const metaCredentials = pgTable(
     status: text("status", { enum: ["connected", "reconnect_required"] })
       .notNull()
       .default("connected"),
+    isActive: boolean("is_active").notNull().default(true),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
   (t) => [
-    uniqueIndex("meta_credentials_org_uq").on(t.organizationId),
     // O webhook roteia por phone_number_id: precisa ser único na instância.
     uniqueIndex("meta_credentials_phone_uq").on(t.phoneNumberId),
   ]
@@ -307,6 +455,11 @@ export const unofficialChannel = pgTable(
     organizationId: text("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
+    departmentId: text("department_id").references(() => department.id, {
+      onDelete: "set null",
+    }),
+    name: text("name").notNull().default("WhatsApp"),
+    description: text("description"),
     /** JSON `{ creds, keys }` do Baileys, cifrado. */
     authStateCipher: text("auth_state_cipher").notNull(),
     authStateIv: text("auth_state_iv").notNull(),
@@ -317,10 +470,11 @@ export const unofficialChannel = pgTable(
     })
       .notNull()
       .default("disconnected"),
+    isActive: boolean("is_active").notNull().default(true),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
-  (t) => [uniqueIndex("unofficial_channel_org_uq").on(t.organizationId)]
+  (t) => [index("unofficial_channel_org_idx").on(t.organizationId)]
 );
 
 /**
@@ -348,6 +502,15 @@ export const messageMedia = pgTable("message_media", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+/**
+ * Perfil de agente IA — v0.1: N perfis reutilizáveis por organização (não
+ * mais 1 único). Cada perfil pode ser o padrão de um departamento
+ * (`department.agentProfileId`) e/ou de um atendente (`member.agentProfileId`),
+ * com override manual por conversa (`conversation.agentProfileId`).
+ * `enabled` agora significa "perfil ativo/selecionável" (arquivar em vez de
+ * apagar), não mais "liga a IA para a org inteira" — quem liga/desliga por
+ * conversa específica é `conversation.aiEnabled`, sem relação com este campo.
+ */
 export const agentProfile = pgTable(
   "agent_profile",
   {
@@ -364,7 +527,7 @@ export const agentProfile = pgTable(
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
-  (t) => [uniqueIndex("agent_profile_org_uq").on(t.organizationId)]
+  (t) => [index("agent_profile_org_idx").on(t.organizationId)]
 );
 
 export const kbEntry = pgTable(
@@ -374,6 +537,9 @@ export const kbEntry = pgTable(
     organizationId: text("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
+    departmentId: text("department_id").references(() => department.id, {
+      onDelete: "set null",
+    }),
     kind: text("kind", { enum: ["qa", "block"] }).notNull(),
     question: text("question"),
     answer: text("answer"),
@@ -392,6 +558,9 @@ export const template = pgTable(
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
+    departmentId: text("department_id").references(() => department.id, {
+      onDelete: "set null",
+    }),
     language: text("language").notNull(),
     category: text("category").notNull(),
     body: text("body").notNull(),
@@ -427,6 +596,9 @@ export const campaign = pgTable(
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
+    departmentId: text("department_id").references(() => department.id, {
+      onDelete: "set null",
+    }),
     channel: text("channel", { enum: ["official", "unofficial"] }).notNull(),
     /** Somente canal oficial. */
     templateId: text("template_id").references(() => template.id),
@@ -614,10 +786,11 @@ export const memberPermission = pgTable(
 );
 
 /**
- * Restrição opcional de acesso a canal por membro. Sem channel_id: cada
- * organização tem no máximo um canal oficial e um não oficial hoje
- * (meta_credentials/unofficial_channel são UNIQUE por organização).
- * Ausência de linha = acesso liberado por padrão.
+ * Restrição opcional de acesso a canal por membro — por TIPO de canal
+ * (official/unofficial), não por número específico: mesmo com N números
+ * por organização (v0.1), a permissão aqui é "pode usar o canal oficial?"
+ * / "pode usar o não oficial?", igual desde antes do multi-número. Sem
+ * channel_id de propósito. Ausência de linha = acesso liberado por padrão.
  */
 export const memberChannel = pgTable(
   "member_channel",
@@ -657,6 +830,15 @@ export const inviteToken = pgTable(
     role: text("role", { enum: ["admin", "agent"] }).notNull(),
     initialPermissions: jsonb("initial_permissions"),
     initialChannels: jsonb("initial_channels"),
+    /** Departamento ao qual o convidado já entra vinculado (v0.1),
+     * opcional — null = convite sem departamento (comportamento atual). */
+    initialDepartmentId: text("initial_department_id").references(
+      () => department.id,
+      { onDelete: "set null" }
+    ),
+    initialDepartmentRole: text("initial_department_role", {
+      enum: ["admin", "agent"],
+    }),
     expiresAt: timestamp("expires_at").notNull(),
     usedAt: timestamp("used_at"),
     usedBy: text("used_by").references(() => member.id),

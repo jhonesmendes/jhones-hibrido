@@ -24,7 +24,12 @@ export type ConversationDto = {
 export async function listConversations(
   organizationId: string,
   since?: Date,
-  assignedToFilter?: string
+  assignedToFilter?: string,
+  /** Departamento ativo (v0.1); undefined/null = sem filtro (visão
+   * consolidada). Conversas sem department_id ficam de fora quando um
+   * departamento está ativo — só entram quando o canal que as originou
+   * estiver vinculado a um departamento (Configurações → Canais). */
+  departmentFilter?: string
 ): Promise<ConversationDto[]> {
   const db = getDb();
   const previewSql = sql<string | null>`(
@@ -61,6 +66,9 @@ export async function listConversations(
         since ? gt(schema.conversation.updatedAt, since) : undefined,
         assignedToFilter
           ? eq(schema.conversation.assignedTo, assignedToFilter)
+          : undefined,
+        departmentFilter
+          ? eq(schema.conversation.departmentId, departmentFilter)
           : undefined
       )
     )

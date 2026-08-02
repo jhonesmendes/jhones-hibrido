@@ -1,0 +1,2 @@
+ALTER TABLE "conversation" ADD COLUMN "meta_credential_id" text;--> statement-breakpoint
+ALTER TABLE "conversation" ADD CONSTRAINT "conversation_meta_credential_id_meta_credentials_id_fk" FOREIGN KEY ("meta_credential_id") REFERENCES "public"."meta_credentials"("id") ON DELETE set null ON UPDATE no action;

@@ -3,10 +3,14 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   AlertTriangle,
-  CheckCircle2,
+  BadgeCheck,
+  ChevronUp,
   Copy,
   Info,
+  Pencil,
+  Plus,
   ShieldCheck,
+  Trash2,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,12 +18,19 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-type Connection = {
+type Department = { id: string; name: string };
+
+type WhatsappNumber = {
+  id: string;
+  name: string;
+  description: string | null;
+  departmentId: string | null;
   wabaId: string;
   phoneNumberId: string;
   displayPhoneNumber: string | null;
   verifiedName: string | null;
   status: "connected" | "reconnect_required";
+  isActive: boolean;
   tokenLast4: string;
 };
 
@@ -30,18 +41,28 @@ type WebhookInfo = {
   signatureLayer: boolean;
 };
 
+/**
+ * v0.1: N números oficiais por organização, não mais 1 — cada linha em
+ * `meta_credentials` é um canal próprio. O webhook continua sendo UM só
+ * por organização (roteia por phone_number_id do payload, já resolvido
+ * no servidor); por isso o card do webhook fica fora da lista de números.
+ */
 export function WhatsappWizard() {
-  const [connection, setConnection] = useState<Connection | null>(null);
+  const [numbers, setNumbers] = useState<WhatsappNumber[] | null>(null);
+  const [departments, setDepartments] = useState<Department[]>([]);
   const [webhook, setWebhook] = useState<WebhookInfo | null>(null);
+  const [addingNew, setAddingNew] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
   const refetch = useCallback(async () => {
-    const [c, w] = await Promise.all([
-      fetch("/api/settings/whatsapp").then((r) => (r.ok ? r.json() : null)),
+    const [n, w, d] = await Promise.all([
+      fetch("/api/settings/whatsapp/numbers").then((r) => (r.ok ? r.json() : null)),
       fetch("/api/settings/webhook").then((r) => (r.ok ? r.json() : null)),
-    ]).catch(() => [null, null]);
-    if (c) setConnection(c.connection);
+      fetch("/api/settings/departments").then((r) => (r.ok ? r.json() : null)),
+    ]).catch(() => [null, null, null]);
+    if (n) setNumbers(n.numbers);
     if (w) setWebhook(w);
+    if (d) setDepartments(d.departments);
     setLoaded(true);
   }, []);
 
@@ -53,62 +74,191 @@ export function WhatsappWizard() {
     return <p className="text-sm text-muted-foreground">Carregando…</p>;
   }
 
+  const hasReconnectRequired = numbers?.some((n) => n.status === "reconnect_required");
+
   return (
     <div className="max-w-3xl space-y-6">
-      {connection?.status === "reconnect_required" && (
+      {hasReconnectRequired && (
         <div className="flex items-start gap-2 rounded-lg border border-[#ecd4d2] bg-[#faf1f0] p-4 text-sm">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
           <div>
             <p className="font-medium text-[#a2504c]">
-              O token do WhatsApp expirou ou foi revogado.
+              Um ou mais números têm o token vencido ou revogado.
             </p>
             <p className="text-[#a2504c]/80">
-              Os envios estão pausados. Cole um token novo abaixo e teste a
-              conexão para reconectar.
+              Os envios por esse número estão pausados. Abra-o abaixo e cole
+              um token novo para reconectar.
             </p>
           </div>
         </div>
       )}
 
-      {connection && connection.status === "connected" && (
-        <div className="flex items-center gap-3 rounded-lg border border-[#d8e8dd] bg-[#eff7f1] p-4">
-          <CheckCircle2 className="h-5 w-5 text-success" />
-          <div className="flex-1 text-sm">
-            <p className="font-medium text-[#3f6b52]">
-              Número conectado: {connection.displayPhoneNumber ?? connection.phoneNumberId}
-            </p>
-            <p className="text-[#3f6b52]/80">
-              {connection.verifiedName ? `${connection.verifiedName} · ` : ""}
-              token …{connection.tokenLast4}
-            </p>
-          </div>
-          <Badge variant="success">Conectado</Badge>
-        </div>
-      )}
+      <div className="space-y-3">
+        {numbers?.map((n) => (
+          <NumberCard
+            key={n.id}
+            number={n}
+            departments={departments}
+            onChanged={() => void refetch()}
+          />
+        ))}
 
-      <ConnectForm existing={connection} onSaved={() => void refetch()} />
+        {numbers?.length === 0 && !addingNew && (
+          <p className="text-sm text-muted-foreground">
+            Nenhum número oficial conectado ainda.
+          </p>
+        )}
+
+        {addingNew ? (
+          <ConnectForm
+            onSaved={() => {
+              setAddingNew(false);
+              void refetch();
+            }}
+            onCancel={() => setAddingNew(false)}
+          />
+        ) : (
+          <Button variant="outline" onClick={() => setAddingNew(true)}>
+            <Plus className="mr-1.5 h-4 w-4" /> Adicionar número
+          </Button>
+        )}
+      </div>
 
       {webhook && <WebhookCard webhook={webhook} />}
     </div>
   );
 }
 
+function NumberCard({
+  number: n,
+  departments,
+  onChanged,
+}: {
+  number: WhatsappNumber;
+  departments: Department[];
+  onChanged: () => void;
+}) {
+  const [expanded, setExpanded] = useState(n.status === "reconnect_required");
+  const [busy, setBusy] = useState(false);
+
+  async function toggleActive() {
+    setBusy(true);
+    await fetch(`/api/settings/whatsapp/numbers/${n.id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ isActive: !n.isActive }),
+    }).catch(() => null);
+    setBusy(false);
+    onChanged();
+  }
+
+  async function setDepartment(departmentId: string) {
+    setBusy(true);
+    await fetch(`/api/settings/whatsapp/numbers/${n.id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ departmentId: departmentId || null }),
+    }).catch(() => null);
+    setBusy(false);
+    onChanged();
+  }
+
+  async function remove() {
+    if (!confirm(`Remover o número "${n.name}"? Isso não pode ser desfeito.`)) return;
+    setBusy(true);
+    await fetch(`/api/settings/whatsapp/numbers/${n.id}`, { method: "DELETE" }).catch(
+      () => null
+    );
+    setBusy(false);
+    onChanged();
+  }
+
+  return (
+    <Card>
+      <CardHeader className="flex-row items-center justify-between space-y-0 pb-3">
+        <div className="flex items-center gap-3">
+          <BadgeCheck className="h-5 w-5 text-primary" />
+          <div>
+            <CardTitle className="text-base">{n.name}</CardTitle>
+            <CardDescription>
+              {n.displayPhoneNumber ?? n.phoneNumberId}
+              {n.verifiedName ? ` · ${n.verifiedName}` : ""}
+            </CardDescription>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <Badge variant={n.status === "connected" ? "success" : "destructive"}>
+            {n.status === "connected" ? "Conectado" : "Reconectar"}
+          </Badge>
+          {!n.isActive && <Badge variant="outline">Inativo</Badge>}
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label={expanded ? "Recolher" : "Editar"}
+            disabled={busy}
+            onClick={() => setExpanded((v) => !v)}
+          >
+            {expanded ? <ChevronUp className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
+          </Button>
+        </div>
+      </CardHeader>
+      {expanded && (
+        <CardContent className="space-y-4 border-t pt-4">
+          {n.description && <p className="text-sm text-muted-foreground">{n.description}</p>}
+          {departments.length > 0 && (
+            <div className="space-y-1.5">
+              <Label>Departamento</Label>
+              <select
+                value={n.departmentId ?? ""}
+                disabled={busy}
+                onChange={(e) => void setDepartment(e.target.value)}
+                className="flex h-9 w-full rounded-md border border-input bg-card px-3 text-sm"
+              >
+                <option value="">Sem departamento (visível à organização toda)</option>
+                {departments.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          <ConnectForm existing={n} onSaved={onChanged} />
+          <div className="flex items-center justify-between border-t pt-3">
+            <Button variant="outline" size="sm" disabled={busy} onClick={() => void toggleActive()}>
+              {n.isActive ? "Desativar" : "Reativar"}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-destructive hover:text-destructive"
+              disabled={busy}
+              onClick={() => void remove()}
+            >
+              <Trash2 className="mr-1.5 h-3.5 w-3.5" /> Remover número
+            </Button>
+          </div>
+        </CardContent>
+      )}
+    </Card>
+  );
+}
+
 function ConnectForm({
   existing,
   onSaved,
+  onCancel,
 }: {
-  existing: Connection | null;
+  existing?: WhatsappNumber;
   onSaved: () => void;
+  onCancel?: () => void;
 }) {
+  const [name, setName] = useState(existing?.name ?? "");
   const [wabaId, setWabaId] = useState(existing?.wabaId ?? "");
-  const [phoneNumberId, setPhoneNumberId] = useState(
-    existing?.phoneNumberId ?? ""
-  );
+  const [phoneNumberId, setPhoneNumberId] = useState(existing?.phoneNumberId ?? "");
   const [token, setToken] = useState("");
   const [testResult, setTestResult] = useState<
-    | { ok: true; display: string }
-    | { ok: false; message: string }
-    | null
+    { ok: true; display: string } | { ok: false; message: string } | null
   >(null);
   const [testing, setTesting] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -136,21 +286,24 @@ function ConnectForm({
     if (res.ok && data?.displayPhoneNumber) {
       setTestResult({ ok: true, display: data.displayPhoneNumber });
     } else {
-      setTestResult({
-        ok: false,
-        message: data?.error?.message ?? "A validação falhou",
-      });
+      setTestResult({ ok: false, message: data?.error?.message ?? "A validação falhou" });
     }
   }
 
   async function save() {
     setSaving(true);
     setSaveError(null);
-    const res = await fetch("/api/settings/whatsapp", {
-      method: "PUT",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ wabaId, phoneNumberId, token }),
-    }).catch(() => null);
+    const res = existing
+      ? await fetch(`/api/settings/whatsapp/numbers/${existing.id}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ token }),
+        }).catch(() => null)
+      : await fetch("/api/settings/whatsapp/numbers", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ name: name.trim() || undefined, wabaId, phoneNumberId, token }),
+        }).catch(() => null);
     setSaving(false);
     if (!res?.ok) {
       const data = (await res?.json().catch(() => null)) as {
@@ -165,42 +318,56 @@ function ConnectForm({
   }
 
   return (
-    <Card>
-      <CardHeader>
+    <Card className={existing ? "border-0 shadow-none" : undefined}>
+      <CardHeader className={existing ? "px-0 pt-0" : undefined}>
         <CardTitle>
-          {existing ? "Reconectar / atualizar o número" : "Conectar seu número de WhatsApp"}
+          {existing ? "Reconectar com um token novo" : "Conectar um número de WhatsApp"}
         </CardTitle>
         <CardDescription>
           Cole as credenciais da WhatsApp Cloud API. O token é validado na
           Meta ANTES de ser salvo e é armazenado criptografado.
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="grid gap-3 rounded-md border bg-background/40 p-4 text-sm">
-          <p className="font-medium">De onde vem o token?</p>
-          <div className="grid gap-3 md:grid-cols-2">
-            <div className="rounded-md border p-3">
-              <p className="mb-1 font-medium text-primary">Modo direto</p>
-              <p className="text-muted-foreground">
-                O negócio tem o próprio app em{" "}
-                <span className="text-foreground">developers.facebook.com</span>:
-                use um token de <span className="text-foreground">usuário do sistema</span>{" "}
-                (não expira) com permissões de WhatsApp. Neste modo, vale
-                configurar também o App Secret para a assinatura do webhook.
-              </p>
-            </div>
-            <div className="rounded-md border p-3">
-              <p className="mb-1 font-medium text-primary">Modo agência (Tech Provider)</p>
-              <p className="text-muted-foreground">
-                Sua agência faz o Embedded Signup na plataforma DELA e o
-                backend dela obtém o token do cliente; ela entrega o token
-                para colar aqui. O webhook conecta com o{" "}
-                <span className="text-foreground">override por WABA</span>{" "}
-                (checklist de 5 passos no README).
-              </p>
+      <CardContent className={`space-y-4 ${existing ? "px-0" : ""}`}>
+        {!existing && (
+          <div className="grid gap-3 rounded-md border bg-background/40 p-4 text-sm">
+            <p className="font-medium">De onde vem o token?</p>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="rounded-md border p-3">
+                <p className="mb-1 font-medium text-primary">Modo direto</p>
+                <p className="text-muted-foreground">
+                  O negócio tem o próprio app em{" "}
+                  <span className="text-foreground">developers.facebook.com</span>:
+                  use um token de <span className="text-foreground">usuário do sistema</span>{" "}
+                  (não expira) com permissões de WhatsApp. Neste modo, vale
+                  configurar também o App Secret para a assinatura do webhook.
+                </p>
+              </div>
+              <div className="rounded-md border p-3">
+                <p className="mb-1 font-medium text-primary">Modo agência (Tech Provider)</p>
+                <p className="text-muted-foreground">
+                  Sua agência faz o Embedded Signup na plataforma DELA e o
+                  backend dela obtém o token do cliente; ela entrega o token
+                  para colar aqui. O webhook conecta com o{" "}
+                  <span className="text-foreground">override por WABA</span>{" "}
+                  (checklist de 5 passos no README).
+                </p>
+              </div>
             </div>
           </div>
-        </div>
+        )}
+
+        {!existing && (
+          <div className="space-y-1.5">
+            <Label htmlFor="channel-name">Nome do canal (opcional)</Label>
+            <Input
+              id="channel-name"
+              placeholder="Ex.: Comercial, Suporte, CCD…"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </div>
+        )}
 
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-1.5">
@@ -209,6 +376,7 @@ function ConnectForm({
               id="waba-id"
               placeholder="ID da conta do WhatsApp Business"
               value={wabaId}
+              disabled={Boolean(existing)}
               onChange={(e) => setWabaId(e.target.value)}
             />
           </div>
@@ -218,6 +386,7 @@ function ConnectForm({
               id="phone-number-id"
               placeholder="ID do número de telefone"
               value={phoneNumberId}
+              disabled={Boolean(existing)}
               onChange={(e) => setPhoneNumberId(e.target.value)}
             />
           </div>
@@ -227,7 +396,9 @@ function ConnectForm({
           <Input
             id="token"
             type="password"
-            placeholder={existing ? `Salvo (…${existing.tokenLast4}) — cole um novo para trocar` : "EAAG…"}
+            placeholder={
+              existing ? `Salvo (…${existing.tokenLast4}) — cole um novo para trocar` : "EAAG…"
+            }
             value={token}
             onChange={(e) => {
               setToken(e.target.value);
@@ -237,9 +408,7 @@ function ConnectForm({
         </div>
 
         {testResult && (
-          <p
-            className={`text-sm ${testResult.ok ? "text-success" : "text-destructive"}`}
-          >
+          <p className={`text-sm ${testResult.ok ? "text-success" : "text-destructive"}`}>
             {testResult.ok
               ? `✓ Token válido para ${testResult.display}. Já pode salvar.`
               : testResult.message}
@@ -248,19 +417,17 @@ function ConnectForm({
         {saveError && <p className="text-sm text-destructive">{saveError}</p>}
 
         <div className="flex gap-2">
-          <Button
-            variant="outline"
-            disabled={!canTest || testing}
-            onClick={() => void test()}
-          >
+          <Button variant="outline" disabled={!canTest || testing} onClick={() => void test()}>
             {testing ? "Testando…" : "Testar conexão"}
           </Button>
-          <Button
-            disabled={!testResult?.ok || saving}
-            onClick={() => void save()}
-          >
-            {saving ? "Salvando…" : "Salvar conexão"}
+          <Button disabled={!testResult?.ok || saving} onClick={() => void save()}>
+            {saving ? "Salvando…" : existing ? "Salvar token novo" : "Salvar número"}
           </Button>
+          {onCancel && (
+            <Button variant="ghost" onClick={onCancel} disabled={saving}>
+              Cancelar
+            </Button>
+          )}
         </div>
       </CardContent>
     </Card>
@@ -282,14 +449,15 @@ function WebhookCard({ webhook }: { webhook: WebhookInfo }) {
       <CardHeader>
         <CardTitle>Webhook do WhatsApp</CardTitle>
         <CardDescription>
-          Cole estes valores no painel da Meta (modo direto) ou use-os no
-          override do backend da sua agência (no nível da WABA).{" "}
+          Uma única URL para toda a organização — o roteamento entre os seus
+          números usa o Phone Number ID de cada evento, não a URL. Cole estes
+          valores no painel da Meta (modo direto) ou use-os no override do
+          backend da sua agência (no nível da WABA).{" "}
           <strong className="text-foreground">
-            Salve a conexão ANTES de configurar o webhook:
+            Salve ao menos um número ANTES de configurar o webhook:
           </strong>{" "}
           a verificação (handshake) funciona sem salvar, mas as mensagens só
-          são recebidas com a conexão salva — o roteamento usa o seu Phone
-          Number ID.
+          são recebidas com a conexão salva.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -314,9 +482,7 @@ function WebhookCard({ webhook }: { webhook: WebhookInfo }) {
             >
               <Copy className="h-4 w-4" />
             </Button>
-            {copied === "url" && (
-              <span className="text-xs text-primary">Copiada ✓</span>
-            )}
+            {copied === "url" && <span className="text-xs text-primary">Copiada ✓</span>}
           </div>
           <p className="text-xs text-muted-foreground">
             A URL contém o token secreto no caminho: trate-a como uma senha.
@@ -336,9 +502,7 @@ function WebhookCard({ webhook }: { webhook: WebhookInfo }) {
             >
               <Copy className="h-4 w-4" />
             </Button>
-            {copied === "vt" && (
-              <span className="text-xs text-primary">Copiado ✓</span>
-            )}
+            {copied === "vt" && <span className="text-xs text-primary">Copiado ✓</span>}
           </div>
         </div>
         {webhook.signatureLayer ? (

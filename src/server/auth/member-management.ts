@@ -27,6 +27,8 @@ export type MemberPatch = {
     official?: ChannelAccessPatch;
     unofficial?: ChannelAccessPatch;
   };
+  /** Perfil de agente IA padrão deste atendente (v0.1, Etapa 6). */
+  agentProfileId?: string | null;
 };
 
 /**
@@ -86,12 +88,19 @@ export async function updateMember(
   }
 
   await db.transaction(async (tx) => {
-    if (patch.role !== undefined || patch.isActive !== undefined) {
+    if (
+      patch.role !== undefined ||
+      patch.isActive !== undefined ||
+      patch.agentProfileId !== undefined
+    ) {
       await tx
         .update(schema.member)
         .set({
           ...(patch.role !== undefined ? { role: patch.role } : {}),
           ...(patch.isActive !== undefined ? { isActive: patch.isActive } : {}),
+          ...(patch.agentProfileId !== undefined
+            ? { agentProfileId: patch.agentProfileId }
+            : {}),
         })
         .where(eq(schema.member.id, memberId));
     }

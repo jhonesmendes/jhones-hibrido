@@ -196,6 +196,7 @@ function timestampToEpochSeconds(ts: unknown): string {
  */
 export async function handleIncomingMessages(
   organizationId: string,
+  channelId: string,
   sock: WASocket,
   messages: WAMessage[]
 ): Promise<void> {
@@ -230,6 +231,7 @@ export async function handleIncomingMessages(
 
     await ingestInboundMessage({
       organizationId,
+      unofficialChannelId: channelId,
       from: isGroup ? groupJidToId(rawJid) : jidToPhone(remoteJid),
       profileName: isGroup
         ? await getGroupName(sock, rawJid)

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Plus, Sparkles, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronUp, Plus, Sparkles, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { HelpLink } from "@/components/docs/help-link";
 
 type Profile = {
+  id: string;
   enabled: boolean;
   name: string;
   tone: string | null;
@@ -28,21 +29,28 @@ type KbEntry = {
   content: string | null;
 };
 
+/**
+ * v0.1 (Etapa 6): N perfis de agente reutilizáveis por organização, não
+ * mais 1 só. Cada perfil pode ser o padrão de um departamento
+ * (Configurações → Departamentos) e/ou de um atendente (Configurações →
+ * Equipe) — a conversa resolve pela cadeia: override manual > atendente >
+ * departamento > perfil mais antigo ativo da org.
+ */
 export function AgentClient() {
-  const [profile, setProfile] = useState<Profile | null>(null);
+  const [profiles, setProfiles] = useState<Profile[] | null>(null);
   const [aiConfigured, setAiConfigured] = useState(true);
   const [entries, setEntries] = useState<KbEntry[]>([]);
   const [kbSize, setKbSize] = useState<{ chars: number; warnAt: number; warning: boolean } | null>(null);
-  const [saved, setSaved] = useState(false);
+  const [creating, setCreating] = useState(false);
 
   const refetch = useCallback(async () => {
     const [p, kb, size] = await Promise.all([
-      fetch("/api/agent/profile").then((r) => (r.ok ? r.json() : null)),
+      fetch("/api/agent/profiles").then((r) => (r.ok ? r.json() : null)),
       fetch("/api/kb").then((r) => (r.ok ? r.json() : null)),
       fetch("/api/kb/size").then((r) => (r.ok ? r.json() : null)),
     ]).catch(() => [null, null, null]);
     if (p) {
-      setProfile(p.profile);
+      setProfiles(p.profiles);
       setAiConfigured(p.aiConfigured);
     }
     if (kb) setEntries(kb.entries);
@@ -53,7 +61,7 @@ export function AgentClient() {
     void refetch();
   }, [refetch]);
 
-  if (!profile) {
+  if (!profiles) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
         Carregando…
@@ -61,52 +69,19 @@ export function AgentClient() {
     );
   }
 
-  async function saveProfile(patch: Partial<Profile>) {
-    await fetch("/api/agent/profile", {
-      method: "PUT",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(patch),
-    }).catch(() => null);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-    void refetch();
-  }
-
   return (
     <div className="h-full overflow-y-auto">
       <header className="flex items-center justify-between border-b px-6 py-4">
         <div className="flex items-center gap-1.5">
-          <h2 className="font-semibold">Agente de IA</h2>
+          <h2 className="font-semibold">Agentes de IA</h2>
           <HelpLink slug="agente" />
-        </div>
-        <div className="flex items-center gap-3">
-          {saved && <span className="text-xs text-primary">Salvo ✓</span>}
-          <span className="text-sm text-muted-foreground">
-            {profile.enabled ? "Ligado" : "Desligado"}
-          </span>
-          <button
-            role="switch"
-            aria-checked={profile.enabled}
-            aria-label="Agente ligado"
-            disabled={!aiConfigured}
-            onClick={() => void saveProfile({ enabled: !profile.enabled })}
-            className={`relative h-6 w-11 rounded-full transition-colors disabled:opacity-40 ${
-              profile.enabled ? "bg-primary" : "bg-secondary"
-            }`}
-          >
-            <span
-              className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform ${
-                profile.enabled ? "translate-x-5" : "translate-x-0.5"
-              }`}
-            />
-          </button>
         </div>
       </header>
 
       {!aiConfigured && (
         <div className="mx-6 mt-6 rounded-lg border border-brand-soft bg-brand-tint p-6 text-center">
           <Sparkles className="mx-auto mb-2 h-8 w-8 text-primary" />
-          <p className="font-medium">Configure seu provedor de IA para ativar o agente</p>
+          <p className="font-medium">Configure seu provedor de IA para ativar os agentes</p>
           <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
             Configure em{" "}
             <Link href="/settings/ai" className="text-primary hover:underline">
@@ -114,87 +89,233 @@ export function AgentClient() {
             </Link>
             , ou adicione <code className="rounded bg-secondary px-1">OPENROUTER_API_TOKEN</code>{" "}
             e <code className="rounded bg-secondary px-1">OPENROUTER_MODEL</code> às variáveis de
-            ambiente da instância e reinicie. Enquanto isso, você pode deixar prontos o
-            comportamento e o conhecimento aqui embaixo.
+            ambiente da instância e reinicie. Enquanto isso, você pode deixar prontos os
+            perfis e o conhecimento aqui embaixo.
           </p>
         </div>
       )}
 
       <div className="grid gap-6 p-6 lg:grid-cols-2">
-        <ProfileSection profile={profile} onSave={saveProfile} />
+        <div className="space-y-3">
+          {profiles.map((p) => (
+            <ProfileCard key={p.id} profile={p} onChanged={() => void refetch()} />
+          ))}
+
+          {profiles.length === 0 && !creating && (
+            <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+              Nenhum perfil de agente ainda.
+            </p>
+          )}
+
+          {creating ? (
+            <CreateProfileForm
+              onCreated={() => {
+                setCreating(false);
+                void refetch();
+              }}
+              onCancel={() => setCreating(false)}
+            />
+          ) : (
+            <Button variant="outline" onClick={() => setCreating(true)}>
+              <Plus className="mr-1.5 h-4 w-4" /> Novo perfil
+            </Button>
+          )}
+        </div>
+
         <KbSection entries={entries} kbSize={kbSize} onChanged={() => void refetch()} />
       </div>
     </div>
   );
 }
 
-function ProfileSection({
-  profile,
-  onSave,
+function CreateProfileForm({
+  onCreated,
+  onCancel,
 }: {
-  profile: Profile;
-  onSave: (patch: Partial<Profile>) => Promise<void>;
+  onCreated: () => void;
+  onCancel: () => void;
 }) {
-  const [form, setForm] = useState(profile);
-  useEffect(() => setForm(profile), [profile]);
+  const [name, setName] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function create() {
+    setSaving(true);
+    setError(null);
+    const res = await fetch("/api/agent/profiles", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name }),
+    }).catch(() => null);
+    setSaving(false);
+    if (!res?.ok) {
+      const data = (await res?.json().catch(() => null)) as {
+        error?: { message?: string };
+      } | null;
+      setError(data?.error?.message ?? "Não foi possível criar o perfil");
+      return;
+    }
+    onCreated();
+  }
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Comportamento</CardTitle>
+        <CardTitle>Novo perfil</CardTitle>
         <CardDescription>
-          Como o agente se apresenta e age ao responder aos seus clientes.
+          Ex.: &ldquo;Bob Comercial&rdquo;, &ldquo;Bob Suporte&rdquo; — dê um
+          nome e depois atribua a um departamento ou atendente.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-1.5">
-          <Label htmlFor="agent-name">Nome do agente</Label>
-          <Input
-            id="agent-name"
-            value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
-          />
+          <Label htmlFor="new-agent-name">Nome</Label>
+          <Input id="new-agent-name" value={name} onChange={(e) => setName(e.target.value)} />
         </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="agent-tone">Tom</Label>
-          <Input
-            id="agent-tone"
-            placeholder="ex.: próximo e direto, com você"
-            value={form.tone ?? ""}
-            onChange={(e) => setForm({ ...form, tone: e.target.value })}
-          />
+        {error && <p className="text-sm text-destructive">{error}</p>}
+        <div className="flex gap-2">
+          <Button disabled={saving || !name.trim()} onClick={() => void create()}>
+            {saving ? "Criando…" : "Criar perfil"}
+          </Button>
+          <Button variant="ghost" onClick={onCancel} disabled={saving}>
+            Cancelar
+          </Button>
         </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="agent-instructions">Instruções</Label>
-          <Textarea
-            id="agent-instructions"
-            rows={5}
-            placeholder="O que o agente deve e não deve fazer…"
-            value={form.instructions ?? ""}
-            onChange={(e) => setForm({ ...form, instructions: e.target.value })}
-          />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="agent-escalation">Regras de escalonamento</Label>
-          <Textarea
-            id="agent-escalation"
-            rows={3}
-            placeholder="Quando passar a conversa para um humano…"
-            value={form.escalationRules ?? ""}
-            onChange={(e) => setForm({ ...form, escalationRules: e.target.value })}
-          />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="agent-greeting">Saudação</Label>
-          <Input
-            id="agent-greeting"
-            placeholder="Saudação para conversas novas"
-            value={form.greeting ?? ""}
-            onChange={(e) => setForm({ ...form, greeting: e.target.value })}
-          />
-        </div>
-        <Button onClick={() => void onSave(form)}>Salvar comportamento</Button>
       </CardContent>
+    </Card>
+  );
+}
+
+function ProfileCard({
+  profile: p,
+  onChanged,
+}: {
+  profile: Profile;
+  onChanged: () => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const [form, setForm] = useState(p);
+  const [saving, setSaving] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => setForm(p), [p]);
+
+  async function save() {
+    setSaving(true);
+    await fetch(`/api/agent/profiles/${p.id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        name: form.name,
+        tone: form.tone,
+        instructions: form.instructions,
+        escalationRules: form.escalationRules,
+        greeting: form.greeting,
+      }),
+    }).catch(() => null);
+    setSaving(false);
+    onChanged();
+  }
+
+  async function toggleEnabled() {
+    setBusy(true);
+    await fetch(`/api/agent/profiles/${p.id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ enabled: !p.enabled }),
+    }).catch(() => null);
+    setBusy(false);
+    onChanged();
+  }
+
+  async function remove() {
+    if (!confirm(`Remover o perfil "${p.name}"? Departamentos/atendentes que o usam voltam a não ter perfil padrão.`))
+      return;
+    setBusy(true);
+    await fetch(`/api/agent/profiles/${p.id}`, { method: "DELETE" }).catch(() => null);
+    setBusy(false);
+    onChanged();
+  }
+
+  return (
+    <Card>
+      <CardHeader className="flex-row items-center justify-between space-y-0 pb-3">
+        <CardTitle className="text-base">{p.name}</CardTitle>
+        <div className="flex items-center gap-2">
+          <Badge variant={p.enabled ? "success" : "outline"}>
+            {p.enabled ? "Ativo" : "Inativo"}
+          </Badge>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label={expanded ? "Recolher" : "Editar"}
+            onClick={() => setExpanded((v) => !v)}
+          >
+            {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </Button>
+        </div>
+      </CardHeader>
+      {expanded && (
+        <CardContent className="space-y-4 border-t pt-4">
+          <div className="space-y-1.5">
+            <Label>Nome do agente</Label>
+            <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Tom</Label>
+            <Input
+              placeholder="ex.: próximo e direto, com você"
+              value={form.tone ?? ""}
+              onChange={(e) => setForm({ ...form, tone: e.target.value })}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Instruções</Label>
+            <Textarea
+              rows={5}
+              placeholder="O que o agente deve e não deve fazer…"
+              value={form.instructions ?? ""}
+              onChange={(e) => setForm({ ...form, instructions: e.target.value })}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Regras de escalonamento</Label>
+            <Textarea
+              rows={3}
+              placeholder="Quando passar a conversa para um humano…"
+              value={form.escalationRules ?? ""}
+              onChange={(e) => setForm({ ...form, escalationRules: e.target.value })}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Saudação</Label>
+            <Input
+              placeholder="Saudação para conversas novas"
+              value={form.greeting ?? ""}
+              onChange={(e) => setForm({ ...form, greeting: e.target.value })}
+            />
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-3">
+            <div className="flex gap-2">
+              <Button size="sm" disabled={saving || !form.name.trim()} onClick={() => void save()}>
+                {saving ? "Salvando…" : "Salvar"}
+              </Button>
+              <Button variant="outline" size="sm" disabled={busy} onClick={() => void toggleEnabled()}>
+                {p.enabled ? "Desativar" : "Ativar"}
+              </Button>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-destructive hover:text-destructive"
+              disabled={busy}
+              onClick={() => void remove()}
+            >
+              <Trash2 className="mr-1.5 h-3.5 w-3.5" /> Remover
+            </Button>
+          </div>
+        </CardContent>
+      )}
     </Card>
   );
 }
@@ -248,7 +369,7 @@ function KbSection({
             <CardTitle>Knowledge base</CardTitle>
             <CardDescription>
               A única fonte de verdade do agente: o que não está aqui, ele não
-              afirma.
+              afirma. Compartilhada por todos os perfis da organização.
             </CardDescription>
           </div>
           {kbSize && (

@@ -3,6 +3,7 @@ import { getDb, schema } from "@/lib/db";
 import { newId } from "@/lib/db/ids";
 import { publish } from "@/server/events/bus";
 import { runAgentTurn } from "@/server/ai/pipeline";
+import { resolveAgentProfile } from "@/server/ai/agent-profile";
 import { resolveAiConfig } from "@/server/ai/config";
 import { renderKb } from "@/server/ai/prompts";
 import { computeScore, judgeCase } from "@/server/lab/judge";
@@ -96,12 +97,15 @@ async function runAllCases(
     .where(eq(schema.kbEntry.organizationId, organizationId));
   const kbText = renderKb(kbEntries);
 
-  const profileRows = await db
-    .select()
-    .from(schema.agentProfile)
-    .where(eq(schema.agentProfile.organizationId, organizationId))
-    .limit(1);
-  const profile = profileRows[0];
+  // Texto descritivo pro juiz: o mesmo perfil que `runAgentTurn` vai
+  // resolver para as conversas de teste desta rodada (sem departamento nem
+  // atendente atribuído, cai no padrão da org — mesmo comportamento de
+  // antes da v0.1, quando só existia 1 perfil por org).
+  const profile = await resolveAgentProfile(
+    organizationId,
+    { agentProfileId: null, assignedTo: null, departmentId: null },
+    { includeDisabled: true }
+  );
   const behaviorText = profile
     ? [
         `Nome: ${profile.name}`,

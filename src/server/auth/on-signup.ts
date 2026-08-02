@@ -71,6 +71,7 @@ export async function resolveMembership(userId: string): Promise<{
   organizationId: string;
   role: string;
   isActive: boolean;
+  activeDepartmentId: string | null;
 } | null> {
   const db = getDb();
   const rows = await db
@@ -79,6 +80,7 @@ export async function resolveMembership(userId: string): Promise<{
       organizationId: schema.member.organizationId,
       role: schema.member.role,
       isActive: schema.member.isActive,
+      activeDepartmentId: schema.member.activeDepartmentId,
     })
     .from(schema.member)
     .where(eq(schema.member.userId, userId))

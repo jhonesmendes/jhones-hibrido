@@ -22,6 +22,7 @@ const patchSchema = z.object({
       unofficial: channelAccessSchema.optional(),
     })
     .optional(),
+  agentProfileId: z.string().trim().min(1).nullable().optional(),
 });
 
 /** Alteração administrativa de membro (US2): papel, status, permissões, canais. */

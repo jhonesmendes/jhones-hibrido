@@ -29,7 +29,7 @@ export const POST = withAuth(async (session, req: Request, ctx: Params) => {
 
   const row = await getConversation(session.organizationId, id);
   if (!row) return apiError(404, "not_found", "Conversa não encontrada");
-  await requireConversationAccess(session, row.conversation.assignedTo);
+  await requireConversationAccess(session, row.conversation);
   await requirePermission(session, "conversations:reply");
   await requireChannelAccess(session, "official", "send");
 

@@ -14,7 +14,12 @@ export type AuditAction =
   | "settings.smtp_changed"
   | "settings.ai_changed"
   | "settings.n8n_changed"
-  | "n8n.workflow_executed";
+  | "n8n.workflow_executed"
+  | "department.created"
+  | "department.updated"
+  | "department.deleted"
+  | "department.member_added"
+  | "department.member_removed";
 
 /**
  * Registra uma ação crítica (FR-019). Nunca lança: um problema no log de

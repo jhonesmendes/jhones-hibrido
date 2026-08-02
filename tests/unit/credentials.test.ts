@@ -13,7 +13,9 @@ vi.mock("@/lib/db", () => ({
       values: (v: Record<string, unknown>) => {
         insertedRows.push(v);
         return {
-          onConflictDoUpdate: () => Promise.resolve(),
+          onConflictDoUpdate: () => ({
+            returning: () => Promise.resolve([{ id: "cred_test" }]),
+          }),
         };
       },
     }),

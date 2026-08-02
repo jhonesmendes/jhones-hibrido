@@ -23,8 +23,10 @@ vi.mock("@/lib/db", () => {
   const member = { __name: "member" };
   const memberPermission = { __name: "memberPermission" };
   const memberChannel = { __name: "memberChannel" };
+  const memberDepartment = { __name: "memberDepartment" };
   const inviteToken = { __name: "inviteToken" };
   const user = { __name: "user", name: "Convite Testador" };
+  const department = { __name: "department", name: "Departamento Teste" };
 
   function tableName(table: unknown): string {
     return (table as { __name: string }).__name;
@@ -33,14 +35,21 @@ vi.mock("@/lib/db", () => {
   /**
    * `joined=false`: linha crua do invite (usado dentro da transação de
    * consumeInviteToken, sem join). `joined=true`: shape
-   * `{ invite, inviterName }` (checkInviteToken faz innerJoin com
-   * member/user para trazer o nome de quem convidou).
+   * `{ invite, inviterName, departmentName }` (checkInviteToken faz
+   * innerJoin com member/user + leftJoin com department).
    */
   function makeChain(joined: boolean) {
     const rows = () =>
-      invite ? [joined ? { invite, inviterName: user.name } : invite] : [];
+      invite
+        ? [
+            joined
+              ? { invite, inviterName: user.name, departmentName: null }
+              : invite,
+          ]
+        : [];
     return {
       innerJoin: () => makeChain(true),
+      leftJoin: () => makeChain(true),
       where: () =>
         Object.assign(Promise.resolve(rows()), {
           limit: () => Promise.resolve(rows()),
@@ -84,7 +93,15 @@ vi.mock("@/lib/db", () => {
       transaction: async (fn: (tx: ReturnType<typeof makeTx>) => Promise<unknown>) =>
         fn(makeTx()),
     }),
-    schema: { member, memberPermission, memberChannel, inviteToken, user },
+    schema: {
+      member,
+      memberPermission,
+      memberChannel,
+      memberDepartment,
+      inviteToken,
+      user,
+      department,
+    },
   };
 });
 

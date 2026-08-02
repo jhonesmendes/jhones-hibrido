@@ -4,7 +4,7 @@ import { newId } from "@/lib/db/ids";
 import { scoped } from "@/lib/db/tenant";
 import { parseRecipientsCsv } from "@/lib/campaigns/csv";
 import { extractVariables } from "@/lib/campaigns/render";
-import { getLiveStatus } from "@/server/baileys/manager";
+import { isAnyUnofficialChannelConnected } from "@/server/settings/unofficial-channels";
 import { countVariables } from "@/server/whatsapp/templates";
 import { serializeCampaign } from "@/server/campaigns/queries";
 
@@ -224,8 +224,8 @@ export async function createCampaign(
     if (!input.messageTemplate.trim()) {
       throw new CampaignError("invalid", "A mensagem não pode ficar vazia");
     }
-    const channel = await getLiveStatus(organizationId);
-    if (channel.status !== "connected") {
+    const connected = await isAnyUnofficialChannelConnected(organizationId);
+    if (!connected) {
       throw new CampaignError(
         "channel_not_connected",
         "Conecte o WhatsApp Web em Configurações antes de criar esta campanha"

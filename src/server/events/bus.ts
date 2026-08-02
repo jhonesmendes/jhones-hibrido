@@ -35,6 +35,8 @@ export type SseEvent =
   | {
       type: "channel.status";
       data: {
+        /** v0.1: qual canal não oficial mudou de status (N por org). */
+        channelId: string;
         status: "disconnected" | "connecting" | "connected";
         qrCode: string | null;
         phoneNumber: string | null;

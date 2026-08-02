@@ -7,6 +7,9 @@ export type SessionContext = {
   memberId: string;
   organizationId: string;
   role: string;
+  /** Departamento ativo (v0.1) — preferência do membro, não do navegador;
+   * null = visão consolidada (sem filtro) ou org sem departamentos ainda. */
+  activeDepartmentId: string | null;
 };
 
 export class UnauthorizedError extends Error {
@@ -40,6 +43,7 @@ export async function requireSession(): Promise<SessionContext> {
     memberId: membership.memberId,
     organizationId: membership.organizationId,
     role: membership.role,
+    activeDepartmentId: membership.activeDepartmentId,
   };
 }
 

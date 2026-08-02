@@ -7,7 +7,7 @@ import {
 } from "@/server/inbox/ingest";
 import { sendText } from "@/server/inbox/send";
 import { sendTemplate } from "@/server/whatsapp/templates";
-import { getLiveStatus } from "@/server/baileys/manager";
+import { isAnyUnofficialChannelConnected } from "@/server/settings/unofficial-channels";
 import { renderMessage } from "@/lib/campaigns/render";
 import { getCampaign } from "@/server/campaigns/queries";
 
@@ -69,8 +69,8 @@ export async function startCampaign(
       );
     }
   } else {
-    const channel = await getLiveStatus(organizationId);
-    if (channel.status !== "connected") {
+    const connected = await isAnyUnofficialChannelConnected(organizationId);
+    if (!connected) {
       throw new CampaignSendError(
         "not_ready",
         "O WhatsApp Web não está mais conectado"

@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import {
   BufferJSON,
   initAuthCreds,
@@ -8,15 +8,16 @@ import {
   type SignalDataTypeMap,
 } from "@whiskeysockets/baileys";
 import { getDb, schema } from "@/lib/db";
-import { newId } from "@/lib/db/ids";
 import { decryptSecret, encryptSecret } from "@/lib/crypto";
 
 /**
  * Estado de autenticação do Baileys persistido no Postgres, criptografado em
  * repouso (mesmo `lib/crypto` AES-256-GCM que o token da Meta). Equivalente
  * a `useMultiFileAuthState` do Baileys, mas respaldado por BD em vez de
- * arquivos — um blob JSON completo por organização (volume baixo, sem
- * necessidade de uma tabela de chaves individuais nesta escala).
+ * arquivos — um blob JSON completo por CANAL (v0.1: `unofficial_channel.id`,
+ * não mais por organização — múltiplos canais = múltiplas linhas, cada uma
+ * já criada com um estado vazio antes de conectar pela 1ª vez, ver
+ * `server/settings/unofficial-channels.ts:createUnofficialChannel`).
  */
 
 type StoredKeys = {
@@ -33,14 +34,12 @@ export type LoadedAuthState = {
   saveState: () => Promise<void>;
 };
 
-async function readStoredState(
-  organizationId: string
-): Promise<StoredState | null> {
+async function readStoredState(channelId: string): Promise<StoredState | null> {
   const db = getDb();
   const rows = await db
     .select()
     .from(schema.unofficialChannel)
-    .where(eq(schema.unofficialChannel.organizationId, organizationId))
+    .where(eq(schema.unofficialChannel.id, channelId))
     .limit(1);
   const row = rows[0];
   if (!row) return null;
@@ -52,10 +51,8 @@ async function readStoredState(
   return JSON.parse(json, BufferJSON.reviver) as StoredState;
 }
 
-export async function loadAuthState(
-  organizationId: string
-): Promise<LoadedAuthState> {
-  const existing = await readStoredState(organizationId);
+export async function loadAuthState(channelId: string): Promise<LoadedAuthState> {
+  const existing = await readStoredState(channelId);
   const stored: StoredState = existing ?? { creds: initAuthCreds(), keys: {} };
 
   async function persist(): Promise<void> {
@@ -63,23 +60,14 @@ export async function loadAuthState(
     const enc = encryptSecret(json);
     const db = getDb();
     await db
-      .insert(schema.unofficialChannel)
-      .values({
-        id: newId("unofficialChannel"),
-        organizationId,
+      .update(schema.unofficialChannel)
+      .set({
         authStateCipher: enc.cipher,
         authStateIv: enc.iv,
         authStateTag: enc.tag,
+        updatedAt: new Date(),
       })
-      .onConflictDoUpdate({
-        target: [schema.unofficialChannel.organizationId],
-        set: {
-          authStateCipher: enc.cipher,
-          authStateIv: enc.iv,
-          authStateTag: enc.tag,
-          updatedAt: new Date(),
-        },
-      });
+      .where(eq(schema.unofficialChannel.id, channelId));
   }
 
   const state: AuthenticationState = {
@@ -123,18 +111,39 @@ export async function loadAuthState(
   return { state, saveState: persist };
 }
 
-export async function deleteAuthState(organizationId: string): Promise<void> {
+/** Reseta o auth-state para vazio (logout) — mantém a linha do canal (nome,
+ * departamento) e o `channelId`, só exige um QR novo para reconectar.
+ * Diferente de excluir o canal (ver `deleteUnofficialChannel`). */
+export async function resetAuthState(channelId: string): Promise<void> {
+  const json = JSON.stringify(
+    { creds: initAuthCreds(), keys: {} },
+    BufferJSON.replacer
+  );
+  const enc = encryptSecret(json);
   const db = getDb();
   await db
-    .delete(schema.unofficialChannel)
-    .where(eq(schema.unofficialChannel.organizationId, organizationId));
+    .update(schema.unofficialChannel)
+    .set({
+      authStateCipher: enc.cipher,
+      authStateIv: enc.iv,
+      authStateTag: enc.tag,
+      updatedAt: new Date(),
+    })
+    .where(eq(schema.unofficialChannel.id, channelId));
 }
 
-/** Organizações com uma sessão já pareada (para reconectar ao iniciar). */
-export async function listPairedOrganizations(): Promise<string[]> {
+/** Canais com uma sessão já pareada (para reconectar ao iniciar) — só os
+ * que chegaram a conectar de fato, não todo canal criado. */
+export async function listPairedChannels(): Promise<
+  { channelId: string; organizationId: string }[]
+> {
   const db = getDb();
   const rows = await db
-    .select({ organizationId: schema.unofficialChannel.organizationId })
-    .from(schema.unofficialChannel);
-  return rows.map((r) => r.organizationId);
+    .select({
+      id: schema.unofficialChannel.id,
+      organizationId: schema.unofficialChannel.organizationId,
+    })
+    .from(schema.unofficialChannel)
+    .where(inArray(schema.unofficialChannel.status, ["connected", "connecting"]));
+  return rows.map((r) => ({ channelId: r.id, organizationId: r.organizationId }));
 }

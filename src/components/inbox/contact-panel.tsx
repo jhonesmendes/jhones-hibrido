@@ -57,7 +57,9 @@ export function ContactPanel({
     const [detail, stagesRes, agentRes] = await Promise.all([
       fetch(`/api/contacts/${contactId}`).then((r) => (r.ok ? r.json() : null)),
       fetch("/api/pipeline/stages").then((r) => (r.ok ? r.json() : null)),
-      fetch("/api/agent/profile").then((r) => (r.ok ? r.json() : null)),
+      fetch(`/api/conversations/${conversation.id}/agent-status`).then((r) =>
+        r.ok ? r.json() : null
+      ),
     ]).catch(() => [null, null, null]);
     if (detail) {
       setNotes(detail.contact?.notes ?? "");
@@ -66,27 +68,29 @@ export function ContactPanel({
       setLeadId(detail.lead?.id ?? null);
     }
     if (stagesRes) setStages(stagesRes.stages);
-    setAgentEnabled(Boolean(agentRes?.profile?.enabled));
+    setAgentEnabled(Boolean(agentRes?.enabled));
     setAiConfigured(Boolean(agentRes?.aiConfigured));
     setNotesLoaded(true);
-  }, [contactId]);
+  }, [contactId, conversation.id]);
 
   // Refetch ao vivo (etapa/lead + estado do agente) SEM tocar nas notas, para
   // não sobrescrever o que o operador estiver digitando. Disparado pelo SSE.
   const refreshLive = useCallback(async () => {
     const [detail, agentRes] = await Promise.all([
       fetch(`/api/contacts/${contactId}`).then((r) => (r.ok ? r.json() : null)),
-      fetch("/api/agent/profile").then((r) => (r.ok ? r.json() : null)),
+      fetch(`/api/conversations/${conversation.id}/agent-status`).then((r) =>
+        r.ok ? r.json() : null
+      ),
     ]).catch(() => [null, null]);
     if (detail) {
       setCurrentStageId(detail.stage?.id ?? null);
       setLeadId(detail.lead?.id ?? null);
     }
     if (agentRes) {
-      setAgentEnabled(Boolean(agentRes.profile?.enabled));
+      setAgentEnabled(Boolean(agentRes.enabled));
       setAiConfigured(Boolean(agentRes.aiConfigured));
     }
-  }, [contactId]);
+  }, [contactId, conversation.id]);
 
   useEffect(() => {
     setNotesLoaded(false);

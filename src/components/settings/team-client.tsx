@@ -17,6 +17,7 @@ type Member = {
   id: string;
   role: Role;
   isActive: boolean;
+  agentProfileId: string | null;
   name: string;
   email: string;
   createdAt: string;
@@ -302,6 +303,9 @@ export function TeamClient() {
   );
 }
 
+type Department = { id: string; name: string };
+type AgentProfile = { id: string; name: string };
+
 function InviteDialog({
   onClose,
   onCreated,
@@ -312,10 +316,20 @@ function InviteDialog({
   const [role, setRole] = useState<"admin" | "agent">("agent");
   const [email, setEmail] = useState("");
   const [expiresIn, setExpiresIn] = useState<"24h" | "7d" | "30d">("7d");
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [departmentId, setDepartmentId] = useState("");
+  const [departmentRole, setDepartmentRole] = useState<"admin" | "agent">("agent");
   const [url, setUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/settings/departments")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { departments: Department[] } | null) => setDepartments(d?.departments ?? []))
+      .catch(() => {});
+  }, []);
 
   async function generate() {
     setSaving(true);
@@ -327,6 +341,8 @@ function InviteDialog({
         role,
         email: email.trim() || undefined,
         expiresIn,
+        departmentId: departmentId || undefined,
+        departmentRole: departmentId ? departmentRole : undefined,
       }),
     }).catch(() => null);
     setSaving(false);
@@ -417,6 +433,38 @@ function InviteDialog({
                 <option value="30d">30 dias</option>
               </select>
             </div>
+            {departments.length > 0 && (
+              <div className="space-y-1.5">
+                <Label htmlFor="invite-dept">Departamento (opcional)</Label>
+                <select
+                  id="invite-dept"
+                  value={departmentId}
+                  onChange={(e) => setDepartmentId(e.target.value)}
+                  className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+                >
+                  <option value="">Sem departamento</option>
+                  {departments.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            {departmentId && (
+              <div className="space-y-1.5">
+                <Label htmlFor="invite-dept-role">Papel no departamento</Label>
+                <select
+                  id="invite-dept-role"
+                  value={departmentRole}
+                  onChange={(e) => setDepartmentRole(e.target.value as "admin" | "agent")}
+                  className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+                >
+                  <option value="agent">Agente</option>
+                  <option value="admin">Admin do departamento</option>
+                </select>
+              </div>
+            )}
             {error && <p className="text-sm text-destructive">{error}</p>}
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={onClose}>
@@ -448,8 +496,17 @@ function EditMemberDialog({
     member.permissions
   );
   const [channels, setChannels] = useState(member.channels);
+  const [agentProfileId, setAgentProfileId] = useState(member.agentProfileId ?? "");
+  const [agentProfiles, setAgentProfiles] = useState<AgentProfile[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/agent/profiles")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { profiles: AgentProfile[] } | null) => setAgentProfiles(d?.profiles ?? []))
+      .catch(() => {});
+  }, []);
 
   async function save() {
     setSaving(true);
@@ -457,7 +514,13 @@ function EditMemberDialog({
     const res = await fetch(`/api/settings/team/${member.id}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ role, isActive, permissions, channels }),
+      body: JSON.stringify({
+        role,
+        isActive,
+        permissions,
+        channels,
+        agentProfileId: agentProfileId || null,
+      }),
     }).catch(() => null);
     setSaving(false);
     if (!res?.ok) {
@@ -508,6 +571,25 @@ function EditMemberDialog({
               <Label htmlFor="edit-active">Conta ativa</Label>
             </div>
           </div>
+
+          {agentProfiles.length > 0 && (
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-agent-profile">Agente IA padrão</Label>
+              <select
+                id="edit-agent-profile"
+                value={agentProfileId}
+                onChange={(e) => setAgentProfileId(e.target.value)}
+                className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+              >
+                <option value="">Nenhum (segue o padrão do departamento)</option>
+                {agentProfiles.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div>
             <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">

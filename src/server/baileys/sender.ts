@@ -41,12 +41,12 @@ async function resolveJid(
 /** Envia texto livre pelo motor nativo; devolve o ID da mensagem.
  * `target` é um telefone (individual) ou um JID de grupo (`...@g.us`). */
 export async function sendText(
-  organizationId: string,
+  channelId: string,
   target: string,
   text: string
 ): Promise<string> {
-  const sock = getSocket(organizationId);
-  const live = await getLiveStatus(organizationId);
+  const sock = getSocket(channelId);
+  const live = await getLiveStatus(channelId);
   // Não basta existir um socket: ele pode estar "connecting" (pareamento
   // ainda não concluído) — nesse caso `sock.sendMessage` ficaria esperando à toa.
   if (!sock || live.status !== "connected") {
@@ -78,12 +78,12 @@ export async function sendText(
 /** Envia mídia (imagem/documento/áudio/vídeo) pelo motor nativo; devolve o ID da mensagem.
  * `target` é um telefone (individual) ou um JID de grupo (`...@g.us`). */
 export async function sendMedia(
-  organizationId: string,
+  channelId: string,
   target: string,
   file: { buffer: Buffer; mimeType: string; filename: string | null; caption?: string }
 ): Promise<string> {
-  const sock = getSocket(organizationId);
-  const live = await getLiveStatus(organizationId);
+  const sock = getSocket(channelId);
+  const live = await getLiveStatus(channelId);
   if (!sock || live.status !== "connected") {
     throw new BaileysSendError(
       "not_connected",

@@ -29,6 +29,9 @@ export async function createInviteToken(params: {
   email?: string;
   permissions?: Record<string, boolean>;
   channels?: InviteChannels;
+  /** Departamento (v0.1) ao qual o convidado já entra vinculado. */
+  departmentId?: string;
+  departmentRole?: "admin" | "agent";
   expiresIn: "24h" | "7d" | "30d";
   createdBy: string;
 }): Promise<{ id: string; url: string; expiresAt: Date }> {
@@ -44,6 +47,8 @@ export async function createInviteToken(params: {
     role: params.role,
     initialPermissions: params.permissions ?? null,
     initialChannels: params.channels ?? null,
+    initialDepartmentId: params.departmentId ?? null,
+    initialDepartmentRole: params.departmentId ? params.departmentRole ?? "agent" : null,
     expiresAt,
     createdBy: params.createdBy,
   });
@@ -58,6 +63,7 @@ export type InviteCheckResult =
       expiresAt: Date;
       inviterName: string | null;
       permissions: string[];
+      departmentName: string | null;
     }
   | { ok: false; code: "invalid" | "expired" | "used" };
 
@@ -70,10 +76,15 @@ export async function checkInviteToken(
     .select({
       invite: schema.inviteToken,
       inviterName: schema.user.name,
+      departmentName: schema.department.name,
     })
     .from(schema.inviteToken)
     .innerJoin(schema.member, eq(schema.inviteToken.createdBy, schema.member.id))
     .innerJoin(schema.user, eq(schema.member.userId, schema.user.id))
+    .leftJoin(
+      schema.department,
+      eq(schema.inviteToken.initialDepartmentId, schema.department.id)
+    )
     .where(eq(schema.inviteToken.tokenHash, hashToken(tokenPlain)))
     .limit(1);
   const row = rows[0];
@@ -96,6 +107,7 @@ export async function checkInviteToken(
     expiresAt: invite.expiresAt,
     inviterName: row.inviterName,
     permissions,
+    departmentName: row.departmentName,
   };
 }
 
@@ -184,6 +196,15 @@ export async function consumeInviteToken(
           canSend: access.canSend,
         });
       }
+    }
+
+    if (invite.initialDepartmentId) {
+      await tx.insert(schema.memberDepartment).values({
+        id: newId("memberDepartment"),
+        memberId,
+        departmentId: invite.initialDepartmentId,
+        role: invite.initialDepartmentRole ?? "agent",
+      });
     }
 
     return { memberId, organizationId: invite.organizationId };

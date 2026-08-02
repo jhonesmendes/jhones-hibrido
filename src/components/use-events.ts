@@ -24,6 +24,7 @@ export type EventHandlers = {
     failed: number;
   }) => void;
   onChannelStatus?: (data: {
+    channelId: string;
     status: "disconnected" | "connecting" | "connected";
     qrCode: string | null;
     phoneNumber: string | null;

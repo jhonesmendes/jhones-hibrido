@@ -141,6 +141,7 @@ export async function processMessagesValue(value: WebhookValue): Promise<void> {
 
     await ingestInboundMessage({
       organizationId,
+      metaCredentialId: credentials.id,
       from: msg.from,
       profileName: profileName ?? null,
       waMessageId: msg.id,
@@ -187,6 +188,12 @@ export async function ingestInboundMessage(input: {
   timestamp: string;
   /** Canal de origem; sticky na conversa. Padrão: official. */
   channel?: "official" | "unofficial";
+  /** Número oficial específico que recebeu (v0.1, multi-número); sticky
+   * igual a `channel`. Só se aplica ao canal oficial — Baileys não passa. */
+  metaCredentialId?: string | null;
+  /** Canal não oficial específico que recebeu (v0.1, multi-sessão Baileys);
+   * sticky igual a `channel`. Só se aplica ao canal não oficial. */
+  unofficialChannelId?: string | null;
   /**
    * true = eco de uma mensagem enviada pelo próprio número (típico de
    * gateways não oficiais: inclui o que foi enviado a partir do telefone).
@@ -264,6 +271,12 @@ export async function ingestInboundMessage(input: {
             lastMessageAt: waTimestamp,
             unreadCount: sql`${schema.conversation.unreadCount} + 1`,
             channel, // sticky: responder pelo canal por onde o cliente escreveu
+            ...(input.metaCredentialId !== undefined
+              ? { metaCredentialId: input.metaCredentialId }
+              : {}),
+            ...(input.unofficialChannelId !== undefined
+              ? { unofficialChannelId: input.unofficialChannelId }
+              : {}),
             updatedAt: new Date(),
           }
     )

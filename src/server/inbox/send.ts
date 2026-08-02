@@ -10,6 +10,7 @@ import {
 import { mediaKindFromMime, type MediaKind } from "@/lib/media";
 import { publish } from "@/server/events/bus";
 import {
+  getCredentialsById,
   getCredentialsByOrg,
   markReconnectRequired,
   type Credentials,
@@ -22,6 +23,7 @@ import {
   sendText as sendBaileysText,
 } from "@/server/baileys/sender";
 import { baileysMessageId } from "@/server/baileys/inbound";
+import { resolveDefaultUnofficialChannelId } from "@/server/settings/unofficial-channels";
 
 /** Erro tipado do envio; `code` mapeia para HTTP na camada de API. */
 export class SendError extends Error {
@@ -42,6 +44,32 @@ export class SendError extends Error {
 }
 
 type SendResult = { messageId: string };
+
+/** Resolve o número oficial pelo qual esta conversa responde: o número
+ * amarrado (`conversation.metaCredentialId`, sticky pela última mensagem
+ * recebida) tem prioridade; sem amarração (conversa nova, ou organização
+ * com um único número), cai no padrão da organização. */
+async function resolveOutboundCredentials(
+  organizationId: string,
+  metaCredentialId: string | null
+): Promise<Credentials | null> {
+  if (metaCredentialId) {
+    const byId = await getCredentialsById(metaCredentialId, organizationId);
+    if (byId) return byId;
+  }
+  return getCredentialsByOrg(organizationId);
+}
+
+/** Mesma lógica de `resolveOutboundCredentials`, para o canal não oficial:
+ * `conversation.unofficialChannelId` (sticky) tem prioridade; sem
+ * amarração, cai no canal padrão da organização. */
+async function resolveOutboundChannelId(
+  organizationId: string,
+  unofficialChannelId: string | null
+): Promise<string | null> {
+  if (unofficialChannelId) return unofficialChannelId;
+  return resolveDefaultUnofficialChannelId(organizationId);
+}
 
 /**
  * Envia uma mensagem de texto livre por WhatsApp.
@@ -94,7 +122,7 @@ export async function sendText(input: {
     );
   }
   if (effectiveChannel === "unofficial") {
-    return sendViaUnofficial(input, row.contact);
+    return sendViaUnofficial(input, row.contact, row.conversation.unofficialChannelId);
   }
 
   if (!isWindowOpen(row.conversation.lastInboundAt)) {
@@ -104,7 +132,10 @@ export async function sendText(input: {
     );
   }
 
-  const credentials = await getCredentialsByOrg(input.organizationId);
+  const credentials = await resolveOutboundCredentials(
+    input.organizationId,
+    row.conversation.metaCredentialId
+  );
   if (!credentials) {
     throw new SendError("not_connected", "Não há número de WhatsApp conectado");
   }
@@ -200,7 +231,12 @@ export async function sendMedia(input: {
     );
   }
   if (effectiveChannel === "unofficial") {
-    return sendMediaViaUnofficial(input, row.contact, kind);
+    return sendMediaViaUnofficial(
+      input,
+      row.contact,
+      kind,
+      row.conversation.unofficialChannelId
+    );
   }
 
   if (!isWindowOpen(row.conversation.lastInboundAt)) {
@@ -210,7 +246,10 @@ export async function sendMedia(input: {
     );
   }
 
-  const credentials = await getCredentialsByOrg(input.organizationId);
+  const credentials = await resolveOutboundCredentials(
+    input.organizationId,
+    row.conversation.metaCredentialId
+  );
   if (!credentials) {
     throw new SendError("not_connected", "Não há número de WhatsApp conectado");
   }
@@ -305,7 +344,8 @@ async function sendMediaViaUnofficial(
     caption?: string;
   },
   contact: { phone: string; kind: string },
-  kind: MediaKind
+  kind: MediaKind,
+  unofficialChannelId: string | null
 ): Promise<SendResult> {
   const db = getDb();
   const target =
@@ -313,18 +353,25 @@ async function sendMediaViaUnofficial(
       ? `${contact.phone}@g.us`
       : normalizeRecipient(contact.phone);
 
+  const channelId = await resolveOutboundChannelId(
+    input.organizationId,
+    unofficialChannelId
+  );
+  if (!channelId) {
+    throw new SendError(
+      "not_connected",
+      "Não há WhatsApp Web conectado: confira Configurações → Canais"
+    );
+  }
+
   let providerMessageId: string;
   try {
-    providerMessageId = await sendBaileysMedia(
-      input.organizationId,
-      target,
-      {
-        buffer: input.buffer,
-        mimeType: input.mimeType,
-        filename: input.filename ?? null,
-        caption: input.caption,
-      }
-    );
+    providerMessageId = await sendBaileysMedia(channelId, target, {
+      buffer: input.buffer,
+      mimeType: input.mimeType,
+      filename: input.filename ?? null,
+      caption: input.caption,
+    });
   } catch (err) {
     if (err instanceof BaileysSendError) {
       if (err.code === "not_connected") {
@@ -405,7 +452,8 @@ async function sendViaUnofficial(
     text: string;
     aiGenerated?: boolean;
   },
-  contact: { phone: string; kind: string }
+  contact: { phone: string; kind: string },
+  unofficialChannelId: string | null
 ): Promise<SendResult> {
   const db = getDb();
   const target =
@@ -413,13 +461,20 @@ async function sendViaUnofficial(
       ? `${contact.phone}@g.us`
       : normalizeRecipient(contact.phone);
 
+  const channelId = await resolveOutboundChannelId(
+    input.organizationId,
+    unofficialChannelId
+  );
+  if (!channelId) {
+    throw new SendError(
+      "not_connected",
+      "Não há WhatsApp Web conectado: confira Configurações → Canais"
+    );
+  }
+
   let providerMessageId: string;
   try {
-    providerMessageId = await sendBaileysText(
-      input.organizationId,
-      target,
-      input.text
-    );
+    providerMessageId = await sendBaileysText(channelId, target, input.text);
   } catch (err) {
     if (err instanceof BaileysSendError) {
       if (err.code === "not_connected") {
@@ -489,7 +544,7 @@ export async function callGraphSend(
   } catch (err) {
     if (err instanceof MetaApiError) {
       if (err.isAuthError) {
-        await markReconnectRequired(credentials.organizationId);
+        await markReconnectRequired(credentials.id);
         throw new SendError(
           "reconnect_required",
           "O token do WhatsApp expirou: reconecte o número em Configurações"

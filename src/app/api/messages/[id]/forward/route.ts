@@ -24,7 +24,10 @@ export const POST = withAuth(async (session, req: Request, ctx: Params) => {
   if (!body.ok) return body.response;
 
   const rows = await getDb()
-    .select({ assignedTo: schema.conversation.assignedTo })
+    .select({
+      assignedTo: schema.conversation.assignedTo,
+      departmentId: schema.conversation.departmentId,
+    })
     .from(schema.message)
     .innerJoin(
       schema.conversation,
@@ -40,7 +43,7 @@ export const POST = withAuth(async (session, req: Request, ctx: Params) => {
     .limit(1);
   const row = rows[0];
   if (!row) return apiError(404, "not_found", "Mensagem não encontrada");
-  await requireConversationAccess(session, row.assignedTo);
+  await requireConversationAccess(session, row);
   await requirePermission(session, "conversations:reply");
 
   const results = await forwardMessage(session, {

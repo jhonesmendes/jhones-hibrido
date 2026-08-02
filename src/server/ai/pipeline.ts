@@ -10,6 +10,7 @@ import { SendError, sendText } from "@/server/inbox/send";
 import { AgentAction, degradeAction, resolveStage, type AgentActionType } from "@/server/ai/actions";
 import { matchesHandoffIntent } from "@/server/ai/handoff";
 import { buildAgentSystemPrompt } from "@/server/ai/prompts";
+import { resolveAgentProfile } from "@/server/ai/agent-profile";
 
 /**
  * Turno do agente (FR-021..FR-025).
@@ -100,16 +101,14 @@ export async function runAgentTurn(conversationId: string): Promise<void> {
   const aiConfig = await resolveAiConfig(organizationId);
   if (!aiConfig) return;
 
-  const profileRows = await db
-    .select()
-    .from(schema.agentProfile)
-    .where(eq(schema.agentProfile.organizationId, organizationId))
-    .limit(1);
-  const profile = profileRows[0];
+  // Cadeia de prioridade v0.1: conversa (override) > atendente > dept >
+  // padrão da org. O toggle "enabled" se aplica a conversas reais; o
+  // Laboratório avalia o comportamento configurado mesmo que nenhum perfil
+  // esteja ativo ainda (`includeDisabled`).
+  const profile = await resolveAgentProfile(organizationId, conversation, {
+    includeDisabled: conversation.isTest,
+  });
   if (!profile) return;
-  // O toggle global se aplica a conversas reais; o Laboratório avalia o
-  // comportamento configurado mesmo que o agente ainda não esteja ligado.
-  if (!conversation.isTest && !profile.enabled) return;
 
   const history = await db
     .select()

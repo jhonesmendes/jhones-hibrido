@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -8,6 +8,7 @@ import {
   FlaskConical,
   Inbox,
   Kanban,
+  LayoutDashboard,
   ListChecks,
   LogOut,
   Megaphone,
@@ -28,6 +29,8 @@ import {
   ensureServiceWorker,
   getNotificationPermission,
 } from "@/lib/notifications";
+import { fetchGroupsInInbox } from "@/lib/inbox-preferences";
+import { DepartmentSwitcher } from "@/components/department-switcher";
 
 const NAV = [
   { href: "/inbox", label: "Caixa de entrada", icon: Inbox, badge: true },
@@ -52,6 +55,9 @@ export function AppNav({
   const router = useRouter();
   const [unread, setUnread] = useState(0);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // Preferência pessoal: se grupos estão fora da Caixa de Entrada, o badge
+  // do menu também não deve contar as não lidas deles.
+  const groupsInInboxRef = useRef(true);
 
   // Fecha o drawer ao trocar de rota (navegação por um link do menu).
   useEffect(() => {
@@ -62,13 +68,19 @@ export function AppNav({
     const res = await fetch("/api/conversations").catch(() => null);
     if (!res?.ok) return;
     const data = (await res.json()) as {
-      conversations: { unreadCount: number }[];
+      conversations: { unreadCount: number; contact: { kind: string } }[];
     };
-    setUnread(data.conversations.reduce((a, c) => a + c.unreadCount, 0));
+    const relevant = groupsInInboxRef.current
+      ? data.conversations
+      : data.conversations.filter((c) => c.contact.kind !== "group");
+    setUnread(relevant.reduce((a, c) => a + c.unreadCount, 0));
   }
 
   useEffect(() => {
-    void refetchUnread();
+    void fetchGroupsInInbox().then((v) => {
+      groupsInInboxRef.current = v;
+      void refetchUnread();
+    });
     // Registra o SW sempre (habilita "Instalar app" no Chrome mesmo sem
     // notificações ativadas). Reforça a inscrição de push em qualquer tela
     // (não só na Caixa de entrada) sempre que a permissão já foi concedida
@@ -160,6 +172,29 @@ export function AppNav({
           <span className="block text-[11px] text-text-3">Vocero CRM · WhatsApp</span>
         </span>
       </div>
+
+      <DepartmentSwitcher role={role} />
+
+      {(role === "owner" || role === "admin") && (
+        <Link
+          href="/dashboard"
+          className={cn(
+            "mb-1 flex items-center gap-[11px] rounded-sm px-2.5 py-2 text-sm font-medium transition-colors",
+            pathname.startsWith("/dashboard")
+              ? "bg-brand-tint font-semibold text-brand-text"
+              : "text-text-2 hover:bg-accent"
+          )}
+        >
+          <LayoutDashboard
+            className={cn(
+              "h-[18px] w-[18px]",
+              pathname.startsWith("/dashboard") ? "text-brand" : "text-text-3"
+            )}
+            strokeWidth={1.7}
+          />
+          Dashboard
+        </Link>
+      )}
 
       <nav className="flex flex-col gap-0.5">
         {NAV.map((item) => {

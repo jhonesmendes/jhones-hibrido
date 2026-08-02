@@ -9,19 +9,20 @@ import makeWASocket, {
 import { getDb, schema } from "@/lib/db";
 import { publish } from "@/server/events/bus";
 import {
-  deleteAuthState,
-  listPairedOrganizations,
+  listPairedChannels,
   loadAuthState,
+  resetAuthState,
 } from "@/server/baileys/auth-state";
 import { baileysMessageId, handleIncomingMessages } from "@/server/baileys/inbound";
 import { syncContactNames } from "@/server/baileys/contacts";
 import { applyStatusUpdate } from "@/server/inbox/status";
 
 /**
- * Motor WhatsApp não oficial nativo — um socket Baileys em memória por
- * organização (mesmo padrão `globalThis` que Campanhas/Follow-up, para
- * sobreviver ao HMR em dev). Conexão direta com o protocolo, sem gateway nem
- * webhook: os eventos chegam por callbacks do próprio socket.
+ * Motor WhatsApp não oficial nativo — v0.1: N sockets Baileys em memória por
+ * organização, um por canal (`unofficial_channel.id` = chave dos Maps, não
+ * mais `organizationId`). Mesmo padrão `globalThis` de antes (sobrevive ao
+ * HMR em dev). Conexão direta com o protocolo, sem gateway nem webhook: os
+ * eventos chegam por callbacks do próprio socket.
  */
 
 type LiveStatus = {
@@ -89,18 +90,29 @@ function jidToPhoneNumber(jid: string): string {
   return jid.replace(/:\d+/, "").replace(/@.*$/, "");
 }
 
+async function getChannelOrganizationId(channelId: string): Promise<string | null> {
+  const db = getDb();
+  const rows = await db
+    .select({ organizationId: schema.unofficialChannel.organizationId })
+    .from(schema.unofficialChannel)
+    .where(eq(schema.unofficialChannel.id, channelId))
+    .limit(1);
+  return rows[0]?.organizationId ?? null;
+}
+
 async function setStatus(
+  channelId: string,
   organizationId: string,
   patch: Partial<LiveStatus>
 ): Promise<void> {
-  const current = statuses().get(organizationId) ?? {
+  const current = statuses().get(channelId) ?? {
     status: "disconnected" as const,
     qrCode: null,
     phoneNumber: null,
   };
   const next = { ...current, ...patch };
-  statuses().set(organizationId, next);
-  publish(organizationId, { type: "channel.status", data: next });
+  statuses().set(channelId, next);
+  publish(organizationId, { type: "channel.status", data: { channelId, ...next } });
 
   const db = getDb();
   await db
@@ -112,22 +124,28 @@ async function setStatus(
         : {}),
       updatedAt: new Date(),
     })
-    .where(eq(schema.unofficialChannel.organizationId, organizationId));
+    .where(eq(schema.unofficialChannel.id, channelId));
 }
 
 export async function connect(
-  organizationId: string,
-  opts: { isRetry?: boolean } = {}
+  channelId: string,
+  opts: { isRetry?: boolean; organizationId?: string } = {}
 ): Promise<void> {
-  if (sockets().has(organizationId)) return;
-  if (!opts.isRetry) reconnectAttempts().delete(organizationId);
+  if (sockets().has(channelId)) return;
+  if (!opts.isRetry) reconnectAttempts().delete(channelId);
 
-  await setStatus(organizationId, { status: "connecting", qrCode: null });
+  const organizationId = opts.organizationId ?? (await getChannelOrganizationId(channelId));
+  if (!organizationId) {
+    console.error(`[baileys] canal ${channelId} não encontrado — conexão abortada`);
+    return;
+  }
 
-  const { state, saveState } = await loadAuthState(organizationId);
+  await setStatus(channelId, organizationId, { status: "connecting", qrCode: null });
+
+  const { state, saveState } = await loadAuthState(channelId);
   const version = await resolveWaVersion();
   const sock = makeWASocket({ auth: state, version, syncFullHistory: false });
-  sockets().set(organizationId, sock);
+  sockets().set(channelId, sock);
 
   sock.ev.on("creds.update", () => {
     void saveState();
@@ -137,15 +155,13 @@ export async function connect(
     void (async () => {
       if (update.qr) {
         const qrCode = await QRCode.toDataURL(update.qr);
-        await setStatus(organizationId, { status: "connecting", qrCode });
+        await setStatus(channelId, organizationId, { status: "connecting", qrCode });
       }
 
       if (update.connection === "open") {
-        reconnectAttempts().delete(organizationId);
-        const phoneNumber = sock.user?.id
-          ? jidToPhoneNumber(sock.user.id)
-          : null;
-        await setStatus(organizationId, {
+        reconnectAttempts().delete(channelId);
+        const phoneNumber = sock.user?.id ? jidToPhoneNumber(sock.user.id) : null;
+        await setStatus(channelId, organizationId, {
           status: "connected",
           qrCode: null,
           phoneNumber,
@@ -153,7 +169,7 @@ export async function connect(
       }
 
       if (update.connection === "close") {
-        sockets().delete(organizationId);
+        sockets().delete(channelId);
         const statusCode = (
           update.lastDisconnect?.error as
             | { output?: { statusCode?: number } }
@@ -162,23 +178,23 @@ export async function connect(
         const loggedOut = statusCode === DisconnectReason.loggedOut;
 
         if (loggedOut) {
-          reconnectAttempts().delete(organizationId);
-          await deleteAuthState(organizationId);
-          await setStatus(organizationId, {
+          reconnectAttempts().delete(channelId);
+          await resetAuthState(channelId);
+          await setStatus(channelId, organizationId, {
             status: "disconnected",
             qrCode: null,
             phoneNumber: null,
           });
         } else {
-          const attempts = (reconnectAttempts().get(organizationId) ?? 0) + 1;
-          reconnectAttempts().set(organizationId, attempts);
+          const attempts = (reconnectAttempts().get(channelId) ?? 0) + 1;
+          reconnectAttempts().set(channelId, attempts);
 
           if (attempts > MAX_RECONNECT_ATTEMPTS) {
             // Rede instável demais pra fechar o pareamento (ex.: handshake
             // falhando repetido em segundos) — desiste e devolve o controle
             // pro usuário em vez de martelar reconexões pra sempre.
-            reconnectAttempts().delete(organizationId);
-            await setStatus(organizationId, {
+            reconnectAttempts().delete(channelId);
+            await setStatus(channelId, organizationId, {
               status: "disconnected",
               qrCode: null,
               phoneNumber: null,
@@ -188,7 +204,7 @@ export async function connect(
 
           // Corte de rede/reinício do lado do WhatsApp: reinicia a sessão,
           // com espera crescente pra não martelar o servidor do WhatsApp.
-          await setStatus(organizationId, {
+          await setStatus(channelId, organizationId, {
             status: "connecting",
             qrCode: null,
           });
@@ -197,7 +213,7 @@ export async function connect(
             RECONNECT_MAX_DELAY_MS
           );
           setTimeout(() => {
-            void connect(organizationId, { isRetry: true });
+            void connect(channelId, { isRetry: true, organizationId });
           }, delay);
         }
       }
@@ -205,8 +221,8 @@ export async function connect(
   });
 
   sock.ev.on("messages.upsert", ({ messages }) => {
-    void handleIncomingMessages(organizationId, sock, messages).catch((err) =>
-      console.error("[baileys] erro ao processar mensagens recebidas:", err)
+    void handleIncomingMessages(organizationId, channelId, sock, messages).catch(
+      (err) => console.error("[baileys] erro ao processar mensagens recebidas:", err)
     );
   });
 
@@ -250,40 +266,45 @@ const ACK_STATUS: Record<number, "sent" | "delivered" | "read" | "failed"> = {
   5: "read",
 };
 
-export async function disconnect(organizationId: string): Promise<void> {
-  const sock = sockets().get(organizationId);
+/** Desconecta (logout) um canal — mantém a linha (nome/departamento), só
+ * reseta o auth-state. Excluir o canal por completo é responsabilidade de
+ * `server/settings/unofficial-channels.ts:deleteUnofficialChannel`, chamado
+ * depois desta função pela API route. */
+export async function disconnect(channelId: string): Promise<void> {
+  const sock = sockets().get(channelId);
+  const organizationId = await getChannelOrganizationId(channelId);
   if (sock) {
     try {
       await sock.logout();
     } catch {
       // já pode estar desconectado do lado do WhatsApp
     }
-    sockets().delete(organizationId);
+    sockets().delete(channelId);
   }
-  await deleteAuthState(organizationId);
-  statuses().delete(organizationId);
-  reconnectAttempts().delete(organizationId);
-  publish(organizationId, {
-    type: "channel.status",
-    data: { status: "disconnected", qrCode: null, phoneNumber: null },
-  });
+  await resetAuthState(channelId);
+  statuses().delete(channelId);
+  reconnectAttempts().delete(channelId);
+  if (organizationId) {
+    publish(organizationId, {
+      type: "channel.status",
+      data: { channelId, status: "disconnected", qrCode: null, phoneNumber: null },
+    });
+  }
 }
 
-export function getSocket(organizationId: string): WASocket | undefined {
-  return sockets().get(organizationId);
+export function getSocket(channelId: string): WASocket | undefined {
+  return sockets().get(channelId);
 }
 
-export async function getLiveStatus(
-  organizationId: string
-): Promise<LiveStatus> {
-  const cached = statuses().get(organizationId);
+export async function getLiveStatus(channelId: string): Promise<LiveStatus> {
+  const cached = statuses().get(channelId);
   if (cached) return cached;
 
   const db = getDb();
   const rows = await db
     .select()
     .from(schema.unofficialChannel)
-    .where(eq(schema.unofficialChannel.organizationId, organizationId))
+    .where(eq(schema.unofficialChannel.id, channelId))
     .limit(1);
   const row = rows[0];
   if (!row) return { status: "disconnected", qrCode: null, phoneNumber: null };
@@ -294,15 +315,12 @@ export async function getLiveStatus(
   };
 }
 
-/** Reconecta toda organização com uma sessão já pareada (US3, ao iniciar). */
+/** Reconecta todo canal com uma sessão já pareada (US3, ao iniciar). */
 export async function reconnectAllOnBoot(): Promise<void> {
-  const organizationIds = await listPairedOrganizations();
-  for (const organizationId of organizationIds) {
-    void connect(organizationId).catch((err) =>
-      console.error(
-        `[baileys] falha ao reconectar organização ${organizationId}:`,
-        err
-      )
+  const channels = await listPairedChannels();
+  for (const { channelId, organizationId } of channels) {
+    void connect(channelId, { organizationId }).catch((err) =>
+      console.error(`[baileys] falha ao reconectar canal ${channelId}:`, err)
     );
   }
 }

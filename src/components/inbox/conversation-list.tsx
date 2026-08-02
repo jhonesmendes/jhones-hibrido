@@ -75,6 +75,7 @@ export function ConversationList({
   onStartConversation,
   notificationPermission,
   onEnableNotifications,
+  groupsInInbox,
 }: {
   conversations: ConversationDto[] | null;
   selectedId: string | null;
@@ -88,6 +89,9 @@ export function ConversationList({
   onStartConversation: (phone: string) => Promise<boolean>;
   notificationPermission: NotificationPermission | "unsupported";
   onEnableNotifications: () => void;
+  /** Preferência pessoal (Configurações → Preferências): grupos aparecem
+   * misturados na aba "Todas" ou só na aba "Grupos" (sempre disponível). */
+  groupsInInbox: boolean;
 }) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<"all" | "unread" | "groups">("all");
@@ -104,14 +108,20 @@ export function ConversationList({
           (c.preview ?? "").toLowerCase().includes(q)
       )
     : conversations;
-  const unreadCount = searched.filter((c) => c.unreadCount > 0).length;
+  // Fora da aba "Grupos", a preferência pessoal decide se grupos entram no
+  // "Todas"/"Não lidas" — a aba "Grupos" em si sempre mostra todos, senão
+  // não haveria como acessá-los quando a preferência está desligada.
+  const nonGroupAware = groupsInInbox
+    ? searched
+    : searched.filter((c) => c.contact.kind !== "group");
+  const unreadCount = nonGroupAware.filter((c) => c.unreadCount > 0).length;
   const groupsCount = searched.filter((c) => c.contact.kind === "group").length;
   const visible =
     filter === "unread"
-      ? searched.filter((c) => c.unreadCount > 0)
+      ? nonGroupAware.filter((c) => c.unreadCount > 0)
       : filter === "groups"
         ? searched.filter((c) => c.contact.kind === "group")
-        : searched;
+        : nonGroupAware;
 
   // Busca parece um telefone → atalho "iniciar conversa" (como no WhatsApp).
   const phoneCandidate = normalizePhoneInput(query);
@@ -154,7 +164,11 @@ export function ConversationList({
       <header className="border-b px-4 pb-3 pt-4">
         <div className="mb-3 flex items-baseline gap-2">
           <h2 className="text-[17px] font-[650] tracking-tight">Caixa de entrada</h2>
-          <span className="text-sm text-text-3">{conversations.length}</span>
+          <span className="text-sm text-text-3">
+            {groupsInInbox
+              ? conversations.length
+              : conversations.filter((c) => c.contact.kind !== "group").length}
+          </span>
           <HelpLink slug="inbox" />
           {notificationPermission !== "unsupported" && (
             <button

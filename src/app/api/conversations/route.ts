@@ -29,7 +29,8 @@ export const GET = withAuth(async (session, req: Request) => {
   const conversations = await listConversations(
     session.organizationId,
     since && !Number.isNaN(since.getTime()) ? since : undefined,
-    assignedToFilter
+    assignedToFilter,
+    session.activeDepartmentId ?? undefined
   );
   return Response.json({ conversations });
 });

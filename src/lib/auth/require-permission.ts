@@ -55,18 +55,76 @@ export async function requirePermission(
   }
 }
 
+/** Role do membro dentro de um departamento; null = não pertence a ele. */
+export async function departmentRole(
+  memberId: string,
+  departmentId: string
+): Promise<"admin" | "agent" | null> {
+  const db = getDb();
+  const [row] = await db
+    .select({ role: schema.memberDepartment.role })
+    .from(schema.memberDepartment)
+    .where(
+      and(
+        eq(schema.memberDepartment.memberId, memberId),
+        eq(schema.memberDepartment.departmentId, departmentId)
+      )
+    )
+    .limit(1);
+  return row?.role ?? null;
+}
+
+/**
+ * Permissão dentro de um departamento (v0.1, Fundação de departamentos):
+ * 1. owner da org → sempre true
+ * 2. admin do dept → true para qualquer permissão do dept
+ * 3. agent do dept → só o que foi concedido em `member_department_permission`
+ * 4. não pertence ao dept → false
+ */
+export async function hasPermissionInDept(
+  session: SessionContext,
+  departmentId: string,
+  permission: Permission
+): Promise<boolean> {
+  if (session.role === "owner") return true;
+  const role = await departmentRole(session.memberId, departmentId);
+  if (!role) return false;
+  if (role === "admin") return true;
+  const db = getDb();
+  const [row] = await db
+    .select({ granted: schema.memberDepartmentPermission.granted })
+    .from(schema.memberDepartmentPermission)
+    .where(
+      and(
+        eq(schema.memberDepartmentPermission.memberId, session.memberId),
+        eq(schema.memberDepartmentPermission.departmentId, departmentId),
+        eq(schema.memberDepartmentPermission.permission, permission)
+      )
+    )
+    .limit(1);
+  return row?.granted ?? false;
+}
+
 /**
  * Sem `conversations:view_all`, só é permitido acessar a conversa atribuída
- * ao próprio membro (FR-007).
+ * ao próprio membro (FR-007). v0.1: quando a conversa pertence a um
+ * departamento, pertencer a ele é pré-requisito adicional (não substitui a
+ * checagem de atribuição/view_all acima, soma-se a ela).
  */
 export async function requireConversationAccess(
   session: SessionContext,
-  assignedTo: string | null
+  conversation: { assignedTo: string | null; departmentId?: string | null }
 ): Promise<void> {
   if (session.role === "owner") return;
+  if (conversation.departmentId) {
+    const role = await departmentRole(session.memberId, conversation.departmentId);
+    if (!role) {
+      throw new ForbiddenError("Conversa de outro departamento");
+    }
+  }
   const effective = await resolvePermissions(session.memberId, session.role);
   if (effective.has("conversations:view_all")) return;
-  if (assignedTo === session.memberId) return;
+  if (conversation.assignedTo === session.memberId) return;
   throw new ForbiddenError("Conversa não atribuída a você");
 }
 

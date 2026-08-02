@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+﻿import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { WASocket, WAMessage } from "@whiskeysockets/baileys";
 
 const ingestInboundMessage = vi.fn();
@@ -41,7 +41,7 @@ describe("handleIncomingMessages", () => {
   });
 
   it("mensaje de texto simple se ingesta normalizado", async () => {
-    await handleIncomingMessages("org_1", fakeSock, [makeMsg()]);
+    await handleIncomingMessages("org_1", "uch_1", fakeSock, [makeMsg()]);
     expect(ingestInboundMessage).toHaveBeenCalledTimes(1);
     const arg = ingestInboundMessage.mock.calls[0]![0];
     expect(arg).toMatchObject({
@@ -56,29 +56,34 @@ describe("handleIncomingMessages", () => {
     });
   });
 
-  it("ignora mensajes de grupo (@g.us)", async () => {
-    await handleIncomingMessages("org_1", fakeSock, [
+  it("mensaje de grupo (@g.us) se ingesta con contactKind group", async () => {
+    await handleIncomingMessages("org_1", "uch_1", fakeSock, [
       makeMsg({
         key: { remoteJid: "123456789-987@g.us", fromMe: false, id: "X" },
       }),
     ]);
-    expect(ingestInboundMessage).not.toHaveBeenCalled();
+    expect(ingestInboundMessage).toHaveBeenCalledTimes(1);
+    const arg = ingestInboundMessage.mock.calls[0]![0];
+    expect(arg).toMatchObject({
+      from: "123456789-987",
+      contactKind: "group",
+    });
   });
 
   it("ignora difusión de status (status@broadcast)", async () => {
-    await handleIncomingMessages("org_1", fakeSock, [
+    await handleIncomingMessages("org_1", "uch_1", fakeSock, [
       makeMsg({ key: { remoteJid: "status@broadcast", fromMe: false, id: "X" } }),
     ]);
     expect(ingestInboundMessage).not.toHaveBeenCalled();
   });
 
   it("mensaje sin contenido (notificación de protocolo) se ignora", async () => {
-    await handleIncomingMessages("org_1", fakeSock, [makeMsg({ message: null })]);
+    await handleIncomingMessages("org_1", "uch_1", fakeSock, [makeMsg({ message: null })]);
     expect(ingestInboundMessage).not.toHaveBeenCalled();
   });
 
   it("imagen sin caption: type image, sin preview en esta iteración (mediaUrl null)", async () => {
-    await handleIncomingMessages("org_1", fakeSock, [
+    await handleIncomingMessages("org_1", "uch_1", fakeSock, [
       makeMsg({ message: { imageMessage: {} } }),
     ]);
     const arg = ingestInboundMessage.mock.calls[0]![0];
@@ -88,7 +93,7 @@ describe("handleIncomingMessages", () => {
   });
 
   it("documento con caption extrae el texto del caption", async () => {
-    await handleIncomingMessages("org_1", fakeSock, [
+    await handleIncomingMessages("org_1", "uch_1", fakeSock, [
       makeMsg({
         message: { documentMessage: { caption: "Nota fiscal", fileName: "nf.pdf" } },
       }),
@@ -99,7 +104,7 @@ describe("handleIncomingMessages", () => {
   });
 
   it("eco propio (fromMe) se marca correctamente y sin profileName", async () => {
-    await handleIncomingMessages("org_1", fakeSock, [
+    await handleIncomingMessages("org_1", "uch_1", fakeSock, [
       makeMsg({
         key: {
           remoteJid: "5511999999999@s.whatsapp.net",
@@ -114,7 +119,7 @@ describe("handleIncomingMessages", () => {
   });
 
   it("tipo no soportado (sin campos de contenido reconocidos) se ignora", async () => {
-    await handleIncomingMessages("org_1", fakeSock, [
+    await handleIncomingMessages("org_1", "uch_1", fakeSock, [
       makeMsg({ message: { reactionMessage: { text: "👍" } } }),
     ]);
     expect(ingestInboundMessage).not.toHaveBeenCalled();
@@ -122,7 +127,7 @@ describe("handleIncomingMessages", () => {
 
   it("JID @lid con mapeo conocido se resuelve al teléfono real antes de ingestar", async () => {
     getPNForLID.mockResolvedValue("5511999999999:5@s.whatsapp.net");
-    await handleIncomingMessages("org_1", fakeSock, [
+    await handleIncomingMessages("org_1", "uch_1", fakeSock, [
       makeMsg({
         key: { remoteJid: "86543641391354@lid", fromMe: false, id: "Z" },
       }),
@@ -134,7 +139,7 @@ describe("handleIncomingMessages", () => {
 
   it("JID @lid sin mapeo conocido todavía se descarta (no crea contacto fantasma)", async () => {
     getPNForLID.mockResolvedValue(null);
-    await handleIncomingMessages("org_1", fakeSock, [
+    await handleIncomingMessages("org_1", "uch_1", fakeSock, [
       makeMsg({
         key: { remoteJid: "86543641391354@lid", fromMe: false, id: "Z" },
       }),
@@ -143,7 +148,7 @@ describe("handleIncomingMessages", () => {
   });
 
   it("JID BR sin el 9º dígito (WhatsApp es inconsistente sobre el formato) se normaliza al ingestar", async () => {
-    await handleIncomingMessages("org_1", fakeSock, [
+    await handleIncomingMessages("org_1", "uch_1", fakeSock, [
       makeMsg({
         key: {
           remoteJid: "556699679169@s.whatsapp.net",

@@ -4,7 +4,9 @@ import { vi } from "vitest";
 /** FR-001 a FR-007: permissão efetiva por membro (default do papel + overrides). */
 
 let permissionRows: { permission: string; granted: boolean }[] = [];
-let channelRow: { canView: boolean; canSend: boolean } | undefined;
+/** Reaproveitado por todo query que termina em `.limit(1)` (canal, dept
+ * role, dept permission) — cada teste define a forma certa antes de chamar. */
+let channelRow: Record<string, unknown> | undefined;
 
 vi.mock("@/lib/db", () => ({
   getDb: () => ({
@@ -17,11 +19,17 @@ vi.mock("@/lib/db", () => ({
       }),
     }),
   }),
-  schema: { memberPermission: {}, memberChannel: {} },
+  schema: {
+    memberPermission: {},
+    memberChannel: {},
+    memberDepartment: {},
+    memberDepartmentPermission: {},
+  },
 }));
 
 import {
   ForbiddenError,
+  hasPermissionInDept,
   requireChannelAccess,
   requireConversationAccess,
   requirePermission,
@@ -31,7 +39,13 @@ import {
 import type { SessionContext } from "@/lib/auth/session";
 
 function session(role: string, memberId = "mb_1"): SessionContext {
-  return { userId: "u_1", memberId, organizationId: "org_1", role };
+  return {
+    userId: "u_1",
+    memberId,
+    organizationId: "org_1",
+    role,
+    activeDepartmentId: null,
+  };
 }
 
 describe("resolvePermissions", () => {
@@ -95,7 +109,7 @@ describe("requireConversationAccess", () => {
   it("owner sempre passa", async () => {
     permissionRows = [];
     await expect(
-      requireConversationAccess(session("owner"), "outro_membro")
+      requireConversationAccess(session("owner"), { assignedTo: "outro_membro" })
     ).resolves.toBeUndefined();
   });
 
@@ -104,29 +118,74 @@ describe("requireConversationAccess", () => {
       { permission: "conversations:view_all", granted: true },
     ];
     await expect(
-      requireConversationAccess(session("agent"), "outro_membro")
+      requireConversationAccess(session("agent"), { assignedTo: "outro_membro" })
     ).resolves.toBeUndefined();
   });
 
   it("agent sem view_all só vê a própria conversa atribuída", async () => {
     permissionRows = [];
     await expect(
-      requireConversationAccess(session("agent", "mb_1"), "mb_1")
+      requireConversationAccess(session("agent", "mb_1"), { assignedTo: "mb_1" })
     ).resolves.toBeUndefined();
   });
 
   it("agent sem view_all e não atribuída a ele é recusado", async () => {
     permissionRows = [];
     await expect(
-      requireConversationAccess(session("agent", "mb_1"), "mb_2")
+      requireConversationAccess(session("agent", "mb_1"), { assignedTo: "mb_2" })
     ).rejects.toThrow(ForbiddenError);
   });
 
   it("agent sem view_all e conversa não atribuída (null) é recusado", async () => {
     permissionRows = [];
     await expect(
-      requireConversationAccess(session("agent", "mb_1"), null)
+      requireConversationAccess(session("agent", "mb_1"), { assignedTo: null })
     ).rejects.toThrow(ForbiddenError);
+  });
+
+  it("conversa de departamento: membro fora do dept é recusado mesmo com view_all", async () => {
+    permissionRows = [{ permission: "conversations:view_all", granted: true }];
+    channelRow = undefined; // departmentRole() não encontra vínculo
+    await expect(
+      requireConversationAccess(session("agent", "mb_1"), {
+        assignedTo: null,
+        departmentId: "dep_1",
+      })
+    ).rejects.toThrow(ForbiddenError);
+  });
+
+  it("conversa de departamento: membro do dept segue as regras normais de atribuição", async () => {
+    permissionRows = [];
+    channelRow = { role: "agent" }; // pertence ao dep_1
+    await expect(
+      requireConversationAccess(session("agent", "mb_1"), {
+        assignedTo: "mb_1",
+        departmentId: "dep_1",
+      })
+    ).resolves.toBeUndefined();
+  });
+});
+
+describe("hasPermissionInDept", () => {
+  it("owner sempre passa, sem consultar o banco", async () => {
+    channelRow = undefined;
+    await expect(
+      hasPermissionInDept(session("owner"), "dep_1", "campaigns:send")
+    ).resolves.toBe(true);
+  });
+
+  it("quem não pertence ao departamento não tem nenhuma permissão", async () => {
+    channelRow = undefined;
+    await expect(
+      hasPermissionInDept(session("agent", "mb_1"), "dep_1", "campaigns:send")
+    ).resolves.toBe(false);
+  });
+
+  it("admin do departamento tem qualquer permissão dele", async () => {
+    channelRow = { role: "admin" };
+    await expect(
+      hasPermissionInDept(session("agent", "mb_1"), "dep_1", "campaigns:send")
+    ).resolves.toBe(true);
   });
 });
 

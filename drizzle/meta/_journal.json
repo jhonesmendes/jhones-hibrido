@@ -113,6 +113,55 @@
       "when": 1785440764602,
       "tag": "0015_regular_sally_floyd",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1785585625609,
+      "tag": "0016_great_spot",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1785608047334,
+      "tag": "0017_multi_departamento_foundation",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1785609788898,
+      "tag": "0018_conversation_meta_credential",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1785611538784,
+      "tag": "0019_member_active_department",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1785614350331,
+      "tag": "0020_invite_department",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1785615685458,
+      "tag": "0021_baileys_multi_session",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1785619930105,
+      "tag": "0022_agent_profiles_multi",
+      "breakpoints": true
     }
   ]
 }

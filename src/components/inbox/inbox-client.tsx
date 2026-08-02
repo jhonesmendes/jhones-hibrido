@@ -14,6 +14,7 @@ import {
   requestNotificationPermission,
   setActiveConversationForPush,
 } from "@/lib/notifications";
+import { fetchGroupsInInbox } from "@/lib/inbox-preferences";
 import { ConversationList } from "./conversation-list";
 import { MessageThread } from "./message-thread";
 import { Composer } from "./composer";
@@ -33,6 +34,9 @@ export function InboxClient() {
   const [notifPermission, setNotifPermission] = useState<
     NotificationPermission | "unsupported"
   >("default");
+  // Preferência pessoal (servidor, não localStorage — vale em qualquer
+  // dispositivo): grupos misturados na aba "Todas" ou só na aba "Grupos".
+  const [groupsInInbox, setGroupsInInbox] = useState(true);
 
   useEffect(() => {
     // A preferência salva é de desktop (painel lateral fixo); no mobile o
@@ -41,6 +45,7 @@ export function InboxClient() {
     const isDesktop = window.matchMedia("(min-width: 768px)").matches;
     setPanelOpen(isDesktop ? localStorage.getItem("vocero.panelOpen") !== "false" : false);
     setNotifPermission(getNotificationPermission());
+    void fetchGroupsInInbox().then(setGroupsInInbox);
   }, []);
 
   const enableNotifications = useCallback(() => {
@@ -304,6 +309,7 @@ export function InboxClient() {
           onStartConversation={startConversation}
           notificationPermission={notifPermission}
           onEnableNotifications={enableNotifications}
+          groupsInInbox={groupsInInbox}
         />
       </section>
 

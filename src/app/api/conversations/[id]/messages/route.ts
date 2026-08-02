@@ -17,7 +17,7 @@ export const GET = withAuth(async (session, req: Request, ctx: Params) => {
   const { id } = await ctx.params;
   const row = await getConversation(session.organizationId, id);
   if (!row) return apiError(404, "not_found", "Conversa não encontrada");
-  await requireConversationAccess(session, row.conversation.assignedTo);
+  await requireConversationAccess(session, row.conversation);
   await requireChannelAccess(session, row.conversation.channel, "view");
 
   const url = new URL(req.url);
@@ -61,7 +61,7 @@ export const POST = withAuth(async (session, req: Request, ctx: Params) => {
 
   const row = await getConversation(session.organizationId, id);
   if (!row) return apiError(404, "not_found", "Conversa não encontrada");
-  await requireConversationAccess(session, row.conversation.assignedTo);
+  await requireConversationAccess(session, row.conversation);
   await requirePermission(session, "conversations:reply");
   const effectiveChannel = body.data.channel ?? row.conversation.channel;
   await requireChannelAccess(session, effectiveChannel, "send");

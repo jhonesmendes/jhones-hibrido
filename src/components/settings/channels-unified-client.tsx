@@ -12,9 +12,9 @@ type Tab = "official" | "unofficial";
 /**
  * Tela única de Canais: agrupa o canal oficial (Meta Cloud API) e o não
  * oficial (motor Baileys) em abas, no lugar de duas rotas separadas
- * (`/settings/whatsapp` e `/settings/channels`). Cada canal segue com no
- * máximo um número por organização (ver schema.meta_credentials /
- * unofficial_channel) — não é uma lista multi-número.
+ * (`/settings/whatsapp` e `/settings/channels`). v0.1: os dois já são listas
+ * multi-número — N `meta_credentials` e N `unofficial_channel` por
+ * organização, cada canal com sua sessão própria.
  */
 export function ChannelsUnifiedClient() {
   const [tab, setTab] = useState<Tab>("official");

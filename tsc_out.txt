@@ -1,0 +1,26 @@
+﻿node.exe : npm notice run vocero-crm@1.0.0 npx
+No linha:1 caractere:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Users\jhonesmendes\AppData\R ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (npm notice run vocero-crm@1.0.0 npx:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+npm notice run tsc --noEmit -p tsconfig.json
+error TS2688: Cannot find type definition file for 'node'.
+  The file is in the program because:
+    Entry point for implicit type library 'node'
+error TS2688: Cannot find type definition file for 'nodemailer'.
+  The file is in the program because:
+    Entry point for implicit type library 'nodemailer'
+error TS2688: Cannot find type definition file for 'qrcode'.
+  The file is in the program because:
+    Entry point for implicit type library 'qrcode'
+error TS2688: Cannot find type definition file for 'react'.
+  The file is in the program because:
+    Entry point for implicit type library 'react'
+error TS2688: Cannot find type definition file for 'react-dom'.
+  The file is in the program because:
+    Entry point for implicit type library 'react-dom'
+error TS2688: Cannot find type definition file for 'web-push'.
+  The file is in the program because:
+    Entry point for implicit type library 'web-push'

@@ -97,10 +97,10 @@ export function NewCampaignWizard({
         setTemplates((d.templates ?? []).filter((t) => t.status === "approved"))
       )
       .catch(() => {});
-    fetch("/api/settings/channels")
-      .then((r) => (r.ok ? r.json() : { status: "disconnected" }))
-      .then((d: { status?: string }) =>
-        setUnofficialConnected(d.status === "connected")
+    fetch("/api/settings/channels/unofficial")
+      .then((r) => (r.ok ? r.json() : { channels: [] }))
+      .then((d: { channels?: { status: string }[] }) =>
+        setUnofficialConnected((d.channels ?? []).some((c) => c.status === "connected"))
       )
       .catch(() => setUnofficialConnected(false));
     fetch("/api/pipeline/stages")
