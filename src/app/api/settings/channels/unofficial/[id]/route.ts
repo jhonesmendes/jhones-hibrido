@@ -21,6 +21,9 @@ const patchSchema = z.object({
 });
 
 export const PATCH = withAuth(async (session, req: Request, { params }: Params) => {
+  if (session.role !== "owner" && session.role !== "admin") {
+    return apiError(403, "forbidden", "Só owner/admin gerenciam canais");
+  }
   const { id } = await params;
   const existing = await getUnofficialChannelById(id, session.organizationId);
   if (!existing) return apiError(404, "not_found", "Canal não encontrado");
@@ -36,6 +39,9 @@ export const PATCH = withAuth(async (session, req: Request, { params }: Params) 
  * apagar a linha — diferente de `disconnect`, que só reseta o auth-state e
  * mantém o canal para reconectar depois. */
 export const DELETE = withAuth(async (session, req: Request, { params }: Params) => {
+  if (session.role !== "owner" && session.role !== "admin") {
+    return apiError(403, "forbidden", "Só owner/admin gerenciam canais");
+  }
   const { id } = await params;
   const existing = await getUnofficialChannelById(id, session.organizationId);
   if (!existing) return apiError(404, "not_found", "Canal não encontrado");

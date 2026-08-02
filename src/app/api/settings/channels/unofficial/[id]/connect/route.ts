@@ -11,6 +11,9 @@ type Params = { params: Promise<{ id: string }> };
 /** Inicia a conexão deste canal — o QR e o estado chegam por SSE
  * (`channel.status`, com `channelId`), não nesta resposta. */
 export const POST = withAuth(async (session, req: Request, { params }: Params) => {
+  if (session.role !== "owner" && session.role !== "admin") {
+    return apiError(403, "forbidden", "Só owner/admin gerenciam canais");
+  }
   const { id } = await params;
   const channel = await getUnofficialChannelById(id, session.organizationId);
   if (!channel) return apiError(404, "not_found", "Canal não encontrado");

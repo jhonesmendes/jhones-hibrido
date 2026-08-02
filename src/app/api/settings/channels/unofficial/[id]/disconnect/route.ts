@@ -12,6 +12,9 @@ type Params = { params: Promise<{ id: string }> };
  * para reconectar com um QR novo depois. Remover o canal por completo é
  * o `DELETE` em `/api/settings/channels/unofficial/[id]`. */
 export const POST = withAuth(async (session, req: Request, { params }: Params) => {
+  if (session.role !== "owner" && session.role !== "admin") {
+    return apiError(403, "forbidden", "Só owner/admin gerenciam canais");
+  }
   const { id } = await params;
   const channel = await getUnofficialChannelById(id, session.organizationId);
   if (!channel) return apiError(404, "not_found", "Canal não encontrado");

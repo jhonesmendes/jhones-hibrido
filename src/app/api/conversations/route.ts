@@ -4,7 +4,11 @@ import { apiError, parseBody, withAuth } from "@/lib/api";
 import { getDb, schema } from "@/lib/db";
 import { scoped } from "@/lib/db/tenant";
 import { resolvePermissions } from "@/lib/auth/require-permission";
-import { listConversations, serializeConversation } from "@/server/inbox/queries";
+import {
+  listConversations,
+  serializeConversation,
+  updateConversation,
+} from "@/server/inbox/queries";
 import {
   getOrCreateContact,
   getOrCreateConversation,
@@ -80,10 +84,23 @@ export const POST = withAuth(async (session, req: Request) => {
     contact = result.contact;
   }
 
-  const conversation = await getOrCreateConversation(
-    session.organizationId,
-    contact.id
-  );
+  let conversation = await getOrCreateConversation(session.organizationId, contact.id);
+
+  // Sem isso, uma conversa criada manualmente por quem não tem
+  // conversations:view_all nasce com assignedTo=null e desaparece pro
+  // próprio criador (o filtro de "minhas conversas" em GET não bate com
+  // NULL) — a UI mostra "criei, mas não abre". Owner/quem já tem
+  // view_all não precisa: já enxerga qualquer conversa sem dono.
+  if (conversation.assignedTo === null && session.role !== "owner") {
+    const effective = await resolvePermissions(session.memberId, session.role);
+    if (!effective.has("conversations:view_all")) {
+      const updated = await updateConversation(session.organizationId, conversation.id, {
+        assignedTo: session.memberId,
+      });
+      if (updated) conversation = updated;
+    }
+  }
+
   return Response.json(
     { conversation: serializeConversation(conversation, contact) },
     { status: 201 }

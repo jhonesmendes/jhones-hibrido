@@ -10,8 +10,13 @@ import { logAudit } from "@/server/auth/audit";
 
 export const dynamic = "force-dynamic";
 
-/** Lista todos os números oficiais da organização (v0.1: N por org). */
+/** Lista todos os números oficiais da organização (v0.1: N por org).
+ * Restrito a owner/admin — canais são configuração da organização, não
+ * algo que um agente comum deva ver (token last4) nem gerenciar. */
 export const GET = withAuth(async (session) => {
+  if (session.role !== "owner" && session.role !== "admin") {
+    return apiError(403, "forbidden", "Só owner/admin gerenciam canais");
+  }
   const rows = await listCredentialsByOrg(session.organizationId);
   return Response.json({
     numbers: rows.map((c) => ({
@@ -42,6 +47,9 @@ const postSchema = z.object({
  * inscreve (mesmo fluxo do wizard original, agora sem substituir números
  * existentes — cada `phoneNumberId` é uma linha própria). */
 export const POST = withAuth(async (session, req: Request) => {
+  if (session.role !== "owner" && session.role !== "admin") {
+    return apiError(403, "forbidden", "Só owner/admin gerenciam canais");
+  }
   const body = await parseBody(req, postSchema);
   if (!body.ok) return body.response;
 

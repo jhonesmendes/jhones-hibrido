@@ -46,9 +46,14 @@ export function ChannelsClient() {
   const [channels, setChannels] = useState<UnofficialChannel[] | null>(null);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [creating, setCreating] = useState(false);
+  const [forbidden, setForbidden] = useState(false);
 
   const refetch = useCallback(async () => {
     const res = await fetch("/api/settings/channels/unofficial").catch(() => null);
+    if (res?.status === 403) {
+      setForbidden(true);
+      return;
+    }
     if (res?.ok) {
       const data = (await res.json()) as { channels: UnofficialChannel[] };
       setChannels(data.channels);
@@ -80,6 +85,15 @@ export function ChannelsClient() {
           : prev
       ),
   });
+
+  if (forbidden) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        Canais são configuração da organização — só owner e administradores
+        podem ver e gerenciar os números conectados.
+      </p>
+    );
+  }
 
   if (!channels) {
     return <p className="text-sm text-muted-foreground">Carregando…</p>;

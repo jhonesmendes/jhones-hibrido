@@ -24,8 +24,11 @@ const patchSchema = z.object({
   token: z.string().trim().min(1).optional(),
 });
 
-/** Edita nome/descrição/ativação, ou reconecta com um token novo. */
+/** Edita nome/descrição/ativação, ou reconecta com um token novo. Só owner/admin. */
 export const PATCH = withAuth(async (session, req: Request, { params }: Params) => {
+  if (session.role !== "owner" && session.role !== "admin") {
+    return apiError(403, "forbidden", "Só owner/admin gerenciam canais");
+  }
   const { id } = await params;
   const existing = await getCredentialsById(id, session.organizationId);
   if (!existing) return apiError(404, "not_found", "Número não encontrado");
@@ -68,6 +71,9 @@ export const PATCH = withAuth(async (session, req: Request, { params }: Params) 
 });
 
 export const DELETE = withAuth(async (session, req: Request, { params }: Params) => {
+  if (session.role !== "owner" && session.role !== "admin") {
+    return apiError(403, "forbidden", "Só owner/admin gerenciam canais");
+  }
   const { id } = await params;
   const existing = await getCredentialsById(id, session.organizationId);
   if (!existing) return apiError(404, "not_found", "Número não encontrado");

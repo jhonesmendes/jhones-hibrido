@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { parseBody, withAuth } from "@/lib/api";
+import { apiError, parseBody, withAuth } from "@/lib/api";
 import {
   createUnofficialChannel,
   listUnofficialChannels,
@@ -13,8 +13,11 @@ export const runtime = "nodejs";
 /** Lista todos os canais não oficiais da organização (v0.1: N por org),
  * com o status ao vivo (cache em memória do manager) sobreposto ao status
  * persistido — o estado inicial chega aqui, a atualização ao vivo por SSE
- * (evento `channel.status`, já com `channelId`). */
+ * (evento `channel.status`, já com `channelId`). Restrito a owner/admin. */
 export const GET = withAuth(async (session) => {
+  if (session.role !== "owner" && session.role !== "admin") {
+    return apiError(403, "forbidden", "Só owner/admin gerenciam canais");
+  }
   const rows = await listUnofficialChannels(session.organizationId);
   const channels = await Promise.all(
     rows.map(async (r) => {
@@ -42,6 +45,9 @@ const postSchema = z.object({
 /** Cria a linha do canal — só isso, não conecta ainda (ver `[id]/connect`).
  * Separar os dois passos deixa o usuário nomear o canal antes do QR. */
 export const POST = withAuth(async (session, req: Request) => {
+  if (session.role !== "owner" && session.role !== "admin") {
+    return apiError(403, "forbidden", "Só owner/admin gerenciam canais");
+  }
   const body = await parseBody(req, postSchema);
   if (!body.ok) return body.response;
 

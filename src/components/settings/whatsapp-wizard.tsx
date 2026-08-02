@@ -53,13 +53,16 @@ export function WhatsappWizard() {
   const [webhook, setWebhook] = useState<WebhookInfo | null>(null);
   const [addingNew, setAddingNew] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [forbidden, setForbidden] = useState(false);
 
   const refetch = useCallback(async () => {
-    const [n, w, d] = await Promise.all([
-      fetch("/api/settings/whatsapp/numbers").then((r) => (r.ok ? r.json() : null)),
+    const [numbersRes, w, d] = await Promise.all([
+      fetch("/api/settings/whatsapp/numbers"),
       fetch("/api/settings/webhook").then((r) => (r.ok ? r.json() : null)),
       fetch("/api/settings/departments").then((r) => (r.ok ? r.json() : null)),
     ]).catch(() => [null, null, null]);
+    if (numbersRes?.status === 403) setForbidden(true);
+    const n = numbersRes?.ok ? await numbersRes.json() : null;
     if (n) setNumbers(n.numbers);
     if (w) setWebhook(w);
     if (d) setDepartments(d.departments);
@@ -72,6 +75,15 @@ export function WhatsappWizard() {
 
   if (!loaded) {
     return <p className="text-sm text-muted-foreground">Carregando…</p>;
+  }
+
+  if (forbidden) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        Canais são configuração da organização — só owner e administradores
+        podem ver e gerenciar os números conectados.
+      </p>
+    );
   }
 
   const hasReconnectRequired = numbers?.some((n) => n.status === "reconnect_required");
