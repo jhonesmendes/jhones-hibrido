@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, sql } from "drizzle-orm";
+import { and, desc, eq, gt, isNull, or, sql } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { scoped } from "@/lib/db/tenant";
 import { isWindowOpen, windowRemainingMs } from "@/server/inbox/window";
@@ -67,8 +67,14 @@ export async function listConversations(
         assignedToFilter
           ? eq(schema.conversation.assignedTo, assignedToFilter)
           : undefined,
+        // Sem departmentId (conversa ainda não roteada a nenhum departamento)
+        // fica visível a todos — mesmo com um filtro ativo (ver comentário
+        // do campo em schema.ts). Só exclui conversas de OUTRO departamento.
         departmentFilter
-          ? eq(schema.conversation.departmentId, departmentFilter)
+          ? or(
+              eq(schema.conversation.departmentId, departmentFilter),
+              isNull(schema.conversation.departmentId)
+            )
           : undefined
       )
     )

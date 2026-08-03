@@ -5,6 +5,7 @@ import { getAuth, runInternalSignup } from "@/lib/auth";
 import { getDb, schema } from "@/lib/db";
 import { newId } from "@/lib/db/ids";
 import { scoped } from "@/lib/db/tenant";
+import { sendWelcomeEmail } from "@/server/auth/welcome-email";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { resolveChannelAccess, resolvePermissions } from "@/lib/auth/require-permission";
 
@@ -101,5 +102,11 @@ export const POST = withAuth(async (session, req: Request) => {
     })
     .onConflictDoNothing();
 
-  return Response.json({ ok: true }, { status: 201 });
+  const emailed = await sendWelcomeEmail(session.organizationId, {
+    name: body.data.name,
+    email: body.data.email,
+    password: body.data.password,
+  });
+
+  return Response.json({ ok: true, emailed }, { status: 201 });
 });

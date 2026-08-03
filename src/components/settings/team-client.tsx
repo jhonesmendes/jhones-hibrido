@@ -55,7 +55,11 @@ export function TeamClient() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [tempPassword, setTempPassword] = useState("");
-  const [created, setCreated] = useState<{ email: string; password: string } | null>(null);
+  const [created, setCreated] = useState<{
+    email: string;
+    password: string;
+    emailed: boolean;
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState<Member | null>(null);
@@ -114,7 +118,8 @@ export function TeamClient() {
       setError(data?.error?.message ?? "Não foi possível criar a conta");
       return;
     }
-    setCreated({ email, password: tempPassword });
+    const data = (await res.json()) as { emailed: boolean };
+    setCreated({ email, password: tempPassword, emailed: data.emailed });
     setName("");
     setEmail("");
     setTempPassword("");
@@ -143,9 +148,10 @@ export function TeamClient() {
         <CardHeader>
           <CardTitle>Criar conta de equipe</CardTitle>
           <CardDescription>
-            Sem e-mails: você mesmo compartilha a senha temporária com o
-            colega (ela aparece UMA única vez). Prefere mandar um link em vez
-            de compartilhar senha?{" "}
+            Se você tiver SMTP configurado, o novo colega recebe os dados de
+            acesso por e-mail automaticamente. Sem SMTP, a senha temporária
+            aparece aqui UMA única vez para você compartilhar. Prefere mandar
+            um link em vez de senha?{" "}
             <button
               type="button"
               className="text-primary hover:underline"
@@ -195,7 +201,9 @@ export function TeamClient() {
             <div className="rounded-md border border-[#d8e8dd] bg-[#eff7f1] p-3 text-sm">
               <p className="font-medium text-[#3f6b52]">Conta criada ✓</p>
               <p className="mt-1 text-[#3f6b52]/90">
-                Compartilhe estes dados agora (não serão exibidos de novo):
+                {created.emailed
+                  ? "Um e-mail com os dados de acesso foi enviado para o novo colega. Guarde-os aqui também, caso precise:"
+                  : "Sem SMTP configurado (ou o envio falhou): compartilhe estes dados agora (não serão exibidos de novo):"}
                 <br />
                 <code>{created.email}</code> · senha{" "}
                 <code>{created.password}</code>

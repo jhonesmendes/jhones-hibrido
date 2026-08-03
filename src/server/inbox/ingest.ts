@@ -76,12 +76,15 @@ export async function getOrCreateContact(
 
 export async function getOrCreateConversation(
   organizationId: string,
-  contactId: string
+  contactId: string,
+  /** Departamento de quem iniciou manualmente (v0.1); só se aplica à
+   * criação — conversas já existentes mantêm o departamento atual. */
+  departmentId?: string | null
 ) {
   const db = getDb();
   const inserted = await db
     .insert(schema.conversation)
-    .values({ id: newId("conversation"), organizationId, contactId })
+    .values({ id: newId("conversation"), organizationId, contactId, departmentId })
     .onConflictDoNothing()
     .returning();
   if (inserted[0]) return inserted[0];

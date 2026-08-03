@@ -84,7 +84,11 @@ export const POST = withAuth(async (session, req: Request) => {
     contact = result.contact;
   }
 
-  let conversation = await getOrCreateConversation(session.organizationId, contact.id);
+  let conversation = await getOrCreateConversation(
+    session.organizationId,
+    contact.id,
+    session.activeDepartmentId
+  );
 
   // Sem isso, uma conversa criada manualmente por quem não tem
   // conversations:view_all nasce com assignedTo=null e desaparece pro
