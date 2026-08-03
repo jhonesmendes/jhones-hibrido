@@ -3,7 +3,7 @@
 # ============================================================
 services:
   app:
-    image: ghcr.io/jhonesmendes/vocero-hibrido:latest
+    image: ghcr.io/jhonesmendes/jhones-hibrido:latest
     ports:
       - "3000:3000"
     restart: unless-stopped
