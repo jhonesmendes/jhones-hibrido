@@ -1,11 +1,14 @@
 # ============================================================
-# Vocero CRM — app + Postgres
+# Vocero CRM — Ruta B: app + Postgres + Caddy (HTTPS automático)
+# Uso:  cp .env.example .env  →  rellenar  →  docker compose up -d --build
 # ============================================================
 services:
   app:
-    image: ghcr.io/jhonesmendes/jhones-hibrido:latest
+    #build:
+    #context: .
+    image: ghcr.io/jhonesmendes/jhones-hibrido:latests
     ports:
-      - "3000:3000"
+    - "3000:3000"
     restart: unless-stopped
     environment:
       APP_BASE_URL: ${APP_BASE_URL}
@@ -24,8 +27,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    networks:
-      - vocero-net
+    # el HEALTHCHECK vive en el Dockerfile (/api/health)
 
   postgres:
     image: postgres:16-alpine
@@ -41,12 +43,28 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
-    networks:
-      - vocero-net
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - vocero_caddy_data:/data
+      - vocero_caddy_config:/config
+    depends_on:
+      - app
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:2019/config/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
 
 volumes:
   vocero_pg:
-
-networks:
-  vocero-net:
-    driver: bridge
+  vocero_caddy_data:
+  vocero_caddy_config:
