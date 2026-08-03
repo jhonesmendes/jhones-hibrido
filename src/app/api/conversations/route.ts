@@ -4,6 +4,7 @@ import { apiError, parseBody, withAuth } from "@/lib/api";
 import { getDb, schema } from "@/lib/db";
 import { scoped } from "@/lib/db/tenant";
 import { resolvePermissions } from "@/lib/auth/require-permission";
+import { listMemberDepartments } from "@/server/settings/departments";
 import {
   listConversations,
   serializeConversation,
@@ -22,18 +23,23 @@ export const GET = withAuth(async (session, req: Request) => {
   const since = sinceParam ? new Date(sinceParam) : undefined;
 
   // Sem conversations:view_all, só vê as conversas atribuídas a si (FR-007)
-  // — inclusive owner, se abriu mão dessa permissão para si mesmo.
+  // — inclusive owner, se abriu mão dessa permissão para si mesmo — OU as
+  // de um departamento do qual é membro (pertencer ao depto do número já
+  // basta, sem precisar de atribuição individual).
   let assignedToFilter: string | undefined;
+  let memberDepartmentIds: string[] | undefined;
   const effective = await resolvePermissions(session.memberId, session.role);
   if (!effective.has("conversations:view_all")) {
     assignedToFilter = session.memberId;
+    memberDepartmentIds = (await listMemberDepartments(session.memberId)).map((d) => d.id);
   }
 
   const conversations = await listConversations(
     session.organizationId,
     since && !Number.isNaN(since.getTime()) ? since : undefined,
     assignedToFilter,
-    session.activeDepartmentId ?? undefined
+    session.activeDepartmentId ?? undefined,
+    memberDepartmentIds
   );
   return Response.json({ conversations });
 });

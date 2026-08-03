@@ -113,9 +113,12 @@ export async function hasPermissionInDept(
  * Sem `conversations:view_all`, só é permitido acessar a conversa atribuída
  * ao próprio membro (FR-007) — inclusive owner, se abriu mão dessa
  * permissão para si (é uma escolha, não uma trava). v0.1: quando a conversa
- * pertence a um departamento, pertencer a ele é pré-requisito adicional para
- * quem não é owner (não substitui a checagem de atribuição/view_all acima,
- * soma-se a ela — owner sempre pertence a todos os departamentos).
+ * pertence a um departamento e quem pede NÃO é owner, pertencer a esse
+ * departamento já basta — vê qualquer conversa do número do seu depto,
+ * atribuída ou não (o objetivo do depto é justamente isso: agrupar quem
+ * atende aquele número). Owner não ganha esse atalho (ele "pertence" a
+ * todos os deptos por definição): segue direto para a checagem de
+ * atribuição/view_all abaixo, que ele pode restringir para si mesmo.
  */
 export async function requireConversationAccess(
   session: SessionContext,
@@ -126,6 +129,7 @@ export async function requireConversationAccess(
     if (!role) {
       throw new ForbiddenError("Conversa de outro departamento");
     }
+    return;
   }
   const effective = await resolvePermissions(session.memberId, session.role);
   if (effective.has("conversations:view_all")) return;

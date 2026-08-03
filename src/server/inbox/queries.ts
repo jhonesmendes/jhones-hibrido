@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, isNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull, or, sql } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { scoped } from "@/lib/db/tenant";
 import { isWindowOpen, windowRemainingMs } from "@/server/inbox/window";
@@ -24,12 +24,19 @@ export type ConversationDto = {
 export async function listConversations(
   organizationId: string,
   since?: Date,
+  /** Sem `conversations:view_all`: restringe às conversas atribuídas ao
+   * membro OU pertencentes a um departamento do qual ele é membro (ver
+   * `memberDepartmentIds`) — pertencer ao depto do número já basta, não
+   * precisa de atribuição individual. */
   assignedToFilter?: string,
   /** Departamento ativo (v0.1); undefined/null = sem filtro (visão
    * consolidada). Conversas sem department_id ficam de fora quando um
    * departamento está ativo — só entram quando o canal que as originou
    * estiver vinculado a um departamento (Configurações → Canais). */
-  departmentFilter?: string
+  departmentFilter?: string,
+  /** Departamentos aos quais o membro pertence — só relevante junto de
+   * `assignedToFilter` (quem já tem view_all não precisa disso). */
+  memberDepartmentIds?: string[]
 ): Promise<ConversationDto[]> {
   const db = getDb();
   const previewSql = sql<string | null>`(
@@ -65,7 +72,12 @@ export async function listConversations(
         eq(schema.conversation.isTest, false),
         since ? gt(schema.conversation.updatedAt, since) : undefined,
         assignedToFilter
-          ? eq(schema.conversation.assignedTo, assignedToFilter)
+          ? or(
+              eq(schema.conversation.assignedTo, assignedToFilter),
+              memberDepartmentIds && memberDepartmentIds.length > 0
+                ? inArray(schema.conversation.departmentId, memberDepartmentIds)
+                : undefined
+            )
           : undefined,
         // Sem departmentId (conversa ainda não roteada a nenhum departamento)
         // fica visível a todos — mesmo com um filtro ativo (ver comentário

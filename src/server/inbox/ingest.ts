@@ -74,6 +74,35 @@ export async function getOrCreateContact(
   return { contact: existing, isNew: false };
 }
 
+/**
+ * Departamento dono do canal que recebeu a mensagem (v0.1) — canal ainda
+ * sem departamento vinculado devolve `null` (conversa fica visível a
+ * todos, ver comentário do campo em schema.ts).
+ */
+async function resolveChannelDepartmentId(input: {
+  metaCredentialId?: string | null;
+  unofficialChannelId?: string | null;
+}): Promise<string | null> {
+  const db = getDb();
+  if (input.metaCredentialId) {
+    const rows = await db
+      .select({ departmentId: schema.metaCredentials.departmentId })
+      .from(schema.metaCredentials)
+      .where(eq(schema.metaCredentials.id, input.metaCredentialId))
+      .limit(1);
+    return rows[0]?.departmentId ?? null;
+  }
+  if (input.unofficialChannelId) {
+    const rows = await db
+      .select({ departmentId: schema.unofficialChannel.departmentId })
+      .from(schema.unofficialChannel)
+      .where(eq(schema.unofficialChannel.id, input.unofficialChannelId))
+      .limit(1);
+    return rows[0]?.departmentId ?? null;
+  }
+  return null;
+}
+
 export async function getOrCreateConversation(
   organizationId: string,
   contactId: string,
@@ -221,9 +250,14 @@ export async function ingestInboundMessage(input: {
     input.profileName,
     input.contactKind ?? "individual"
   );
+  const channelDepartmentId = await resolveChannelDepartmentId({
+    metaCredentialId: input.metaCredentialId,
+    unofficialChannelId: input.unofficialChannelId,
+  });
   const conversation = await getOrCreateConversation(
     organizationId,
-    contact.id
+    contact.id,
+    channelDepartmentId
   );
 
   const waTimestamp = toDate(input.timestamp);
@@ -274,6 +308,7 @@ export async function ingestInboundMessage(input: {
             lastMessageAt: waTimestamp,
             unreadCount: sql`${schema.conversation.unreadCount} + 1`,
             channel, // sticky: responder pelo canal por onde o cliente escreveu
+            departmentId: channelDepartmentId, // sticky, igual ao canal
             ...(input.metaCredentialId !== undefined
               ? { metaCredentialId: input.metaCredentialId }
               : {}),

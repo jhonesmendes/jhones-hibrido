@@ -183,12 +183,23 @@ describe("requireConversationAccess", () => {
     ).rejects.toThrow(ForbiddenError);
   });
 
-  it("conversa de departamento: membro do dept segue as regras normais de atribuição", async () => {
+  it("conversa de departamento: membro do dept vê mesmo sem estar atribuída a ele (não precisa de view_all)", async () => {
     permissionRows = [];
     channelRow = { role: "agent" }; // pertence ao dep_1
     await expect(
       requireConversationAccess(session("agent", "mb_1"), {
-        assignedTo: "mb_1",
+        assignedTo: "outro_membro",
+        departmentId: "dep_1",
+      })
+    ).resolves.toBeUndefined();
+  });
+
+  it("conversa de departamento: membro do dept vê mesmo sem nenhuma atribuição (null)", async () => {
+    permissionRows = [];
+    channelRow = { role: "agent" };
+    await expect(
+      requireConversationAccess(session("agent", "mb_1"), {
+        assignedTo: null,
         departmentId: "dep_1",
       })
     ).resolves.toBeUndefined();
