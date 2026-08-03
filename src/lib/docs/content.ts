@@ -276,6 +276,10 @@ export const DOC_SECTIONS: DocSection[] = [
           { name: "Testar configuração", desc: "envia um e-mail de teste real para o seu próprio e-mail de proprietário." },
         ],
       },
+      {
+        type: "p",
+        text: "Se o único proprietário esquecer a senha antes de configurar o SMTP (ou de gerar um link manual), não há como entrar no painel para se recuperar. Nesse caso, rode no host (ou dentro do container) `pnpm recover:owner-password -- --email=seu@email.com` — redefine a senha direto no banco e imprime uma nova senha temporária no terminal.",
+      },
     ],
   },
 ];
