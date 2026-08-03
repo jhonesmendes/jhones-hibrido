@@ -19,13 +19,17 @@ function roleDefaults(role: string): Set<Permission> {
   return new Set(DEFAULT_PERMISSIONS[role as Role] ?? DEFAULT_PERMISSIONS.agent);
 }
 
-/** Permissões efetivas de um membro: default do papel + overrides do banco. */
+/**
+ * Permissões efetivas de um membro: default do papel + overrides do banco.
+ * Owner também pode ter overrides (ex.: abrir mão de "ver todas as
+ * conversas") — não há bypass aqui; quem sempre passa é `requirePermission`
+ * para as ações estruturais que exigem o papel em si (gestão de equipe etc.).
+ */
 export async function resolvePermissions(
   memberId: string,
   role: string
 ): Promise<Set<Permission>> {
   const effective = roleDefaults(role);
-  if (role === "owner") return effective;
   const db = getDb();
   const overrides = await db
     .select({
@@ -107,16 +111,17 @@ export async function hasPermissionInDept(
 
 /**
  * Sem `conversations:view_all`, só é permitido acessar a conversa atribuída
- * ao próprio membro (FR-007). v0.1: quando a conversa pertence a um
- * departamento, pertencer a ele é pré-requisito adicional (não substitui a
- * checagem de atribuição/view_all acima, soma-se a ela).
+ * ao próprio membro (FR-007) — inclusive owner, se abriu mão dessa
+ * permissão para si (é uma escolha, não uma trava). v0.1: quando a conversa
+ * pertence a um departamento, pertencer a ele é pré-requisito adicional para
+ * quem não é owner (não substitui a checagem de atribuição/view_all acima,
+ * soma-se a ela — owner sempre pertence a todos os departamentos).
  */
 export async function requireConversationAccess(
   session: SessionContext,
   conversation: { assignedTo: string | null; departmentId?: string | null }
 ): Promise<void> {
-  if (session.role === "owner") return;
-  if (conversation.departmentId) {
+  if (conversation.departmentId && session.role !== "owner") {
     const role = await departmentRole(session.memberId, conversation.departmentId);
     if (!role) {
       throw new ForbiddenError("Conversa de outro departamento");

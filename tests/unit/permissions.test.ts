@@ -49,9 +49,17 @@ function session(role: string, memberId = "mb_1"): SessionContext {
 }
 
 describe("resolvePermissions", () => {
-  it("owner tem todas as permissões, sem consultar overrides", async () => {
-    permissionRows = [{ permission: "campaigns:send", granted: false }];
+  it("owner tem todas as permissões por default", async () => {
+    permissionRows = [];
     const perms = await resolvePermissions("mb_1", "owner");
+    expect(perms.has("campaigns:send")).toBe(true);
+    expect(perms.has("conversations:view_all")).toBe(true);
+  });
+
+  it("owner pode abrir mão de uma permissão via override (é uma escolha, não uma trava)", async () => {
+    permissionRows = [{ permission: "conversations:view_all", granted: false }];
+    const perms = await resolvePermissions("mb_1", "owner");
+    expect(perms.has("conversations:view_all")).toBe(false);
     expect(perms.has("campaigns:send")).toBe(true);
   });
 
@@ -106,10 +114,31 @@ describe("requirePermission", () => {
 });
 
 describe("requireConversationAccess", () => {
-  it("owner sempre passa", async () => {
+  it("owner com view_all (default) vê qualquer conversa", async () => {
     permissionRows = [];
     await expect(
       requireConversationAccess(session("owner"), { assignedTo: "outro_membro" })
+    ).resolves.toBeUndefined();
+  });
+
+  it("owner que abriu mão de view_all só vê a própria conversa atribuída", async () => {
+    permissionRows = [{ permission: "conversations:view_all", granted: false }];
+    await expect(
+      requireConversationAccess(session("owner", "mb_1"), { assignedTo: "outro_membro" })
+    ).rejects.toThrow(ForbiddenError);
+    await expect(
+      requireConversationAccess(session("owner", "mb_1"), { assignedTo: "mb_1" })
+    ).resolves.toBeUndefined();
+  });
+
+  it("owner sem view_all ainda acessa conversa de qualquer departamento", async () => {
+    permissionRows = [{ permission: "conversations:view_all", granted: false }];
+    channelRow = undefined; // departmentRole() não seria consultado para owner
+    await expect(
+      requireConversationAccess(session("owner", "mb_1"), {
+        assignedTo: "mb_1",
+        departmentId: "dep_1",
+      })
     ).resolves.toBeUndefined();
   });
 

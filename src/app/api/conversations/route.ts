@@ -21,13 +21,12 @@ export const GET = withAuth(async (session, req: Request) => {
   const sinceParam = url.searchParams.get("since");
   const since = sinceParam ? new Date(sinceParam) : undefined;
 
-  // Sem conversations:view_all, só vê as conversas atribuídas a si (FR-007).
+  // Sem conversations:view_all, só vê as conversas atribuídas a si (FR-007)
+  // — inclusive owner, se abriu mão dessa permissão para si mesmo.
   let assignedToFilter: string | undefined;
-  if (session.role !== "owner") {
-    const effective = await resolvePermissions(session.memberId, session.role);
-    if (!effective.has("conversations:view_all")) {
-      assignedToFilter = session.memberId;
-    }
+  const effective = await resolvePermissions(session.memberId, session.role);
+  if (!effective.has("conversations:view_all")) {
+    assignedToFilter = session.memberId;
   }
 
   const conversations = await listConversations(
@@ -93,9 +92,10 @@ export const POST = withAuth(async (session, req: Request) => {
   // Sem isso, uma conversa criada manualmente por quem não tem
   // conversations:view_all nasce com assignedTo=null e desaparece pro
   // próprio criador (o filtro de "minhas conversas" em GET não bate com
-  // NULL) — a UI mostra "criei, mas não abre". Owner/quem já tem
-  // view_all não precisa: já enxerga qualquer conversa sem dono.
-  if (conversation.assignedTo === null && session.role !== "owner") {
+  // NULL) — a UI mostra "criei, mas não abre". Quem já tem view_all
+  // (inclusive owner, por padrão) não precisa: já enxerga qualquer
+  // conversa sem dono.
+  if (conversation.assignedTo === null) {
     const effective = await resolvePermissions(session.memberId, session.role);
     if (!effective.has("conversations:view_all")) {
       const updated = await updateConversation(session.organizationId, conversation.id, {
