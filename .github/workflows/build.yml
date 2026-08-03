@@ -25,4 +25,4 @@ jobs:
         with:
           context: .
           push: true
-          tags: ghcr.io/jhonesmendes/vocero-hibrido:latest
+          tags: ghcr.io/jhonesmendes/jhones-hibrido:latest
