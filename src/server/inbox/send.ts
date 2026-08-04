@@ -24,6 +24,7 @@ import {
 } from "@/server/baileys/sender";
 import { baileysMessageId } from "@/server/baileys/inbound";
 import { resolveDefaultUnofficialChannelId } from "@/server/settings/unofficial-channels";
+import { logTrace } from "@/server/observability/trace";
 
 /** Erro tipado do envio; `code` mapeia para HTTP na camada de API. */
 export class SendError extends Error {
@@ -84,6 +85,10 @@ export async function sendText(input: {
   aiGenerated?: boolean;
   /** Override pontual do canal de envio (seletor manual no composer). */
   channelOverride?: "official" | "unofficial";
+  /** Quem mandou enviar — um member_id quando foi um agente pelo composer;
+   * `null`/omitido quando foi automação (IA, fila, campanha, follow-up). Só
+   * para o rastro técnico (`trace_event`), nunca afeta o envio em si. */
+  actorMemberId?: string | null;
 }): Promise<SendResult> {
   const db = getDb();
 
@@ -182,6 +187,16 @@ export async function sendText(input: {
     },
   });
 
+  await logTrace({
+    organizationId: input.organizationId,
+    conversationId: input.conversationId,
+    type: "message.sent",
+    channel: "official",
+    channelId: credentials.id,
+    memberId: input.actorMemberId ?? null,
+    detail: { aiGenerated: input.aiGenerated ?? false, textPreview: input.text.slice(0, 200) },
+  });
+
   return { messageId: message.id };
 }
 
@@ -198,6 +213,8 @@ export async function sendMedia(input: {
   filename?: string | null;
   caption?: string;
   channelOverride?: "official" | "unofficial";
+  /** Ver comentário equivalente em `sendText`. */
+  actorMemberId?: string | null;
 }): Promise<SendResult> {
   const db = getDb();
 
@@ -331,6 +348,16 @@ export async function sendMedia(input: {
     },
   });
 
+  await logTrace({
+    organizationId: input.organizationId,
+    conversationId: input.conversationId,
+    type: "message.sent",
+    channel: "official",
+    channelId: credentials.id,
+    memberId: input.actorMemberId ?? null,
+    detail: { kind, filename: input.filename ?? null },
+  });
+
   return { messageId: message.id };
 }
 
@@ -342,6 +369,7 @@ async function sendMediaViaUnofficial(
     mimeType: string;
     filename?: string | null;
     caption?: string;
+    actorMemberId?: string | null;
   },
   contact: { phone: string; kind: string },
   kind: MediaKind,
@@ -435,6 +463,15 @@ async function sendMediaViaUnofficial(
         }),
       },
     });
+    await logTrace({
+      organizationId: input.organizationId,
+      conversationId: input.conversationId,
+      type: "message.sent",
+      channel: "unofficial",
+      channelId: channelId,
+      memberId: input.actorMemberId ?? null,
+      detail: { kind, filename: input.filename ?? null },
+    });
     return { messageId: message.id };
   }
   return { messageId: waMessageId };
@@ -451,6 +488,7 @@ async function sendViaUnofficial(
     organizationId: string;
     text: string;
     aiGenerated?: boolean;
+    actorMemberId?: string | null;
   },
   contact: { phone: string; kind: string },
   unofficialChannelId: string | null
@@ -521,6 +559,15 @@ async function sendViaUnofficial(
         conversationId: input.conversationId,
         message: serializeMessage(message),
       },
+    });
+    await logTrace({
+      organizationId: input.organizationId,
+      conversationId: input.conversationId,
+      type: "message.sent",
+      channel: "unofficial",
+      channelId: channelId,
+      memberId: input.actorMemberId ?? null,
+      detail: { aiGenerated: input.aiGenerated ?? false, textPreview: input.text.slice(0, 200) },
     });
     return { messageId: message.id };
   }

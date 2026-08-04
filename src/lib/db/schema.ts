@@ -1107,3 +1107,35 @@ export const auditLog = pgTable(
     index("audit_log_org_member_idx").on(t.organizationId, t.memberId),
   ]
 );
+
+/**
+ * Rastro técnico do ciclo de vida de UMA mensagem/conversa — recebimento,
+ * roteamento (caixa direta vs. fila), atribuição na fila, aceite/recusa,
+ * envio de resposta e início manual de conversa pelo agente. Existe pra
+ * diagnosticar "cadê a mensagem" sem depender de acesso direto ao banco:
+ * cada evento é uma linha imutável, nunca UPDATE/DELETE — só INSERT — e
+ * nunca deve derrubar o fluxo real se a escrita falhar (ver `logTrace`
+ * em `src/server/observability/trace.ts`).
+ */
+export const traceEvent = pgTable(
+  "trace_event",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    conversationId: text("conversation_id").references(() => conversation.id, {
+      onDelete: "cascade",
+    }),
+    type: text("type").notNull(),
+    channel: text("channel"),
+    channelId: text("channel_id"),
+    memberId: text("member_id").references(() => member.id, { onDelete: "set null" }),
+    detail: jsonb("detail"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("trace_event_conversation_idx").on(t.conversationId, t.createdAt),
+    index("trace_event_org_created_idx").on(t.organizationId, t.createdAt),
+  ]
+);

@@ -4,6 +4,7 @@ import { newId } from "@/lib/db/ids";
 import { notifyAgentAssigned } from "@/server/queue/notifier";
 import { isWithinBusinessHours } from "@/server/queue/business-hours";
 import { sendText } from "@/server/inbox/send";
+import { logTrace } from "@/server/observability/trace";
 
 const DEFAULT_OFFLINE_MESSAGE =
   "No momento estamos fora do horário de atendimento. Deixe sua mensagem e retornaremos assim que possível.";
@@ -220,15 +221,21 @@ export async function routeConversationToQueue(
   // a cada ciclo, então basta o horário abrir pra seguir sozinho — sem
   // precisar de um estado dedicado de "aguardando expediente".
   const withinBusinessHours = isWithinBusinessHours(config.businessHours, config.timezone);
-  if (!withinBusinessHours) {
-    const row = await loadQueueRow(queueEntry.id);
-    if (row) {
-      await sendText({
-        conversationId: row.conversation.id,
-        organizationId: row.conversation.organizationId,
-        text: config.offlineMessage || DEFAULT_OFFLINE_MESSAGE,
-      }).catch((err) => console.error(`[queue] falha ao avisar fora do horário (${queueEntry.id}):`, err));
-    }
+  const row = await loadQueueRow(queueEntry.id);
+  if (row) {
+    await logTrace({
+      organizationId: row.conversation.organizationId,
+      conversationId,
+      type: "queue.entered",
+      detail: { departmentId, withinBusinessHours, routingMode: config.routingMode },
+    });
+  }
+  if (!withinBusinessHours && row) {
+    await sendText({
+      conversationId: row.conversation.id,
+      organizationId: row.conversation.organizationId,
+      text: config.offlineMessage || DEFAULT_OFFLINE_MESSAGE,
+    }).catch((err) => console.error(`[queue] falha ao avisar fora do horário (${queueEntry.id}):`, err));
   }
 
   return { queueId: queueEntry.id, withinBusinessHours };
@@ -297,6 +304,17 @@ export async function assignConversationToAgent(
     departmentId: row.queue.departmentId,
     contactName: row.contact.name,
     timeoutAt,
+  });
+
+  await logTrace({
+    organizationId: row.conversation.organizationId,
+    conversationId: row.conversation.id,
+    type: "queue.assigned",
+    memberId,
+    detail: {
+      mode: fromStatus === "selecting" ? "client-selection" : "automatic",
+      departmentId: row.queue.departmentId,
+    },
   });
 
   return true;
@@ -402,6 +420,21 @@ export async function acceptQueuedConversation(
     .set({ departmentId: row.departmentId, assignedTo: memberId, updatedAt: now })
     .where(eq(schema.conversation.id, row.conversationId));
 
+  const conv = await db
+    .select({ organizationId: schema.conversation.organizationId })
+    .from(schema.conversation)
+    .where(eq(schema.conversation.id, row.conversationId))
+    .limit(1);
+  if (conv[0]) {
+    await logTrace({
+      organizationId: conv[0].organizationId,
+      conversationId: row.conversationId,
+      type: "queue.accepted",
+      memberId,
+      detail: { departmentId: row.departmentId },
+    });
+  }
+
   return { ok: true, conversationId: row.conversationId };
 }
 
@@ -438,6 +471,21 @@ export async function declineQueuedConversation(
       updatedAt: now,
     })
     .where(eq(schema.agentStatus.memberId, memberId));
+
+  const conv = await db
+    .select({ organizationId: schema.conversation.organizationId })
+    .from(schema.conversation)
+    .where(eq(schema.conversation.id, row.conversationId))
+    .limit(1);
+  if (conv[0]) {
+    await logTrace({
+      organizationId: conv[0].organizationId,
+      conversationId: row.conversationId,
+      type: "queue.declined",
+      memberId,
+      detail: { departmentId: row.departmentId },
+    });
+  }
 
   await distributeConversation(queueId).catch((err) =>
     console.error(`[queue] falha ao redistribuir após repasse de ${queueId}:`, err)

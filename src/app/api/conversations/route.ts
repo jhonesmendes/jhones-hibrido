@@ -15,6 +15,7 @@ import {
   getOrCreateConversation,
   resolveDefaultChannelForNewConversation,
 } from "@/server/inbox/ingest";
+import { logTrace } from "@/server/observability/trace";
 
 export const dynamic = "force-dynamic";
 
@@ -110,6 +111,16 @@ export const POST = withAuth(async (session, req: Request) => {
       channel,
       session.activeDepartmentId
     );
+    await logTrace({
+      organizationId: session.organizationId,
+      conversationId: conversation.id,
+      type: "conversation.started_by_agent",
+      channel: channel.type,
+      channelId:
+        channel.type === "official" ? channel.metaCredentialId : channel.unofficialChannelId,
+      memberId: session.memberId,
+      detail: { contactId: contact.id },
+    });
   }
 
   // Sem isso, uma conversa criada manualmente por quem não tem

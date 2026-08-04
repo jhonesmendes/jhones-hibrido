@@ -211,6 +211,13 @@
       "when": 1785874424472,
       "tag": "0029_member_org_user_unique",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1785883673790,
+      "tag": "0030_trace_event",
+      "breakpoints": true
     }
   ]
 }

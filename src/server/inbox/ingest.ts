@@ -19,6 +19,7 @@ import {
 } from "@/server/queue/manager";
 import { handleSelectionReply, sendSelectionGreeting } from "@/server/queue/selection";
 import { LOCAL_MEDIA_MARKER, MEDIA_TYPES, serializeMessage } from "@/server/inbox/message-format";
+import { logTrace } from "@/server/observability/trace";
 
 // Re-exportados por compatibilidade — outros módulos importam esses dois
 // símbolos daqui (`@/server/inbox/ingest`); a definição real vive em
@@ -358,6 +359,25 @@ export async function ingestInboundMessage(input: {
   const message = inserted[0];
   if (!message) return; // duplicado
 
+  await logTrace({
+    organizationId,
+    conversationId: conversation.id,
+    type: "message.received",
+    channel: conversationChannel.type,
+    channelId:
+      conversationChannel.type === "official"
+        ? conversationChannel.metaCredentialId
+        : conversationChannel.unofficialChannelId,
+    detail: {
+      from: input.from,
+      profileName: input.profileName,
+      waMessageId: input.waMessageId,
+      messageType: input.type,
+      fromMe,
+      textPreview: input.text?.slice(0, 200) ?? null,
+    },
+  });
+
   if (input.media) {
     await db
       .insert(schema.messageMedia)
@@ -399,10 +419,25 @@ export async function ingestInboundMessage(input: {
   // Fila de atendimento (Sprint Q2/Q3): só mensagem real do cliente,
   // conversa individual (grupo não tem "um" agente dono — fora de escopo
   // por ora), e NUNCA para conversas do Laboratório (guardrail de sandbox).
-  if (!fromMe && !conversation.isTest && contact.kind !== "group" && channelDepartmentId && queueEnabled) {
-    await routeQueueMessage(conversation.id, channelDepartmentId, input.text ?? "").catch(
-      (err) => console.error("[queue] falha ao rotear conversa para a fila:", err)
-    );
+  if (!fromMe && !conversation.isTest && contact.kind !== "group") {
+    if (channelDepartmentId && queueEnabled) {
+      await logTrace({
+        organizationId,
+        conversationId: conversation.id,
+        type: "conversation.routed_queue",
+        detail: { departmentId: channelDepartmentId },
+      });
+      await routeQueueMessage(conversation.id, channelDepartmentId, input.text ?? "").catch(
+        (err) => console.error("[queue] falha ao rotear conversa para a fila:", err)
+      );
+    } else {
+      await logTrace({
+        organizationId,
+        conversationId: conversation.id,
+        type: "conversation.routed_inbox",
+        detail: { departmentId: channelDepartmentId, assignedTo: conversation.assignedTo },
+      });
+    }
   }
 
   // Grupo não é lead nem alvo de follow-up de pipeline (Foco Vertical): o

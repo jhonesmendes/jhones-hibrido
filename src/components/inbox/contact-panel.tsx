@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Check, ChevronRight, Sparkles, UserPlus, UserRound } from "lucide-react";
+import { Activity, Check, ChevronRight, Sparkles, UserPlus, UserRound } from "lucide-react";
 import type { ContactDto, ConversationDto, StageDto } from "@/lib/types";
 import { cn, formatPhone } from "@/lib/utils";
 import { ContactAvatar } from "@/components/avatar";
@@ -16,6 +16,43 @@ const HANDOFF_LABELS: Record<string, string> = {
   error: "Erro do provedor de IA",
   ventana: "Janela de 24h fechada",
 };
+
+type TraceEvent = {
+  id: string;
+  type: string;
+  channel: string | null;
+  channelId: string | null;
+  memberId: string | null;
+  memberName: string | null;
+  detail: Record<string, unknown> | null;
+  createdAt: string;
+};
+
+const TRACE_LABELS: Record<string, string> = {
+  "message.received": "Mensagem recebida",
+  "conversation.started_by_agent": "Conversa iniciada pelo agente",
+  "conversation.routed_inbox": "Roteada direto pra caixa de entrada",
+  "conversation.routed_queue": "Roteada pra fila do departamento",
+  "queue.entered": "Entrou na fila",
+  "queue.assigned": "Designada a um agente",
+  "queue.accepted": "Aceita pelo agente",
+  "queue.declined": "Recusada / repassada",
+  "queue.selection_timeout": "Cliente não respondeu à seleção",
+  "queue.accept_timeout": "Agente não aceitou a tempo",
+  "message.sent": "Resposta enviada",
+  "message.send_failed": "Falha ao enviar",
+};
+
+function traceDetailSummary(ev: TraceEvent): string | null {
+  const d = ev.detail;
+  if (!d) return null;
+  if (typeof d.textPreview === "string" && d.textPreview) return `"${d.textPreview}"`;
+  if (typeof d.mode === "string") return d.mode === "client-selection" ? "escolhido pelo cliente" : "distribuição automática";
+  if (typeof d.withinBusinessHours === "boolean") {
+    return d.withinBusinessHours ? "dentro do horário de funcionamento" : "fora do horário de funcionamento";
+  }
+  return null;
+}
 
 export function ContactPanel({
   conversation,
@@ -45,6 +82,9 @@ export function ContactPanel({
   // quando o agente ainda não tiver sido configurado/ativado.
   const [agentEnabled, setAgentEnabled] = useState(false);
   const [aiConfigured, setAiConfigured] = useState(false);
+  const [traceOpen, setTraceOpen] = useState(false);
+  const [traceEvents, setTraceEvents] = useState<TraceEvent[]>([]);
+  const [traceLoading, setTraceLoading] = useState(false);
 
   const contactId = conversation.contact.id;
 
@@ -94,8 +134,23 @@ export function ContactPanel({
 
   useEffect(() => {
     setNotesLoaded(false);
+    setTraceOpen(false);
+    setTraceEvents([]);
     void refetch();
   }, [refetch]);
+
+  async function loadTrace() {
+    if (traceOpen) {
+      setTraceOpen(false);
+      return;
+    }
+    setTraceOpen(true);
+    setTraceLoading(true);
+    const res = await fetch(`/api/conversations/${conversation.id}/trace`).catch(() => null);
+    const data = res && res.ok ? await res.json().catch(() => null) : null;
+    setTraceEvents(data?.events ?? []);
+    setTraceLoading(false);
+  }
 
   useEffect(() => {
     if (!notesLoaded) return; // o carregamento inicial já traz o estado atualizado
@@ -358,6 +413,54 @@ export function ContactPanel({
           >
             {savingNotes ? "Salvando…" : "Salvar notas"}
           </Button>
+        </section>
+
+        {/* Diagnóstico técnico: rastro completo do ciclo de vida da
+            mensagem — recebimento, roteamento, fila, envio — pra achar
+            onde uma conversa "sumiu" sem precisar mexer no banco. */}
+        <section className="border-t p-4">
+          <button
+            onClick={() => void loadTrace()}
+            className="flex w-full items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-text-3 hover:text-foreground"
+          >
+            <Activity className="h-3.5 w-3.5" strokeWidth={1.7} />
+            Diagnóstico técnico
+            <ChevronRight
+              className={cn("ml-auto h-3.5 w-3.5 transition-transform", traceOpen && "rotate-90")}
+              strokeWidth={1.7}
+            />
+          </button>
+
+          {traceOpen && (
+            <div className="mt-3">
+              {traceLoading ? (
+                <p className="text-[12px] text-text-3">Carregando…</p>
+              ) : traceEvents.length === 0 ? (
+                <p className="text-[12px] text-text-3">Sem eventos registrados ainda.</p>
+              ) : (
+                <ol className="space-y-3">
+                  {traceEvents.map((ev) => {
+                    const summary = traceDetailSummary(ev);
+                    return (
+                      <li key={ev.id} className="relative border-l border-border-strong pl-3">
+                        <p className="text-[12px] font-medium">
+                          {TRACE_LABELS[ev.type] ?? ev.type}
+                        </p>
+                        <p className="text-[11px] text-text-3">
+                          {new Date(ev.createdAt).toLocaleString("pt-BR")}
+                          {ev.memberName ? ` · ${ev.memberName}` : ""}
+                          {ev.channel ? ` · ${ev.channel === "official" ? "oficial" : "WhatsApp Web"}` : ""}
+                        </p>
+                        {summary && (
+                          <p className="mt-0.5 truncate text-[11px] text-text-3">{summary}</p>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ol>
+              )}
+            </div>
+          )}
         </section>
       </div>
 

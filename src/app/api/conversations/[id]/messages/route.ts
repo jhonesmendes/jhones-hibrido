@@ -72,6 +72,7 @@ export const POST = withAuth(async (session, req: Request, ctx: Params) => {
       organizationId: session.organizationId,
       text: body.data.text,
       channelOverride: body.data.channel,
+      actorMemberId: session.memberId,
     });
     return Response.json({ messageId: result.messageId });
   } catch (err) {
