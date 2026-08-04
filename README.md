@@ -278,16 +278,7 @@ multi-stage con migraciones al arranque. Diseñado para que una agencia lo
 modifique con un asistente de IA: specs y decisiones de diseño en
 [`specs/`](specs/), guía de modificación en [`CLAUDE.md`](CLAUDE.md).
 
-## Licencia
 
-[MIT](LICENSE) — úsalo, véndelo instalado, modifícalo. Si te sirve, una ⭐ al
-repo ayuda a que más gente lo encuentre.
-
-## Créditos
-
-Creado por [Kevin Belier](https://www.youtube.com/@KevinBelier). ¿Quieres
-aprender a convertirte en Meta Tech Provider y monetizar con tu agencia de IA?
-Únete a la [VIBE Community](https://www.skool.com/vibe-community-vip). Los patrones
 de producción (webhook firmado, ingesta idempotente, cifrado de tokens) vienen
 de un proyecto de referencia privado en producción, portados y simplificados
 para este repo.
