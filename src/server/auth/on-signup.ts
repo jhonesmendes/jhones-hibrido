@@ -1,4 +1,4 @@
-import { count, eq, sql } from "drizzle-orm";
+import { asc, count, eq, sql } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { newId } from "@/lib/db/ids";
 
@@ -37,12 +37,15 @@ export async function onUserCreated(userId: string, userName: string) {
       name: userName ? `Negócio de ${userName}` : "Meu negócio",
       slug: "principal",
     });
-    await tx.insert(schema.member).values({
-      id: newId("organization"),
-      organizationId: orgId,
-      userId,
-      role: "owner",
-    });
+    await tx
+      .insert(schema.member)
+      .values({
+        id: newId("organization"),
+        organizationId: orgId,
+        userId,
+        role: "owner",
+      })
+      .onConflictDoNothing();
     await tx.insert(schema.pipelineStage).values(
       SEED_STAGES.map((s, i) => ({
         id: newId("stage"),
@@ -84,6 +87,12 @@ export async function resolveMembership(userId: string): Promise<{
     })
     .from(schema.member)
     .where(eq(schema.member.userId, userId))
+    // Determinístico mesmo se algum dia houver mais de uma linha pro mesmo
+    // usuário (não devia mais acontecer — ver member_org_user_uq — mas sem
+    // ORDER BY o Postgres não garante qual linha vem primeiro, e picar uma
+    // diferente a cada login é o que causava "atribuído a mim, mas não
+    // aparece pra mim"). Mais antiga primeiro = sempre a mesma.
+    .orderBy(asc(schema.member.createdAt))
     .limit(1);
   return rows[0] ?? null;
 }

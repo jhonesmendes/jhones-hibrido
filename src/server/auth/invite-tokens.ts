@@ -153,13 +153,35 @@ export async function consumeInviteToken(
       );
     }
 
-    const memberId = newId("organization");
-    await tx.insert(schema.member).values({
-      id: memberId,
-      organizationId: invite.organizationId,
-      userId,
-      role: invite.role,
-    });
+    // Se o usuário já tem membership nesta org (ex.: convite repetido, ou
+    // reconvite de alguém que já foi removido), reusa a linha em vez de
+    // inserir outra — member_org_user_uq bloquearia o insert de qualquer
+    // forma, mas checar antes evita depender do erro de constraint e
+    // permite reativar quem estava desativado.
+    const existingMember = await tx
+      .select({ id: schema.member.id })
+      .from(schema.member)
+      .where(
+        and(
+          eq(schema.member.organizationId, invite.organizationId),
+          eq(schema.member.userId, userId)
+        )
+      )
+      .limit(1);
+    const memberId = existingMember[0]?.id ?? newId("organization");
+    if (existingMember[0]) {
+      await tx
+        .update(schema.member)
+        .set({ role: invite.role, isActive: true })
+        .where(eq(schema.member.id, memberId));
+    } else {
+      await tx.insert(schema.member).values({
+        id: memberId,
+        organizationId: invite.organizationId,
+        userId,
+        role: invite.role,
+      });
+    }
 
     const claimed = await tx
       .update(schema.inviteToken)

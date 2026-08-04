@@ -75,39 +75,49 @@ export const organization = pgTable("organization", {
   metadata: text("metadata"),
 });
 
-export const member = pgTable("member", {
-  id: text("id").primaryKey(),
-  organizationId: text("organization_id")
-    .notNull()
-    .references(() => organization.id, { onDelete: "cascade" }),
-  userId: text("user_id")
-    .notNull()
-    .references(() => user.id, { onDelete: "cascade" }),
-  /** owner | admin | agent — ver src/lib/auth/permissions.ts. */
-  role: text("role").notNull().default("agent"),
-  /** Membro inativo não consegue logar (FR-009). */
-  isActive: boolean("is_active").notNull().default(true),
-  /** Preferência pessoal: mensagens de grupo aparecem misturadas na aba
-   * "Todas" da Caixa de Entrada (true, padrão) ou só na aba "Grupos". Não
-   * afeta ingestão/entrega — só o que este membro vê. */
-  groupsInInbox: boolean("groups_in_inbox").notNull().default(true),
-  /** Departamento ativo (v0.1) — preferência pessoal do membro, igual a
-   * `groupsInInbox`: não é estado de sessão do better-auth, é a fonte de
-   * verdade para qual departamento a Caixa de Entrada/Pipeline/Contatos
-   * mostram. Null = visão consolidada (normalmente só faz sentido para
-   * owner) ou organização ainda sem departamentos cadastrados. */
-  activeDepartmentId: text("active_department_id").references(
-    () => department.id,
-    { onDelete: "set null" }
-  ),
-  /** Perfil de agente IA padrão deste atendente (v0.1) — usado quando a
-   * conversa está atribuída a ele (`conversation.assignedTo`) e não tem
-   * override próprio. Null = não define padrão neste nível da cadeia. */
-  agentProfileId: text("agent_profile_id").references(() => agentProfile.id, {
-    onDelete: "set null",
-  }),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+export const member = pgTable(
+  "member",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    /** owner | admin | agent — ver src/lib/auth/permissions.ts. */
+    role: text("role").notNull().default("agent"),
+    /** Membro inativo não consegue logar (FR-009). */
+    isActive: boolean("is_active").notNull().default(true),
+    /** Preferência pessoal: mensagens de grupo aparecem misturadas na aba
+     * "Todas" da Caixa de Entrada (true, padrão) ou só na aba "Grupos". Não
+     * afeta ingestão/entrega — só o que este membro vê. */
+    groupsInInbox: boolean("groups_in_inbox").notNull().default(true),
+    /** Departamento ativo (v0.1) — preferência pessoal do membro, igual a
+     * `groupsInInbox`: não é estado de sessão do better-auth, é a fonte de
+     * verdade para qual departamento a Caixa de Entrada/Pipeline/Contatos
+     * mostram. Null = visão consolidada (normalmente só faz sentido para
+     * owner) ou organização ainda sem departamentos cadastrados. */
+    activeDepartmentId: text("active_department_id").references(
+      () => department.id,
+      { onDelete: "set null" }
+    ),
+    /** Perfil de agente IA padrão deste atendente (v0.1) — usado quando a
+     * conversa está atribuída a ele (`conversation.assignedTo`) e não tem
+     * override próprio. Null = não define padrão neste nível da cadeia. */
+    agentProfileId: text("agent_profile_id").references(() => agentProfile.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    // Um usuário nunca pode ter mais de uma membership na mesma organização
+    // — sem isso, `resolveMembership` (sem ORDER BY, .limit(1)) pode
+    // resolver pra um member_id diferente a cada login, deixando
+    // atribuições (conversation.assigned_to) "invisíveis" pro próprio dono.
+    uniqueIndex("member_org_user_uq").on(t.organizationId, t.userId),
+  ]
+);
 
 export const invitation = pgTable("invitation", {
   id: text("id").primaryKey(),

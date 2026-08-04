@@ -17,7 +17,9 @@ type InviteRow = {
 
 let invite: InviteRow | undefined;
 let insertedRows: { table: string; values: Record<string, unknown> }[] = [];
+let updatedRows: { table: string; set: Record<string, unknown> }[] = [];
 let updateClaimSucceeds = true;
+let existingMemberId: string | undefined;
 
 vi.mock("@/lib/db", () => {
   const member = { __name: "member" };
@@ -57,8 +59,19 @@ vi.mock("@/lib/db", () => {
     };
   }
 
+  function emptyChain() {
+    const rows = existingMemberId ? [{ id: existingMemberId }] : [];
+    return {
+      where: () =>
+        Object.assign(Promise.resolve(rows), { limit: () => Promise.resolve(rows) }),
+    };
+  }
+
   function select() {
-    return { from: () => makeChain(false) };
+    return {
+      from: (table: unknown) =>
+        tableName(table) === "member" ? emptyChain() : makeChain(false),
+    };
   }
 
   function makeTx() {
@@ -70,13 +83,19 @@ vi.mock("@/lib/db", () => {
           return Promise.resolve();
         },
       }),
-      update: () => ({
-        set: () => ({
-          where: () => ({
-            returning: () =>
-              Promise.resolve(updateClaimSucceeds ? [{ id: "inv_1" }] : []),
-          }),
-        }),
+      update: (table: unknown) => ({
+        set: (v: Record<string, unknown>) => {
+          if (tableName(table) === "member") {
+            updatedRows.push({ table: "member", set: v });
+            return { where: () => Promise.resolve() };
+          }
+          return {
+            where: () => ({
+              returning: () =>
+                Promise.resolve(updateClaimSucceeds ? [{ id: "inv_1" }] : []),
+            }),
+          };
+        },
       }),
     };
   }
@@ -107,7 +126,9 @@ vi.mock("@/lib/db", () => {
 
 beforeEach(() => {
   insertedRows = [];
+  updatedRows = [];
   updateClaimSucceeds = true;
+  existingMemberId = undefined;
 });
 
 import {
@@ -192,6 +213,17 @@ describe("consumeInviteToken", () => {
     const result = await consumeInviteToken(TOKEN, "user_1", "novo@email.com");
     expect(result.organizationId).toBe("org_1");
     expect(insertedRows.some((r) => r.table === "member")).toBe(true);
+  });
+
+  it("usuário já é membro da org → reusa a membership em vez de duplicar", async () => {
+    invite = baseInvite({ role: "admin" });
+    existingMemberId = "org_existing_1";
+    const result = await consumeInviteToken(TOKEN, "user_1", "novo@email.com");
+    expect(result.memberId).toBe("org_existing_1");
+    expect(insertedRows.some((r) => r.table === "member")).toBe(false);
+    expect(updatedRows).toEqual([
+      { table: "member", set: { role: "admin", isActive: true } },
+    ]);
   });
 
   it("email restrito e diferente do usado → email_mismatch", async () => {
