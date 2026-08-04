@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { DepartmentQueueSettings, type QueueDepartment } from "@/components/settings/department-queue-settings";
+import { HelpLink } from "@/components/docs/help-link";
 
 type Department = QueueDepartment & {
   name: string;
@@ -62,12 +63,15 @@ export function DepartmentsClient() {
 
   return (
     <div className="max-w-3xl space-y-6">
-      <p className="text-sm text-muted-foreground">
-        Departamentos são equipes com número próprio, pipeline e agente IA
-        próprios — o terceiro nível de escopo entre a organização e o
-        indivíduo. Vincule números em Configurações → Canais depois de criar
-        o departamento.
-      </p>
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-sm text-muted-foreground">
+          Departamentos são equipes com número próprio, pipeline e agente IA
+          próprios — o terceiro nível de escopo entre a organização e o
+          indivíduo. Vincule números em Configurações → Canais depois de criar
+          o departamento.
+        </p>
+        <HelpLink slug="departamentos" />
+      </div>
 
       <div className="space-y-3">
         {departments.map((d) => (

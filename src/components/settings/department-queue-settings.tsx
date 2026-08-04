@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { HelpLink } from "@/components/docs/help-link";
 import { cn } from "@/lib/utils";
 
 export type BusinessHoursDay = { enabled: boolean; start: string; end: string };
@@ -172,12 +173,15 @@ export function DepartmentQueueSettings({
 
   return (
     <div className="space-y-4 border-t pt-4">
-      <div>
-        <p className="text-sm font-medium">Fila e roteamento</p>
-        <p className="text-xs text-muted-foreground">
-          Sem fila ativa (padrão), o departamento funciona como hoje — todo
-          membro vê as conversas assim que chegam.
-        </p>
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <p className="text-sm font-medium">Fila e roteamento</p>
+          <p className="text-xs text-muted-foreground">
+            Sem fila ativa (padrão), o departamento funciona como hoje — todo
+            membro vê as conversas assim que chegam.
+          </p>
+        </div>
+        <HelpLink slug="fila" />
       </div>
 
       <label className="flex items-center gap-2 text-sm">

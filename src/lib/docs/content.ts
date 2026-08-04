@@ -63,6 +63,31 @@ export const DOC_SECTIONS: DocSection[] = [
     ],
   },
   {
+    slug: "fila",
+    title: "Fila de atendimento",
+    summary: "Como as conversas de um departamento com fila ativa chegam até você.",
+    blocks: [
+      {
+        type: "p",
+        text: "Recurso opcional, por departamento (ligado em Configurações → Departamentos → Fila e roteamento). Sem fila ativa, o departamento funciona como sempre funcionou: toda mensagem nova já aparece direto na Caixa de Entrada de quem pertence a ele. Com a fila ativa, a conversa passa primeiro pela fila — só vira visível na Caixa de Entrada normal depois de roteada para alguém.",
+      },
+      {
+        type: "fields",
+        items: [
+          { name: "Modo Automático", desc: "o sistema escolhe o agente sozinho (revezamento, quem tem menos conversas, ou o primeiro a responder — configurável) e já te notifica." },
+          { name: "Modo Seleção pelo cliente", desc: "o cliente recebe uma lista dos atendentes disponíveis e escolhe com quem falar digitando o número/letra ou o nome." },
+          { name: "Toast \"Nova conversa\"", desc: "aparece pra quem foi designado, com um cronômetro até o prazo de aceite. \"Aceitar\" abre a conversa; \"Repassar\" devolve pra fila e tenta outro atendente na hora." },
+          { name: "Tela Fila (menu lateral)", desc: "mostra o que está aguardando, quem escolhe, e quem já foi designado. Só aparece pra quem administra a fila do departamento (dono, quem tem \"Ver todas as conversas\", admin do depto) — ou pra qualquer membro do depto quando o modo de distribuição é \"Manual\", já que nesse modo é você quem escolhe pegar a conversa com o botão \"Pegar\"." },
+          { name: "Seu status (rodapé do menu)", desc: "Online / Ocupado / Ausente / Offline. Só quem está Online entra na distribuição automática ou na lista que o cliente vê — mude pra Ausente/Offline quando sair, senão o sistema continua te mandando conversas." },
+        ],
+      },
+      {
+        type: "tip",
+        text: "Fora do horário de funcionamento do departamento (se configurado), o cliente recebe a mensagem automática de \"fora do horário\" e a conversa fica aguardando — ninguém é chamado até o expediente abrir de novo, sem precisar fazer nada manualmente.",
+      },
+    ],
+  },
+  {
     slug: "contatos",
     title: "Contatos",
     summary: "Cadastro de quem já escreveu (ou vai escrever) para o seu WhatsApp.",
@@ -193,6 +218,29 @@ export const DOC_SECTIONS: DocSection[] = [
       {
         type: "warning",
         text: "Hoje cada organização conecta no máximo 1 número oficial + 1 WhatsApp Web. Suportar mais de um por tipo é uma evolução futura já mapeada, ainda não implementada.",
+      },
+    ],
+  },
+  {
+    slug: "departamentos",
+    title: "Configurações → Departamentos",
+    summary: "Equipes com número, pipeline e agente IA próprios — Comercial, Suporte, Cobrança…",
+    blocks: [
+      {
+        type: "p",
+        text: "Departamento é o terceiro nível de escopo, entre a organização e o indivíduo. Sem nenhum departamento criado, a organização continua funcionando como hoje — todo mundo vê tudo. Ao vincular um número (Configurações → Canais) a um departamento, as conversas daquele número passam a pertencer a ele.",
+      },
+      {
+        type: "fields",
+        items: [
+          { name: "Membros", desc: "cada membro tem um papel DENTRO do departamento — admin (vê tudo do depto, administra a fila) ou agente (vê o que lhe é atribuído/roteado, ou o depto inteiro se a fila estiver desligada)." },
+          { name: "Agente IA padrão", desc: "usado quando a conversa não tem um perfil de IA próprio nem um atendente com perfil definido — deixa cada departamento com um comportamento de IA diferente." },
+          { name: "Fila e roteamento", desc: "liga a distribuição de conversas por esse departamento — ver a seção \"Fila de atendimento\" pra entender o fluxo completo (Modo Automático/Seleção pelo cliente, timeouts, mensagens automáticas, horário de funcionamento)." },
+        ],
+      },
+      {
+        type: "tip",
+        text: "Um membro sem departamento nenhum continua vendo conversas normalmente (comportamento pré-departamentos) — departamentos são um recorte adicional, não uma trava por padrão.",
       },
     ],
   },

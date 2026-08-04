@@ -6,6 +6,7 @@ import { Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useEvents } from "@/components/use-events";
+import { HelpLink } from "@/components/docs/help-link";
 
 type QueueEntry = {
   id: string;
@@ -73,6 +74,7 @@ export function QueueClient() {
       <div className="mb-4 flex items-center gap-2">
         <Users className="h-5 w-5 text-text-3" strokeWidth={1.7} />
         <h1 className="text-[17px] font-[650] tracking-tight">Fila de atendimento</h1>
+        <HelpLink slug="fila" />
       </div>
 
       {entries === null ? (
