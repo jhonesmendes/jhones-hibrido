@@ -21,7 +21,7 @@ export async function GET(req: Request) {
     }
     throw err;
   }
-  const { organizationId } = session;
+  const { organizationId, memberId } = session;
 
   let cleanup: (() => void) | null = null;
 
@@ -38,6 +38,12 @@ export async function GET(req: Request) {
       send(`: conectado\n\n`);
 
       const unsubscribe = subscribe(organizationId, (event) => {
+        // "queue.assigned" é dirigido a um membro específico — nenhum
+        // outro deve nem ver que o evento existiu (não é só UI, é sigilo:
+        // quem foi designado pra qual conversa).
+        if (event.type === "queue.assigned" && event.data.targetMemberId !== memberId) {
+          return;
+        }
         send(
           `event: ${event.type}\n` +
             `id: ${Date.now()}\n` +

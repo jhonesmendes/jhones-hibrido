@@ -3,8 +3,10 @@
  * concessão/revogação por membro é dinâmica — ver member_permission).
  */
 export const PERMISSIONS = {
+  /** Sem esta permissão, o padrão já é "só vê o que é seu" (ver
+   * require-permission.ts) — não existe um toggle separado pra isso: ter
+   * ou não view_all é a única variável. */
   "conversations:view_all": "Ver todas as conversas",
-  "conversations:view_assigned": "Ver apenas conversas atribuídas",
   "conversations:reply": "Responder mensagens",
   "conversations:assign": "Atribuir conversas a agentes",
 
@@ -32,7 +34,6 @@ export type Role = "owner" | "admin" | "agent";
 const ALL_PERMISSIONS = Object.keys(PERMISSIONS) as Permission[];
 
 const AGENT_DEFAULT_PERMISSIONS: Permission[] = [
-  "conversations:view_assigned",
   "conversations:reply",
   "pipeline:view",
   "pipeline:move",

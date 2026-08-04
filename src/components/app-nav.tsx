@@ -10,6 +10,7 @@ import {
   Kanban,
   LayoutDashboard,
   ListChecks,
+  ListOrdered,
   LogOut,
   Megaphone,
   Menu,
@@ -31,9 +32,12 @@ import {
 } from "@/lib/notifications";
 import { fetchGroupsInInbox } from "@/lib/inbox-preferences";
 import { DepartmentSwitcher } from "@/components/department-switcher";
+import { StatusSelector } from "@/components/status-selector";
+import { QueueToast, type QueueAssignment } from "@/components/queue-toast";
 
 const NAV = [
   { href: "/inbox", label: "Caixa de entrada", icon: Inbox, badge: true },
+  { href: "/queue", label: "Fila", icon: ListOrdered },
   { href: "/pipeline", label: "Pipeline", icon: Kanban },
   { href: "/contacts", label: "Contatos", icon: Users },
   { href: "/campanhas", label: "Campanhas", icon: Megaphone },
@@ -55,6 +59,7 @@ export function AppNav({
   const router = useRouter();
   const [unread, setUnread] = useState(0);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [queueAssignment, setQueueAssignment] = useState<QueueAssignment | null>(null);
   // Preferência pessoal: se grupos estão fora da Caixa de Entrada, o badge
   // do menu também não deve contar as não lidas deles.
   const groupsInInboxRef = useRef(true);
@@ -92,6 +97,14 @@ export function AppNav({
   useEvents({
     onMessageNew: () => void refetchUnread(),
     onConversationUpdated: () => void refetchUnread(),
+    onQueueAssigned: (d) =>
+      setQueueAssignment({
+        queueId: d.queueId,
+        conversationId: d.conversationId,
+        contactId: d.contactId,
+        contactName: d.contactName,
+        timeoutAt: d.timeoutAt,
+      }),
   });
 
   return (
@@ -302,8 +315,9 @@ export function AppNav({
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[13px] font-semibold">{userName}</span>
-          <span className="block text-[11px] text-text-3">
-            {role === "owner" ? "Proprietário" : "Equipe"} · Online
+          <span className="flex items-center gap-1 text-[11px] text-text-3">
+            {role === "owner" ? "Proprietário" : "Equipe"} ·
+            <StatusSelector />
           </span>
         </span>
         <button
@@ -320,6 +334,10 @@ export function AppNav({
         </button>
       </div>
       </aside>
+
+      {queueAssignment && (
+        <QueueToast assignment={queueAssignment} onDismiss={() => setQueueAssignment(null)} />
+      )}
     </>
   );
 }

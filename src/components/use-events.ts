@@ -29,6 +29,16 @@ export type EventHandlers = {
     qrCode: string | null;
     phoneNumber: string | null;
   }) => void;
+  /** Já vem filtrado pelo servidor (só quem foi designado recebe). */
+  onQueueAssigned?: (data: {
+    targetMemberId: string;
+    queueId: string;
+    conversationId: string;
+    contactId: string;
+    departmentId: string;
+    contactName: string;
+    timeoutAt: string | null;
+  }) => void;
   /** É chamado após RECONECTAR (não na conexão inicial): catch-up com refetch. */
   onReconnect?: () => void;
 };
@@ -69,6 +79,9 @@ export function useEvents(handlers: EventHandlers): void {
     );
     listen("campaign.run", (d) =>
       handlersRef.current.onCampaignRun?.(d as never)
+    );
+    listen("queue.assigned", (d) =>
+      handlersRef.current.onQueueAssigned?.(d as never)
     );
 
     source.onerror = () => {

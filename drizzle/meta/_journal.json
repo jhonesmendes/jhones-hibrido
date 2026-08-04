@@ -162,6 +162,41 @@
       "when": 1785619930105,
       "tag": "0022_agent_profiles_multi",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1785788635087,
+      "tag": "0023_queue_routing",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1785789620521,
+      "tag": "0024_agent_status_last_assigned",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1785791699371,
+      "tag": "0025_queue_selection_options",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1785791845859,
+      "tag": "0026_queue_selection_unavailable_message",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1785804656905,
+      "tag": "0027_department_business_hours_timezone",
+      "breakpoints": true
     }
   ]
 }

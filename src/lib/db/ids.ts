@@ -34,6 +34,8 @@ const prefixes = {
   department: "dep",
   memberDepartment: "mdp",
   memberDepartmentPermission: "mdpp",
+  agentStatus: "ast",
+  conversationQueue: "cq",
 } as const;
 
 export type IdKind = keyof typeof prefixes;

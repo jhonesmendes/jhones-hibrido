@@ -15,6 +15,8 @@ export async function register(): Promise<void> {
       "@/server/campaigns/scheduler"
     );
     startCampaignScheduler();
+    const { startQueueScheduler } = await import("@/server/queue/scheduler");
+    startQueueScheduler();
     const { reconnectAllOnBoot } = await import("@/server/baileys/manager");
     await reconnectAllOnBoot();
   }

@@ -8,9 +8,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { DepartmentQueueSettings, type QueueDepartment } from "@/components/settings/department-queue-settings";
 
-type Department = {
-  id: string;
+type Department = QueueDepartment & {
   name: string;
   slug: string;
   description: string | null;
@@ -231,6 +231,28 @@ function DepartmentCard({
     onChanged();
   }
 
+  async function toggleQueue() {
+    setBusy(true);
+    await fetch(`/api/settings/departments/${d.id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ queueEnabled: !d.queueEnabled }),
+    }).catch(() => null);
+    setBusy(false);
+    onChanged();
+  }
+
+  async function setRoutingMode(routingMode: "automatic" | "client-selection") {
+    setBusy(true);
+    await fetch(`/api/settings/departments/${d.id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ routingMode }),
+    }).catch(() => null);
+    setBusy(false);
+    onChanged();
+  }
+
   async function toggleActive() {
     setBusy(true);
     await fetch(`/api/settings/departments/${d.id}`, {
@@ -341,6 +363,13 @@ function DepartmentCard({
               </p>
             </div>
           )}
+          <DepartmentQueueSettings
+            department={d}
+            onToggleQueue={toggleQueue}
+            onSetRoutingMode={setRoutingMode}
+            onChanged={onChanged}
+          />
+
           {error && <p className="text-sm text-destructive">{error}</p>}
           <div className="flex flex-wrap items-center gap-2">
             <Button size="sm" disabled={busy || !name.trim()} onClick={() => void save()}>

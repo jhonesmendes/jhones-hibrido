@@ -88,17 +88,20 @@ export async function createDepartment(
   );
 }
 
+/** Qualquer coluna editável do departamento — inclui fila/roteamento e
+ * Modo B (Sprint Q). Campos estruturais (id, organizationId, slug,
+ * createdAt) ficam de fora de propósito. */
+type DepartmentPatch = Partial<
+  Omit<
+    typeof schema.department.$inferInsert,
+    "id" | "organizationId" | "slug" | "createdAt" | "updatedAt"
+  >
+>;
+
 export async function updateDepartment(
   id: string,
   organizationId: string,
-  patch: {
-    name?: string;
-    description?: string | null;
-    color?: string | null;
-    icon?: string | null;
-    isActive?: boolean;
-    agentProfileId?: string | null;
-  }
+  patch: DepartmentPatch
 ): Promise<void> {
   const db = getDb();
   await db

@@ -10,11 +10,20 @@ import { applyStatusUpdate } from "@/server/inbox/status";
 import { onLeadActivity } from "@/server/inbox/lead-activity";
 import { maybeRunAgentTurn } from "@/server/ai/trigger";
 import { onInboundMedia } from "@/server/pipeline/followup-document";
+import {
+  distributeConversation,
+  findActiveQueueEntry,
+  getDepartmentQueueConfig,
+  routeConversationToQueue,
+} from "@/server/queue/manager";
+import { handleSelectionReply, sendSelectionGreeting } from "@/server/queue/selection";
+import { LOCAL_MEDIA_MARKER, MEDIA_TYPES, serializeMessage } from "@/server/inbox/message-format";
 
-/** Marca `message.mediaUrl` quando os bytes vivem em `message_media`
- * (canal não oficial, autohospedado) em vez de uma URL externa buscável
- * (canal oficial, CDN da Meta). */
-export const LOCAL_MEDIA_MARKER = "local";
+// Re-exportados por compatibilidade — outros módulos importam esses dois
+// símbolos daqui (`@/server/inbox/ingest`); a definição real vive em
+// message-format.ts pra `send.ts` não precisar importar ingest.ts de volta
+// (send.ts → ingest.ts → selection.ts → send.ts seria um ciclo).
+export { LOCAL_MEDIA_MARKER, serializeMessage };
 
 /** Tipos de conteúdo suportados; o resto é ignorado sem erro. */
 const SUPPORTED_TYPES = new Set([
@@ -254,10 +263,18 @@ export async function ingestInboundMessage(input: {
     metaCredentialId: input.metaCredentialId,
     unofficialChannelId: input.unofficialChannelId,
   });
+  // Departamento com fila ativa: a conversa NÃO recebe department_id ainda
+  // — fica invisível na Caixa de Entrada normal (exceto pra quem já tem
+  // view_all, tipo o owner) até queue/manager.ts rotear de fato. Ver
+  // ROADMAP_queue_routing.md § "Decisão de visibilidade".
+  const queueConfig = channelDepartmentId
+    ? await getDepartmentQueueConfig(channelDepartmentId)
+    : null;
+  const queueEnabled = queueConfig?.queueEnabled === true;
   const conversation = await getOrCreateConversation(
     organizationId,
     contact.id,
-    channelDepartmentId
+    queueEnabled ? null : channelDepartmentId
   );
 
   const waTimestamp = toDate(input.timestamp);
@@ -308,7 +325,11 @@ export async function ingestInboundMessage(input: {
             lastMessageAt: waTimestamp,
             unreadCount: sql`${schema.conversation.unreadCount} + 1`,
             channel, // sticky: responder pelo canal por onde o cliente escreveu
-            departmentId: channelDepartmentId, // sticky, igual ao canal
+            // Sem fila: sticky, igual ao canal. Com fila: NUNCA mexido aqui
+            // — uma vez roteada, quem decide department_id é
+            // queue/manager.ts (acceptQueuedConversation); antes de
+            // roteada, fica null de propósito (ver comentário acima).
+            ...(queueEnabled ? {} : { departmentId: channelDepartmentId }),
             ...(input.metaCredentialId !== undefined
               ? { metaCredentialId: input.metaCredentialId }
               : {}),
@@ -319,6 +340,15 @@ export async function ingestInboundMessage(input: {
           }
     )
     .where(eq(schema.conversation.id, conversation.id));
+
+  // Fila de atendimento (Sprint Q2/Q3): só mensagem real do cliente,
+  // conversa individual (grupo não tem "um" agente dono — fora de escopo
+  // por ora), e NUNCA para conversas do Laboratório (guardrail de sandbox).
+  if (!fromMe && !conversation.isTest && contact.kind !== "group" && channelDepartmentId && queueEnabled) {
+    await routeQueueMessage(conversation.id, channelDepartmentId, input.text ?? "").catch(
+      (err) => console.error("[queue] falha ao rotear conversa para a fila:", err)
+    );
+  }
 
   // Grupo não é lead nem alvo de follow-up de pipeline (Foco Vertical): o
   // pipeline é sobre converter conversas individuais, não threads coletivas.
@@ -362,7 +392,39 @@ export async function ingestInboundMessage(input: {
     // O agente de IA responde conversas individuais, não grupos: uma
     // resposta automática numa thread coletiva sem pedido é intrusiva e
     // foge do escopo do produto (converter conversas, não moderar grupos).
-    if (contact.kind !== "group") await maybeRunAgentTurn(conversation.id);
+    // Em fila ainda não roteada, a IA genérica também se cala — quem
+    // responde primeiro é o roteamento (Modo A) ou a seleção do Modo B
+    // (Sprint Q3); ver ROADMAP_queue_routing.md, gap #4.
+    const waitingInQueue = queueEnabled && !conversation.departmentId;
+    if (contact.kind !== "group" && !waitingInQueue) await maybeRunAgentTurn(conversation.id);
+  }
+}
+
+/**
+ * Ponto único de entrada da fila a partir do ingest: se já há uma seleção
+ * em aberto (Modo B, status 'selecting'), a mensagem do cliente é a
+ * ESCOLHA, não uma nova entrada. Senão, cria a linha e dispara o modo
+ * configurado (Modo A distribui direto; Modo B manda a saudação).
+ */
+async function routeQueueMessage(
+  conversationId: string,
+  departmentId: string,
+  text: string
+): Promise<void> {
+  const active = await findActiveQueueEntry(conversationId, departmentId);
+  if (active) {
+    if (active.status === "selecting") await handleSelectionReply(active.id, text);
+    return; // waiting/assigned/accepted: já em andamento, nada a fazer aqui
+  }
+
+  const created = await routeConversationToQueue(conversationId, departmentId);
+  if (!created) return;
+
+  const config = await getDepartmentQueueConfig(departmentId);
+  if (config?.routingMode === "client-selection") {
+    await sendSelectionGreeting(created.queueId);
+  } else {
+    await distributeConversation(created.queueId);
   }
 }
 
@@ -371,8 +433,6 @@ function toDate(timestamp: string): Date {
   if (Number.isFinite(n) && n > 0) return new Date(n * 1000);
   return new Date();
 }
-
-const MEDIA_TYPES = new Set(["image", "audio", "video", "document", "sticker"]);
 
 const MEDIA_PUSH_LABELS: Record<string, string> = {
   image: "Imagem",
@@ -383,34 +443,3 @@ const MEDIA_PUSH_LABELS: Record<string, string> = {
   location: "Localização",
   contacts: "Contato compartilhado",
 };
-
-/**
- * true se a mídia desta mensagem pode ser servida pelo proxy /api/media/[id]
- * — canal oficial: `mediaUrl` é a URL real do CDN da Meta. Canal não
- * oficial: `mediaUrl` é o marcador `LOCAL_MEDIA_MARKER`, e os bytes de
- * verdade estão em `message_media`.
- */
-function hasServableMedia(m: typeof schema.message.$inferSelect): boolean {
-  return MEDIA_TYPES.has(m.type) && Boolean(m.mediaUrl);
-}
-
-export function serializeMessage(
-  m: typeof schema.message.$inferSelect,
-  media?: { filename: string | null; sizeBytes: number | null; mimeType: string | null } | null
-) {
-  return {
-    id: m.id,
-    conversationId: m.conversationId,
-    direction: m.direction,
-    type: m.type,
-    text: m.text,
-    // Sempre a rota do proxy: a URL real do gateway nunca vai ao navegador.
-    mediaUrl: hasServableMedia(m) ? `/api/media/${m.id}` : null,
-    filename: media?.filename ?? null,
-    sizeBytes: media?.sizeBytes ?? null,
-    mimeType: media?.mimeType ?? null,
-    status: m.status,
-    aiGenerated: m.aiGenerated,
-    createdAt: (m.waTimestamp ?? m.createdAt).toISOString(),
-  };
-}

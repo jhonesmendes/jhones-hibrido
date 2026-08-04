@@ -16,7 +16,7 @@ import {
   type Credentials,
 } from "@/server/whatsapp/credentials";
 import { isWindowOpen } from "@/server/inbox/window";
-import { LOCAL_MEDIA_MARKER, serializeMessage } from "@/server/inbox/ingest";
+import { LOCAL_MEDIA_MARKER, serializeMessage } from "@/server/inbox/message-format";
 import {
   BaileysSendError,
   sendMedia as sendBaileysMedia,

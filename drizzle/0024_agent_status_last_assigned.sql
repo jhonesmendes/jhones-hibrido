@@ -1,0 +1,1 @@
+ALTER TABLE "agent_status" ADD COLUMN "last_assigned_at" timestamp;

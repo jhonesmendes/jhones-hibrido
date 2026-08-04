@@ -153,11 +153,110 @@ export const department = pgTable(
     agentProfileId: text("agent_profile_id").references(() => agentProfile.id, {
       onDelete: "set null",
     }),
+    /** Fila e roteamento (Sprint Q, v0.1). Opt-in explícito: default
+     * `false` preserva o comportamento atual para todo departamento já
+     * existente — só quem liga a fila muda de comportamento. Ver
+     * ROADMAP_queue_routing.md § "Decisão de visibilidade". */
+    queueEnabled: boolean("queue_enabled").notNull().default(false),
+    /** automatic | client-selection */
+    routingMode: text("routing_mode").notNull().default("automatic"),
+    /** round-robin | least-busy | first-available | manual */
+    distributionMode: text("distribution_mode").default("round-robin"),
+    /** Modo B: saudação com placeholders (ex.: "Olá {{nome}}!..."), texto
+     * puro — nunca depende de LLM/IA configurada (Princípio II: IA é
+     * opcional). */
+    selectionGreeting: text("selection_greeting"),
+    /** numbered | letters */
+    selectionFormat: text("selection_format").default("numbered"),
+    selectionShowOnlyOnline: boolean("selection_show_only_online").default(true),
+    selectionTimeoutSeconds: integer("selection_timeout_seconds").default(105),
+    /** auto-assign | queue | ai-assumes */
+    selectionTimeoutAction: text("selection_timeout_action").default("auto-assign"),
+    acceptTimeoutSeconds: integer("accept_timeout_seconds").default(120),
+    /** next-agent | queue | ai-assumes */
+    acceptTimeoutAction: text("accept_timeout_action").default("next-agent"),
+    maxConversationsPerAgent: integer("max_conversations_per_agent").default(5),
+    maxQueueSize: integer("max_queue_size").default(50),
+    queueMessage: text("queue_message"),
+    noAgentsMessage: text("no_agents_message"),
+    offlineMessage: text("offline_message"),
+    transferMessage: text("transfer_message"),
+    awayMessage: text("away_message"),
+    /** Modo B, Cenário 2: agente escolhido pelo cliente não respondeu a
+     * tempo — mensagem antes de reoferecer as opções restantes. */
+    selectionUnavailableMessage: text("selection_unavailable_message"),
+    /** Horário de funcionamento — Cenário 6 (v0.1). Chave por dia da
+     * semana (mon..sun), cada uma `{ enabled, start, end }` em HH:mm no
+     * fuso de `timezone` abaixo. Dia ausente ou `enabled:false` = fechado. */
+    businessHours: jsonb("business_hours"),
+    /** Fuso IANA usado pra interpretar `business_hours` (gap #6 resolvido,
+     * Sprint Q4). Default é o fuso mais comum entre os clientes do Vocero;
+     * cada departamento pode ajustar. */
+    timezone: text("timezone").notNull().default("America/Sao_Paulo"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
   (t) => [uniqueIndex("department_org_slug_uq").on(t.organizationId, t.slug)]
 );
+
+/**
+ * Presença do agente (Sprint Q, v0.1) — UMA linha por membro, org-wide
+ * (não por departamento: ver ROADMAP_queue_routing.md, gap #7). A
+ * elegibilidade "pertence ao departamento certo" é resolvida à parte via
+ * `member_department` no momento do roteamento.
+ */
+export const agentStatus = pgTable("agent_status", {
+  id: text("id").primaryKey(),
+  memberId: text("member_id")
+    .notNull()
+    .unique()
+    .references(() => member.id, { onDelete: "cascade" }),
+  /** offline | online | busy | away */
+  status: text("status").notNull().default("offline"),
+  maxConversations: integer("max_conversations").notNull().default(5),
+  currentConversations: integer("current_conversations").notNull().default(0),
+  lastSeenAt: timestamp("last_seen_at"),
+  /** Última vez que este agente recebeu uma conversa da fila (Sprint Q2) —
+   * separado de `updatedAt` (que também muda ao trocar de status manual)
+   * porque é o ponteiro do round-robin: null vem primeiro na fila. */
+  lastAssignedAt: timestamp("last_assigned_at"),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+/**
+ * Fila de atendimento (Sprint Q, v0.1) — Modo A (round-robin/first-available)
+ * em `src/server/queue/manager.ts`, Modo B (seleção pelo cliente) em
+ * `src/server/queue/selection.ts`. Ver ROADMAP_queue_routing.md.
+ */
+export const conversationQueue = pgTable("conversation_queue", {
+  id: text("id").primaryKey(),
+  conversationId: text("conversation_id")
+    .notNull()
+    .references(() => conversation.id, { onDelete: "cascade" }),
+  departmentId: text("department_id")
+    .notNull()
+    .references(() => department.id, { onDelete: "cascade" }),
+  /** waiting | selecting | assigned | accepted | abandoned | expired */
+  status: text("status").notNull().default("waiting"),
+  assignedTo: text("assigned_to").references(() => member.id),
+  assignedAt: timestamp("assigned_at"),
+  acceptedAt: timestamp("accepted_at"),
+  timeoutAt: timestamp("timeout_at"),
+  attempt: integer("attempt").notNull().default(1),
+  position: integer("position"),
+  /** Quando a IA/sistema enviou as opções ao cliente (Modo B). */
+  selectionSentAt: timestamp("selection_sent_at"),
+  /** O que o cliente digitou em resposta à seleção (Modo B). */
+  clientChoice: text("client_choice"),
+  /** Opções exatamente como apresentadas ao cliente (Modo B, Sprint Q3):
+   * `[{ label: "1", memberId: "mb_...", name: "Ana" }]` — precisa ficar
+   * congelado no momento do envio porque a disponibilidade dos agentes
+   * pode mudar antes da resposta chegar (senão "1" apontaria pra gente
+   * diferente da que foi de fato oferecida). */
+  selectionOptions: jsonb("selection_options"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
 
 /** Vínculo de membro a departamento, com role específico do departamento. */
 export const memberDepartment = pgTable(

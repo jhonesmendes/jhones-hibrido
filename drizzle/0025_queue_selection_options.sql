@@ -1,0 +1,1 @@
+ALTER TABLE "conversation_queue" ADD COLUMN "selection_options" jsonb;

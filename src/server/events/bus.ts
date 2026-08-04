@@ -41,6 +41,21 @@ export type SseEvent =
         qrCode: string | null;
         phoneNumber: string | null;
       };
+    }
+  | {
+      type: "queue.assigned";
+      /** Dirigido a UM membro (Sprint Q2) — `/api/events` filtra por
+       * `targetMemberId` antes de repassar ao navegador; nenhum outro
+       * membro vê este evento (ver server/events/bus.ts::subscribe). */
+      data: {
+        targetMemberId: string;
+        queueId: string;
+        conversationId: string;
+        contactId: string;
+        departmentId: string;
+        contactName: string;
+        timeoutAt: string | null;
+      };
     };
 
 const globalForBus = globalThis as unknown as { __voceroBus?: EventEmitter };

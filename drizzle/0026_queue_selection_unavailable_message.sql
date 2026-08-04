@@ -1,0 +1,1 @@
+ALTER TABLE "department" ADD COLUMN "selection_unavailable_message" text;
