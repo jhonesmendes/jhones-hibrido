@@ -4,12 +4,39 @@ import { publish } from "@/server/events/bus";
 import {
   getOrCreateContact,
   getOrCreateConversation,
+  type ConversationChannel,
 } from "@/server/inbox/ingest";
 import { sendText } from "@/server/inbox/send";
 import { sendTemplate } from "@/server/whatsapp/templates";
-import { isAnyUnofficialChannelConnected } from "@/server/settings/unofficial-channels";
+import { getCredentialsByOrg } from "@/server/whatsapp/credentials";
+import {
+  isAnyUnofficialChannelConnected,
+  resolveDefaultUnofficialChannelId,
+  resolveDepartmentUnofficialChannelId,
+} from "@/server/settings/unofficial-channels";
 import { renderMessage } from "@/lib/campaigns/render";
 import { getCampaign } from "@/server/campaigns/queries";
+
+/** Resolve o canal específico que a campanha usa pra criar/reusar a
+ * conversa de cada destinatário — nunca "sticky"/mutado depois (era o bug:
+ * campanha não oficial virava dona do canal de uma conversa oficial já
+ * existente do contato). Oficial: único número da org hoje (v0.1). Não
+ * oficial: canal do departamento da campanha, senão o padrão da org. */
+async function resolveCampaignChannel(
+  organizationId: string,
+  campaign: { channel: "official" | "unofficial"; departmentId: string | null }
+): Promise<ConversationChannel | null> {
+  if (campaign.channel === "official") {
+    const credentials = await getCredentialsByOrg(organizationId);
+    return credentials ? { type: "official", metaCredentialId: credentials.id } : null;
+  }
+  const departmentChannelId = campaign.departmentId
+    ? await resolveDepartmentUnofficialChannelId(campaign.departmentId)
+    : null;
+  const unofficialChannelId =
+    departmentChannelId ?? (await resolveDefaultUnofficialChannelId(organizationId));
+  return unofficialChannelId ? { type: "unofficial", unofficialChannelId } : null;
+}
 
 export class CampaignSendError extends Error {
   code: "not_found" | "not_draft" | "not_sending" | "not_ready" | "in_progress";
@@ -115,6 +142,15 @@ async function runCampaign(
     }
 
     try {
+      const channel = await resolveCampaignChannel(organizationId, campaign);
+      if (!channel) {
+        throw new Error(
+          campaign.channel === "official"
+            ? "Nenhum número oficial conectado"
+            : "Nenhum canal WhatsApp Web conectado"
+        );
+      }
+
       const { contact } = await getOrCreateContact(
         organizationId,
         recipient.phone,
@@ -122,7 +158,9 @@ async function runCampaign(
       );
       const conversation = await getOrCreateConversation(
         organizationId,
-        contact.id
+        contact.id,
+        channel,
+        campaign.departmentId
       );
 
       let messageId: string;
@@ -145,12 +183,9 @@ async function runCampaign(
         });
         messageId = result.messageId;
       } else {
-        if (conversation.channel !== "unofficial") {
-          await db
-            .update(schema.conversation)
-            .set({ channel: "unofficial" })
-            .where(eq(schema.conversation.id, conversation.id));
-        }
+        // `conversation` já nasceu (ou já existia) no canal correto — ver
+        // resolveCampaignChannel/getOrCreateConversation acima. Nunca mais
+        // se sobrescreve o canal de uma conversa existente aqui.
         const variables = (recipient.variables as Record<string, string>) ?? {};
         const text = renderMessage(campaign.messageTemplate ?? "", variables);
         const result = await sendText({

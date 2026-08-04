@@ -47,6 +47,7 @@ export async function syncContactNames(
       .returning({ id: schema.contact.id });
     if (!updated[0]) continue;
 
+    // Contato pode ter mais de uma conversa (uma por canal) — avisa todas.
     const convRows = await db
       .select({ id: schema.conversation.id })
       .from(schema.conversation)
@@ -55,10 +56,8 @@ export async function syncContactNames(
           eq(schema.conversation.organizationId, organizationId),
           eq(schema.conversation.contactId, updated[0].id)
         )
-      )
-      .limit(1);
-    const conv = convRows[0];
-    if (conv) {
+      );
+    for (const conv of convRows) {
       publish(organizationId, {
         type: "conversation.updated",
         data: { conversation: { id: conv.id } },

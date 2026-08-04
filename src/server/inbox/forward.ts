@@ -3,7 +3,11 @@ import { getDb, schema } from "@/lib/db";
 import { scoped } from "@/lib/db/tenant";
 import type { SessionContext } from "@/lib/auth/session";
 import { requireChannelAccess } from "@/lib/auth/require-permission";
-import { getOrCreateConversation } from "@/server/inbox/ingest";
+import {
+  getOrCreateConversation,
+  resolveDefaultChannelForNewConversation,
+} from "@/server/inbox/ingest";
+import { getMostRecentConversationForContact } from "@/server/inbox/queries";
 import { sendMedia, sendText, SendError } from "@/server/inbox/send";
 
 export type ForwardResult = { contactId: string; ok: boolean; error?: string };
@@ -59,10 +63,17 @@ export async function forwardMessage(
       const contact = contactRows[0];
       if (!contact) throw new SendError("meta_error", "Contato não encontrado");
 
-      const conversation = await getOrCreateConversation(
+      let conversation = await getMostRecentConversationForContact(
         session.organizationId,
         contact.id
       );
+      if (!conversation) {
+        const channel = await resolveDefaultChannelForNewConversation(session.organizationId);
+        if (!channel) {
+          throw new SendError("not_connected", "Nenhum canal de WhatsApp conectado");
+        }
+        conversation = await getOrCreateConversation(session.organizationId, contact.id, channel);
+      }
       await requireChannelAccess(session, conversation.channel, "send");
 
       if (row.media) {

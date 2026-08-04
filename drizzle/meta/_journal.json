@@ -197,6 +197,13 @@
       "when": 1785804656905,
       "tag": "0027_department_business_hours_timezone",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1785869804429,
+      "tag": "0028_conversation_per_channel",
+      "breakpoints": true
     }
   ]
 }

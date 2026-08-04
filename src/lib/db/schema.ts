@@ -407,10 +407,15 @@ export const conversation = pgTable(
     /** Conversa do Laboratório: jamais toca a API real do WhatsApp. */
     isTest: boolean("is_test").notNull().default(false),
     /**
-     * Canal ativo da conversa. "official" = Cloud API da Meta ·
-     * "unofficial" = gateway não oficial (Evolution/WPPConnect/WAHA).
-     * Sticky: é atualizado para o canal da última mensagem recebida, assim
-     * as respostas saem por onde o cliente escreveu (modelo híbrido).
+     * Canal desta conversa. "official" = Cloud API da Meta ·
+     * "unofficial" = motor Baileys nativo. IDENTIDADE, não mais sticky:
+     * fixado na criação (junto com `metaCredentialId`/`unofficialChannelId`
+     * abaixo) e nunca mais mudado — cada número/canal tem sua PRÓPRIA
+     * conversa com o mesmo contato (ver índices únicos abaixo). Corrige o
+     * bug de "resposta saindo pelo número errado": antes, um contato só
+     * podia ter 1 conversa por organização inteira, e o canal "seguia" a
+     * última mensagem recebida — se o mesmo telefone escrevia pra dois
+     * números da empresa, a resposta ia pelo canal errado.
      */
     channel: text("channel", { enum: ["official", "unofficial"] })
       .notNull()
@@ -420,17 +425,16 @@ export const conversation = pgTable(
     departmentId: text("department_id").references(() => department.id, {
       onDelete: "set null",
     }),
-    /** Número oficial específico ao qual esta conversa está presa (v0.1,
-     * multi-número). Sticky igual a `channel`: atualizado para o número que
-     * recebeu a última mensagem, assim a resposta sai pelo mesmo número que
-     * o cliente escreveu. Null = organização com um único número oficial
-     * (ou nenhum ainda) — `sendText`/`sendMedia` caem no fallback padrão. */
+    /** Número oficial específico ao qual esta conversa pertence (v0.1,
+     * multi-número) — identidade, fixado na criação (ver comentário de
+     * `channel`). Preenchido só quando `channel = 'official'`. */
     metaCredentialId: text("meta_credential_id").references(
       () => metaCredentials.id,
       { onDelete: "set null" }
     ),
-    /** Canal não oficial específico ao qual esta conversa está presa (v0.1,
-     * multi-sessão Baileys) — mesmo padrão sticky de `metaCredentialId`. */
+    /** Canal não oficial específico ao qual esta conversa pertence (v0.1,
+     * multi-sessão Baileys) — identidade, mesmo padrão de
+     * `metaCredentialId`. Preenchido só quando `channel = 'unofficial'`. */
     unofficialChannelId: text("unofficial_channel_id").references(
       () => unofficialChannel.id,
       { onDelete: "set null" }
@@ -457,10 +461,19 @@ export const conversation = pgTable(
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
   (t) => [
-    // Uma conversa real por contato; as de teste não competem.
-    uniqueIndex("conversation_org_contact_real_uq")
-      .on(t.organizationId, t.contactId)
-      .where(sql`${t.isTest} = false`),
+    // Uma conversa real por contato POR canal específico — não mais uma
+    // por contato na organização inteira (ver comentário de `channel`
+    // acima). Dois índices parciais porque um contato só amarra a UM dos
+    // dois (metaCredentialId OU unofficialChannelId, nunca os dois);
+    // NULL nunca colide consigo mesmo num índice único do Postgres, então
+    // isso não impede conversas antigas (pré-migração) que ainda não
+    // tinham essa identidade preenchida.
+    uniqueIndex("conversation_org_contact_meta_cred_uq")
+      .on(t.organizationId, t.contactId, t.metaCredentialId)
+      .where(sql`${t.isTest} = false and ${t.channel} = 'official'`),
+    uniqueIndex("conversation_org_contact_unofficial_uq")
+      .on(t.organizationId, t.contactId, t.unofficialChannelId)
+      .where(sql`${t.isTest} = false and ${t.channel} = 'unofficial'`),
     index("conversation_org_last_idx").on(t.organizationId, t.lastMessageAt),
   ]
 );

@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, isNull, or, sql } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { scoped } from "@/lib/db/tenant";
 import { isWindowOpen, windowRemainingMs } from "@/server/inbox/window";
@@ -25,18 +25,15 @@ export async function listConversations(
   organizationId: string,
   since?: Date,
   /** Sem `conversations:view_all`: restringe às conversas atribuídas ao
-   * membro OU pertencentes a um departamento do qual ele é membro (ver
-   * `memberDepartmentIds`) — pertencer ao depto do número já basta, não
-   * precisa de atribuição individual. */
+   * próprio membro (FR-007) — pertencer ao departamento do número NÃO
+   * basta sozinho (revertido depois de testar em produção: o checkbox
+   * "ver todas as conversas" precisa valer também dentro do depto). */
   assignedToFilter?: string,
   /** Departamento ativo (v0.1); undefined/null = sem filtro (visão
    * consolidada). Conversas sem department_id ficam de fora quando um
    * departamento está ativo — só entram quando o canal que as originou
    * estiver vinculado a um departamento (Configurações → Canais). */
-  departmentFilter?: string,
-  /** Departamentos aos quais o membro pertence — só relevante junto de
-   * `assignedToFilter` (quem já tem view_all não precisa disso). */
-  memberDepartmentIds?: string[]
+  departmentFilter?: string
 ): Promise<ConversationDto[]> {
   const db = getDb();
   const previewSql = sql<string | null>`(
@@ -72,12 +69,7 @@ export async function listConversations(
         eq(schema.conversation.isTest, false),
         since ? gt(schema.conversation.updatedAt, since) : undefined,
         assignedToFilter
-          ? or(
-              eq(schema.conversation.assignedTo, assignedToFilter),
-              memberDepartmentIds && memberDepartmentIds.length > 0
-                ? inArray(schema.conversation.departmentId, memberDepartmentIds)
-                : undefined
-            )
+          ? eq(schema.conversation.assignedTo, assignedToFilter)
           : undefined,
         // Sem departmentId (conversa ainda não roteada a nenhum departamento)
         // fica visível a todos — mesmo com um filtro ativo (ver comentário
@@ -95,6 +87,32 @@ export async function listConversations(
   return rows.map((r) =>
     serializeConversation(r.conversation, r.contact, r.preview, r.stageName)
   );
+}
+
+/**
+ * A conversa mais recentemente ativa deste contato — um contato pode ter
+ * uma por canal (ver `ConversationChannel` em ingest.ts); usado por quem
+ * precisa de "a" conversa de um contato sem saber/escolher o canal (abrir
+ * a partir de Contatos/Pipeline, encaminhar mensagem, follow-up).
+ */
+export async function getMostRecentConversationForContact(
+  organizationId: string,
+  contactId: string
+): Promise<typeof schema.conversation.$inferSelect | null> {
+  const db = getDb();
+  const rows = await db
+    .select()
+    .from(schema.conversation)
+    .where(
+      and(
+        eq(schema.conversation.organizationId, organizationId),
+        eq(schema.conversation.contactId, contactId),
+        eq(schema.conversation.isTest, false)
+      )
+    )
+    .orderBy(desc(sql`coalesce(${schema.conversation.lastMessageAt}, ${schema.conversation.createdAt})`))
+    .limit(1);
+  return rows[0] ?? null;
 }
 
 export async function getConversation(

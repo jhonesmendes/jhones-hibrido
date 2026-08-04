@@ -3,6 +3,7 @@ import { getDb, schema } from "@/lib/db";
 import { newId } from "@/lib/db/ids";
 import { getEnv } from "@/lib/env";
 import { sendText } from "@/server/inbox/send";
+import { getMostRecentConversationForContact } from "@/server/inbox/queries";
 import {
   intervalToMs,
   isEligibleForExpiry,
@@ -27,22 +28,22 @@ export async function runFollowupCycle(now: Date = new Date()): Promise<void> {
     if (!config.triggerStageId) continue;
     const intervalMs = intervalToMs(config.intervalValue, config.intervalUnit);
 
-    const rows = await db
-      .select({ lead: schema.lead, conversation: schema.conversation })
+    // Só `lead` aqui — um contato pode ter mais de uma conversa (uma por
+    // canal, ver ConversationChannel em ingest.ts); resolver "a" conversa
+    // pra mandar o lembrete é responsabilidade de dentro do loop (a mais
+    // recentemente ativa), não de um JOIN aqui, que duplicaria o lead uma
+    // vez por conversa e mandaria o mesmo lembrete várias vezes.
+    const leads = await db
+      .select()
       .from(schema.lead)
-      .innerJoin(
-        schema.conversation,
-        eq(schema.conversation.contactId, schema.lead.contactId)
-      )
       .where(
         and(
           eq(schema.lead.organizationId, config.organizationId),
-          eq(schema.lead.stageId, config.triggerStageId),
-          eq(schema.conversation.isTest, false)
+          eq(schema.lead.stageId, config.triggerStageId)
         )
       );
 
-    for (const { lead, conversation } of rows) {
+    for (const lead of leads) {
       const lastSendRows = await db
         .select()
         .from(schema.followupSend)
@@ -65,6 +66,11 @@ export async function runFollowupCycle(now: Date = new Date()): Promise<void> {
         config.message &&
         isEligibleForReminder(lead, lastSend, intervalMs, now)
       ) {
+        const conversation = await getMostRecentConversationForContact(
+          config.organizationId,
+          lead.contactId
+        );
+        if (!conversation) continue; // contato sem nenhuma conversa ainda — nada pra lembrar
         try {
           await sendText({
             conversationId: conversation.id,

@@ -1,0 +1,3 @@
+DROP INDEX "conversation_org_contact_real_uq";--> statement-breakpoint
+CREATE UNIQUE INDEX "conversation_org_contact_meta_cred_uq" ON "conversation" USING btree ("organization_id","contact_id","meta_credential_id") WHERE "conversation"."is_test" = false and "conversation"."channel" = 'official';--> statement-breakpoint
+CREATE UNIQUE INDEX "conversation_org_contact_unofficial_uq" ON "conversation" USING btree ("organization_id","contact_id","unofficial_channel_id") WHERE "conversation"."is_test" = false and "conversation"."channel" = 'unofficial';

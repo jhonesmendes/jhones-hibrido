@@ -132,6 +132,27 @@ export async function resolveDefaultUnofficialChannelId(
   return rows[0]?.id ?? null;
 }
 
+/** Canal não oficial vinculado a este departamento (Configurações → Canais),
+ * ou `null` se nenhum canal apontar pra ele — quem chama cai pro fallback
+ * de `resolveDefaultUnofficialChannelId`. */
+export async function resolveDepartmentUnofficialChannelId(
+  departmentId: string
+): Promise<string | null> {
+  const db = getDb();
+  const rows = await db
+    .select({ id: schema.unofficialChannel.id })
+    .from(schema.unofficialChannel)
+    .where(
+      and(
+        eq(schema.unofficialChannel.departmentId, departmentId),
+        eq(schema.unofficialChannel.isActive, true)
+      )
+    )
+    .orderBy(asc(schema.unofficialChannel.createdAt))
+    .limit(1);
+  return rows[0]?.id ?? null;
+}
+
 /** Checagem leve: existe ao menos 1 canal não oficial conectado — usado por
  * gates que só precisam saber "tem canal disponível" (Campanhas), não qual
  * canal específico. */

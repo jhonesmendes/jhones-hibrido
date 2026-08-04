@@ -4,8 +4,8 @@ import { apiError, parseBody, withAuth } from "@/lib/api";
 import { getDb, schema } from "@/lib/db";
 import { scoped } from "@/lib/db/tenant";
 import { resolvePermissions } from "@/lib/auth/require-permission";
-import { listMemberDepartments } from "@/server/settings/departments";
 import {
+  getMostRecentConversationForContact,
   listConversations,
   serializeConversation,
   updateConversation,
@@ -13,6 +13,7 @@ import {
 import {
   getOrCreateContact,
   getOrCreateConversation,
+  resolveDefaultChannelForNewConversation,
 } from "@/server/inbox/ingest";
 
 export const dynamic = "force-dynamic";
@@ -23,23 +24,20 @@ export const GET = withAuth(async (session, req: Request) => {
   const since = sinceParam ? new Date(sinceParam) : undefined;
 
   // Sem conversations:view_all, só vê as conversas atribuídas a si (FR-007)
-  // — inclusive owner, se abriu mão dessa permissão para si mesmo — OU as
-  // de um departamento do qual é membro (pertencer ao depto do número já
-  // basta, sem precisar de atribuição individual).
+  // — inclusive owner, se abriu mão dessa permissão para si mesmo. Pertencer
+  // ao departamento do número NÃO basta sozinho (ver comentário em
+  // listConversations).
   let assignedToFilter: string | undefined;
-  let memberDepartmentIds: string[] | undefined;
   const effective = await resolvePermissions(session.memberId, session.role);
   if (!effective.has("conversations:view_all")) {
     assignedToFilter = session.memberId;
-    memberDepartmentIds = (await listMemberDepartments(session.memberId)).map((d) => d.id);
   }
 
   const conversations = await listConversations(
     session.organizationId,
     since && !Number.isNaN(since.getTime()) ? since : undefined,
     assignedToFilter,
-    session.activeDepartmentId ?? undefined,
-    memberDepartmentIds
+    session.activeDepartmentId ?? undefined
   );
   return Response.json({ conversations });
 });
@@ -89,11 +87,30 @@ export const POST = withAuth(async (session, req: Request) => {
     contact = result.contact;
   }
 
-  let conversation = await getOrCreateConversation(
+  // Um contato pode ter mais de uma conversa (uma por canal — ver
+  // ConversationChannel). "Iniciar conversa" sem escolher canal explícito
+  // abre a mais recente já existente; só cria uma nova (no canal padrão
+  // da organização) se o contato nunca conversou por nenhum canal ainda.
+  let conversation = await getMostRecentConversationForContact(
     session.organizationId,
-    contact.id,
-    session.activeDepartmentId
+    contact.id
   );
+  if (!conversation) {
+    const channel = await resolveDefaultChannelForNewConversation(session.organizationId);
+    if (!channel) {
+      return apiError(
+        422,
+        "no_channel_connected",
+        "Nenhum canal de WhatsApp conectado — conecte um em Configurações → Canais"
+      );
+    }
+    conversation = await getOrCreateConversation(
+      session.organizationId,
+      contact.id,
+      channel,
+      session.activeDepartmentId
+    );
+  }
 
   // Sem isso, uma conversa criada manualmente por quem não tem
   // conversations:view_all nasce com assignedTo=null e desaparece pro

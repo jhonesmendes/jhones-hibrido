@@ -53,7 +53,9 @@ export const PATCH = withAuth(async (session, req: Request, ctx: Params) => {
   if (!updated[0]) return apiError(404, "not_found", "Lead não encontrado");
 
   // Notifica a caixa de entrada para que a etapa seja refletida em tempo real
-  // (painel de detalhes e indicador de etapa da lista) sem recarregar.
+  // (painel de detalhes e indicador de etapa da lista) sem recarregar — o
+  // contato pode ter mais de uma conversa (uma por canal), então avisa
+  // todas, não só a primeira.
   const convRows = await db
     .select({ id: schema.conversation.id })
     .from(schema.conversation)
@@ -63,12 +65,11 @@ export const PATCH = withAuth(async (session, req: Request, ctx: Params) => {
         eq(schema.conversation.contactId, updated[0].contactId),
         eq(schema.conversation.isTest, false)
       )
-    )
-    .limit(1);
-  if (convRows[0]) {
+    );
+  for (const conv of convRows) {
     publish(session.organizationId, {
       type: "conversation.updated",
-      data: { conversation: { id: convRows[0].id } },
+      data: { conversation: { id: conv.id } },
     });
   }
 

@@ -3,7 +3,8 @@ import { getDb, schema } from "@/lib/db";
 import { newId } from "@/lib/db/ids";
 import { publish } from "@/server/events/bus";
 import { sendPushToOrganization } from "@/server/push/send";
-import { getCredentialsByPhoneNumberId } from "@/server/whatsapp/credentials";
+import { getCredentialsByOrg, getCredentialsByPhoneNumberId } from "@/server/whatsapp/credentials";
+import { resolveDefaultUnofficialChannelId } from "@/server/settings/unofficial-channels";
 import { downloadMetaMedia, getMetaMediaMeta } from "@/lib/meta/client";
 import type { WebhookMedia, WebhookValue } from "@/server/inbox/webhook";
 import { applyStatusUpdate } from "@/server/inbox/status";
@@ -112,17 +113,40 @@ async function resolveChannelDepartmentId(input: {
   return null;
 }
 
+/** Identidade do canal de uma conversa — não é mais um detalhe "sticky"
+ * que muda sozinho, é a chave que distingue conversas do mesmo contato
+ * (ver comentário de `conversation.channel` em schema.ts). */
+export type ConversationChannel =
+  | { type: "official"; metaCredentialId: string }
+  | { type: "unofficial"; unofficialChannelId: string };
+
+/**
+ * Busca (ou cria) a conversa deste contato NESTE canal específico —
+ * um contato pode ter uma conversa por número oficial + uma por canal
+ * WhatsApp Web, todas independentes. `departmentId` só se aplica à
+ * criação (conversas já existentes mantêm o departamento atual).
+ */
 export async function getOrCreateConversation(
   organizationId: string,
   contactId: string,
-  /** Departamento de quem iniciou manualmente (v0.1); só se aplica à
-   * criação — conversas já existentes mantêm o departamento atual. */
+  channel: ConversationChannel,
   departmentId?: string | null
 ) {
   const db = getDb();
+  const metaCredentialId = channel.type === "official" ? channel.metaCredentialId : null;
+  const unofficialChannelId = channel.type === "unofficial" ? channel.unofficialChannelId : null;
+
   const inserted = await db
     .insert(schema.conversation)
-    .values({ id: newId("conversation"), organizationId, contactId, departmentId })
+    .values({
+      id: newId("conversation"),
+      organizationId,
+      contactId,
+      departmentId,
+      channel: channel.type,
+      metaCredentialId,
+      unofficialChannelId,
+    })
     .onConflictDoNothing()
     .returning();
   if (inserted[0]) return inserted[0];
@@ -134,13 +158,31 @@ export async function getOrCreateConversation(
       and(
         eq(schema.conversation.organizationId, organizationId),
         eq(schema.conversation.contactId, contactId),
-        eq(schema.conversation.isTest, false)
+        eq(schema.conversation.isTest, false),
+        eq(schema.conversation.channel, channel.type),
+        channel.type === "official"
+          ? eq(schema.conversation.metaCredentialId, channel.metaCredentialId)
+          : eq(schema.conversation.unofficialChannelId, channel.unofficialChannelId)
       )
     )
     .limit(1);
   const existing = rows[0];
   if (!existing) throw new Error("conversa não encontrada após upsert");
   return existing;
+}
+
+/** Canal padrão pra uma conversa NOVA sem canal explícito escolhido —
+ * prefere o número oficial (se conectado), senão o canal WhatsApp Web
+ * padrão da organização. `null` quando não há nenhum canal conectado
+ * ainda (a chamador decide o que fazer — normalmente um erro claro). */
+export async function resolveDefaultChannelForNewConversation(
+  organizationId: string
+): Promise<ConversationChannel | null> {
+  const official = await getCredentialsByOrg(organizationId);
+  if (official) return { type: "official", metaCredentialId: official.id };
+  const unofficialChannelId = await resolveDefaultUnofficialChannelId(organizationId);
+  if (unofficialChannelId) return { type: "unofficial", unofficialChannelId };
+  return null;
 }
 
 /**
@@ -227,13 +269,14 @@ export async function ingestInboundMessage(input: {
   type: string;
   text: string | null;
   timestamp: string;
-  /** Canal de origem; sticky na conversa. Padrão: official. */
+  /** Canal de origem — identidade da conversa (ver ConversationChannel).
+   * Padrão: official. */
   channel?: "official" | "unofficial";
-  /** Número oficial específico que recebeu (v0.1, multi-número); sticky
-   * igual a `channel`. Só se aplica ao canal oficial — Baileys não passa. */
+  /** Número oficial que recebeu — OBRIGATÓRIO quando `channel` é
+   * "official" (identidade da conversa, não mais sticky). */
   metaCredentialId?: string | null;
-  /** Canal não oficial específico que recebeu (v0.1, multi-sessão Baileys);
-   * sticky igual a `channel`. Só se aplica ao canal não oficial. */
+  /** Canal não oficial (sessão Baileys) que recebeu — OBRIGATÓRIO quando
+   * `channel` é "unofficial" (identidade da conversa, não mais sticky). */
   unofficialChannelId?: string | null;
   /**
    * true = eco de uma mensagem enviada pelo próprio número (típico de
@@ -271,9 +314,24 @@ export async function ingestInboundMessage(input: {
     ? await getDepartmentQueueConfig(channelDepartmentId)
     : null;
   const queueEnabled = queueConfig?.queueEnabled === true;
+
+  const conversationChannel: ConversationChannel =
+    channel === "official"
+      ? { type: "official", metaCredentialId: input.metaCredentialId ?? "" }
+      : { type: "unofficial", unofficialChannelId: input.unofficialChannelId ?? "" };
+  if (
+    (conversationChannel.type === "official" && !conversationChannel.metaCredentialId) ||
+    (conversationChannel.type === "unofficial" && !conversationChannel.unofficialChannelId)
+  ) {
+    throw new Error(
+      `ingestInboundMessage: canal '${channel}' sem credencial/id do canal — não dá pra saber a qual conversa esta mensagem pertence`
+    );
+  }
+
   const conversation = await getOrCreateConversation(
     organizationId,
     contact.id,
+    conversationChannel,
     queueEnabled ? null : channelDepartmentId
   );
 
@@ -315,6 +373,10 @@ export async function ingestInboundMessage(input: {
       .onConflictDoNothing({ target: [schema.messageMedia.messageId] });
   }
 
+  // channel/metaCredentialId/unofficialChannelId NÃO são mais tocados aqui:
+  // são identidade da conversa, fixados na criação (getOrCreateConversation)
+  // — nunca mudam depois, é isso que corrige a resposta saindo pelo número
+  // errado quando o mesmo contato fala com mais de um canal da empresa.
   await db
     .update(schema.conversation)
     .set(
@@ -324,18 +386,11 @@ export async function ingestInboundMessage(input: {
             lastInboundAt: waTimestamp,
             lastMessageAt: waTimestamp,
             unreadCount: sql`${schema.conversation.unreadCount} + 1`,
-            channel, // sticky: responder pelo canal por onde o cliente escreveu
             // Sem fila: sticky, igual ao canal. Com fila: NUNCA mexido aqui
             // — uma vez roteada, quem decide department_id é
             // queue/manager.ts (acceptQueuedConversation); antes de
             // roteada, fica null de propósito (ver comentário acima).
             ...(queueEnabled ? {} : { departmentId: channelDepartmentId }),
-            ...(input.metaCredentialId !== undefined
-              ? { metaCredentialId: input.metaCredentialId }
-              : {}),
-            ...(input.unofficialChannelId !== undefined
-              ? { unofficialChannelId: input.unofficialChannelId }
-              : {}),
             updatedAt: new Date(),
           }
     )
