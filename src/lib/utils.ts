@@ -40,6 +40,26 @@ export function formatPhone(phone: string): string {
 }
 
 /**
+ * Força o download de uma URL mesmo same-origin — o atributo HTML `download`
+ * sozinho é ignorado por muitos navegadores/webviews mobile (o clique só
+ * abre o arquivo em vez de baixar). Busca os bytes e aciona o download via
+ * blob local, que funciona de forma confiável em qualquer navegador.
+ */
+export async function downloadUrl(url: string, filename?: string): Promise<void> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Falha ao baixar arquivo (${res.status})`);
+  const blob = await res.blob();
+  const blobUrl = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = blobUrl;
+  a.download = filename || "";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(blobUrl);
+}
+
+/**
  * Celular BR (55 + DDD de 2 dígitos + 8 dígitos locais, sem o 9º dígito) é
  * completado pro formato de 13 dígitos. O WhatsApp é inconsistente sobre
  * qual formato usa pro mesmo contato dependendo da via (JID direto vs.

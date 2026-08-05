@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { ChevronLeft, ChevronRight, Download, Forward, X } from "lucide-react";
 import type { MessageDto } from "@/lib/types";
 import { formatFileSize } from "@/lib/media";
-import { cn } from "@/lib/utils";
+import { cn, downloadUrl } from "@/lib/utils";
 
 export function MediaLightbox({
   items,
@@ -57,13 +57,12 @@ export function MediaLightbox({
           >
             <Forward className="h-3.5 w-3.5" /> Encaminhar
           </button>
-          <a
-            href={current.mediaUrl}
-            download={current.filename ?? undefined}
+          <button
+            onClick={() => void downloadUrl(current.mediaUrl!, current.filename ?? undefined)}
             className="flex items-center gap-1.5 rounded-md bg-white/15 px-3 py-1.5 text-xs text-white hover:bg-white/25"
           >
             <Download className="h-3.5 w-3.5" /> Baixar
-          </a>
+          </button>
           <button
             onClick={onClose}
             aria-label="Fechar"

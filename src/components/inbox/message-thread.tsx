@@ -14,7 +14,7 @@ import {
   ZoomIn,
 } from "lucide-react";
 import type { MessageDto } from "@/lib/types";
-import { cn } from "@/lib/utils";
+import { cn, downloadUrl } from "@/lib/utils";
 import { formatFileSize } from "@/lib/media";
 import { mediaLabel } from "./helpers";
 import { MediaLightbox } from "./media-lightbox";
@@ -163,14 +163,13 @@ function MediaContent({
         >
           <Forward className="h-3.5 w-3.5" strokeWidth={1.7} />
         </button>
-        <a
-          href={m.mediaUrl}
-          download={m.filename ?? undefined}
+        <button
+          onClick={() => void downloadUrl(m.mediaUrl!, m.filename ?? undefined)}
           aria-label="Baixar"
           className="rounded-md border p-1.5 text-text-3 hover:bg-accent hover:text-foreground"
         >
           <Download className="h-3.5 w-3.5" strokeWidth={1.7} />
-        </a>
+        </button>
       </span>
     </span>
   );
