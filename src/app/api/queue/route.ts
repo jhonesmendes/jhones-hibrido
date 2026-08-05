@@ -6,14 +6,18 @@ import { listDepartmentQueue } from "@/server/queue/manager";
 export const dynamic = "force-dynamic";
 
 /**
- * Fila de atendimento (Sprint Q2) — owner e quem tem `conversations:view_all`
- * veem todo departamento com fila ativa; admin de departamento vê só o(s)
- * seu(s). Agente comum de um depto em modo `manual` (Sprint Q4) também vê
- * o próprio — é assim que ele "pega" uma conversa da fila (POST
- * .../claim), já que nesse modo o sistema nunca designa sozinho. Fora
- * disso, agente comum não vê nada aqui — recebe a conversa via
- * notificação quando é designado (toast/push), não navegando pela fila
- * alheia.
+ * Fila de atendimento — owner e quem tem `conversations:view_all` veem todo
+ * departamento com fila ativa; qualquer membro do departamento (admin ou
+ * agente comum, em qualquer modo de distribuição) vê a fila do(s) seu(s).
+ *
+ * Antes disso só liberava agente comum em modo `manual` — em modo
+ * automático ele dependia 100% do toast em tempo real
+ * (`onQueueAssigned`) pra saber que foi designado; se perdesse o toast
+ * (aba fechada, timeout expirado antes de ver), não tinha pra onde voltar
+ * e checar. Agora a aba Fila é sempre um retorno seguro: mostra a
+ * designação em andamento e, se ela expirar e voltar pra `waiting`, fica
+ * visível (e "pegável" via POST .../claim) pra qualquer um do
+ * departamento — não só em modo manual.
  */
 export const GET = withAuth(async (session) => {
   let departmentIds: string[];
@@ -32,9 +36,7 @@ export const GET = withAuth(async (session) => {
         myDepartments.map(async (d) => ({ d, role: await departmentRole(session.memberId, d.id) }))
       );
       departmentIds = roles
-        .filter(
-          ({ d, role }) => d.queueEnabled && (role === "admin" || d.distributionMode === "manual")
-        )
+        .filter(({ d, role }) => d.queueEnabled && role !== null)
         .map(({ d }) => d.id);
     }
   }

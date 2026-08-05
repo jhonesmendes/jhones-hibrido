@@ -2,11 +2,13 @@ import { asc, eq, sql } from "drizzle-orm";
 import { withAuth } from "@/lib/api";
 import { getDb, schema } from "@/lib/db";
 import { scoped } from "@/lib/db/tenant";
+import { requirePermission, resolvePermissions } from "@/lib/auth/require-permission";
 
 export const dynamic = "force-dynamic";
 
 /** Datos completos del kanban: etapas ordenadas + tarjetas con su contacto. */
 export const GET = withAuth(async (session) => {
+  await requirePermission(session, "pipeline:view");
   const db = getDb();
 
   const stages = await db
@@ -26,6 +28,20 @@ export const GET = withAuth(async (session) => {
     limit 1
   )`;
 
+  // Sem "Ver todas as conversas", o pipeline segue a mesma regra da caixa
+  // de entrada (FR-007): só mostra leads de contatos com pelo menos uma
+  // conversa atribuída a este membro — senão qualquer agente via o board
+  // inteiro da organização, vazando conversas de outros atendentes.
+  const effective = await resolvePermissions(session.memberId, session.role);
+  const ownLeadsOnly = !effective.has("conversations:view_all")
+    ? sql`exists (
+        select 1 from conversation c2
+        where c2.contact_id = ${schema.contact.id}
+          and c2.is_test = false
+          and c2.assigned_to = ${session.memberId}
+      )`
+    : undefined;
+
   const leads = await db
     .select({
       lead: schema.lead,
@@ -34,7 +50,7 @@ export const GET = withAuth(async (session) => {
     })
     .from(schema.lead)
     .innerJoin(schema.contact, eq(schema.lead.contactId, schema.contact.id))
-    .where(scoped(schema.lead.organizationId, session.organizationId))
+    .where(scoped(schema.lead.organizationId, session.organizationId, ownLeadsOnly))
     .orderBy(asc(schema.lead.position));
 
   return Response.json({

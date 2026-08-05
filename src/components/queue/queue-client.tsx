@@ -30,11 +30,12 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 /**
- * Fila de atendimento (Sprint Q2/Q4) — quem chega aqui já foi escopado
- * pelo servidor (`GET /api/queue`): owner, quem tem `conversations:view_all`,
- * admin do depto, ou agente comum de um depto em modo `manual` (só nesse
- * caso o botão "Pegar" faz sentido — nos outros modos o sistema já
- * distribui sozinho e a lista aqui é só acompanhamento).
+ * Fila de atendimento — quem chega aqui já foi escopado pelo servidor
+ * (`GET /api/queue`): owner, quem tem `conversations:view_all`, ou
+ * qualquer membro do departamento (admin ou agente). O botão "Pegar"
+ * aparece pra qualquer entrada `waiting` — é o retorno seguro quando a
+ * distribuição automática expira sem ninguém aceitar, ou quando o modo é
+ * `manual` e o sistema nunca designa sozinho.
  */
 export function QueueClient() {
   const router = useRouter();
