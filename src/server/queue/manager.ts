@@ -5,6 +5,7 @@ import { notifyAgentAssigned } from "@/server/queue/notifier";
 import { isWithinBusinessHours } from "@/server/queue/business-hours";
 import { sendText } from "@/server/inbox/send";
 import { logTrace } from "@/server/observability/trace";
+import { publish } from "@/server/events/bus";
 
 const DEFAULT_OFFLINE_MESSAGE =
   "No momento estamos fora do horário de atendimento. Deixe sua mensagem e retornaremos assim que possível.";
@@ -274,7 +275,11 @@ export async function assignConversationToAgent(
   row: QueueJoinRow,
   memberId: string,
   acceptTimeoutSeconds: number,
-  fromStatus: string
+  fromStatus: string,
+  /** `false` quando o próprio agente é quem escolheu pegar (claim manual) —
+   * o toast "Nova conversa / Aceitar" não faz sentido pra quem já tomou a
+   * decisão sozinho. */
+  notify = true
 ): Promise<boolean> {
   const db = getDb();
   const now = new Date();
@@ -296,15 +301,17 @@ export async function assignConversationToAgent(
     })
     .where(eq(schema.agentStatus.memberId, memberId));
 
-  await notifyAgentAssigned(row.conversation.organizationId, {
-    targetMemberId: memberId,
-    queueId: row.queue.id,
-    conversationId: row.conversation.id,
-    contactId: row.contact.id,
-    departmentId: row.queue.departmentId,
-    contactName: row.contact.name,
-    timeoutAt,
-  });
+  if (notify) {
+    await notifyAgentAssigned(row.conversation.organizationId, {
+      targetMemberId: memberId,
+      queueId: row.queue.id,
+      conversationId: row.conversation.id,
+      contactId: row.contact.id,
+      departmentId: row.queue.departmentId,
+      contactName: row.contact.name,
+      timeoutAt,
+    });
+  }
 
   await logTrace({
     organizationId: row.conversation.organizationId,
@@ -354,17 +361,20 @@ export async function distributeConversation(
 }
 
 /**
- * Auto-atribuição (modo `manual`, Sprint Q4): um agente do departamento
- * pega uma conversa `waiting` da tela de fila, sem esperar o sistema
- * escolher. Funciona em qualquer `distribution_mode` (é só uma via
- * alternativa de entrada pro mesmo claim atômico de
- * `assignConversationToAgent`) — a UI é que só oferece isso quando o modo
- * é `manual` (ver GET /api/queue).
+ * Auto-atribuição: um agente do departamento pega uma conversa `waiting`
+ * direto da tela de Fila, sem esperar o sistema escolher (também é o
+ * retorno seguro em modo automático quando o toast em tempo real passa
+ * batido ou expira — ver GET /api/queue). Diferente da distribuição
+ * automática, aqui não faz sentido um segundo passo de "aceitar": quem
+ * clicou "Pegar" já decidiu, então isso já confirma o aceite na hora
+ * (`acceptQueuedConversation`) em vez de deixar em `assigned` esperando
+ * outra confirmação — é isso que fazia a conversa demorar a aparecer na
+ * Caixa de Entrada depois do clique.
  */
 export async function claimQueuedConversation(
   queueId: string,
   memberId: string
-): Promise<{ ok: boolean }> {
+): Promise<{ ok: boolean; conversationId?: string }> {
   const row = await loadQueueRow(queueId);
   if (!row || row.queue.status !== "waiting") return { ok: false };
 
@@ -384,8 +394,16 @@ export async function claimQueuedConversation(
     .limit(1);
   if (!membership) return { ok: false };
 
-  const ok = await assignConversationToAgent(row, memberId, config.acceptTimeoutSeconds ?? 120, "waiting");
-  return { ok };
+  const assigned = await assignConversationToAgent(
+    row,
+    memberId,
+    config.acceptTimeoutSeconds ?? 120,
+    "waiting",
+    false
+  );
+  if (!assigned) return { ok: false };
+
+  return acceptQueuedConversation(queueId, memberId);
 }
 
 /**
@@ -426,6 +444,14 @@ export async function acceptQueuedConversation(
     .where(eq(schema.conversation.id, row.conversationId))
     .limit(1);
   if (conv[0]) {
+    // Sem isso, a Caixa de Entrada só pega a conversa recém-aceita no
+    // próximo refetch periódico — o painel escuta esse evento (SSE) pra
+    // atualizar a lista na hora (é o que o agente sente como "demora"
+    // entre aceitar/pegar e a conversa aparecer).
+    publish(conv[0].organizationId, {
+      type: "conversation.updated",
+      data: { conversation: { id: row.conversationId } },
+    });
     await logTrace({
       organizationId: conv[0].organizationId,
       conversationId: row.conversationId,

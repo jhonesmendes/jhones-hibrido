@@ -18,7 +18,8 @@ export type TraceEventType =
   | "queue.selection_timeout"
   | "queue.accept_timeout"
   | "message.sent"
-  | "message.send_failed";
+  | "message.send_failed"
+  | "conversation.transferred";
 
 /**
  * Grava um evento do rastro (nunca lança — um problema aqui não pode

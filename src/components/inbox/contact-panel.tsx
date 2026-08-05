@@ -85,6 +85,10 @@ export function ContactPanel({
   const [traceOpen, setTraceOpen] = useState(false);
   const [traceEvents, setTraceEvents] = useState<TraceEvent[]>([]);
   const [traceLoading, setTraceLoading] = useState(false);
+  const [transferTargets, setTransferTargets] = useState<
+    { memberId: string; name: string; online: boolean }[]
+  >([]);
+  const [transferring, setTransferring] = useState<string | null>(null);
 
   const contactId = conversation.contact.id;
 
@@ -138,6 +142,27 @@ export function ContactPanel({
     setTraceEvents([]);
     void refetch();
   }, [refetch]);
+
+  const loadTransferTargets = useCallback(async () => {
+    const res = await fetch(`/api/conversations/${conversation.id}/transfer`).catch(() => null);
+    const data = res && res.ok ? await res.json().catch(() => null) : null;
+    setTransferTargets(data?.members ?? []);
+  }, [conversation.id]);
+
+  useEffect(() => {
+    void loadTransferTargets();
+  }, [loadTransferTargets]);
+
+  async function transferTo(targetMemberId: string) {
+    setTransferring(targetMemberId);
+    const res = await fetch(`/api/conversations/${conversation.id}/transfer`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ targetMemberId }),
+    }).catch(() => null);
+    setTransferring(null);
+    if (res?.ok) void loadTransferTargets(); // atualiza a lista (exclui o novo dono)
+  }
 
   async function loadTrace() {
     if (traceOpen) {
@@ -342,6 +367,35 @@ export function ContactPanel({
               ))}
             </div>
           </div>
+          {/* Repasse entre agentes do mesmo departamento — só aparece
+              quando a conversa pertence a um (a API devolve members: []
+              senão). */}
+          {transferTargets.length > 0 && (
+            <div className="mt-3 rounded-md border bg-secondary/50 px-3 py-2.5">
+              <p className="text-[13px] font-medium">Transferir atendimento</p>
+              <p className="text-[11px] text-text-3">
+                Passa a conversa pra outro agente do mesmo departamento.
+              </p>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {transferTargets.map((m) => (
+                  <button
+                    key={m.memberId}
+                    disabled={transferring === m.memberId}
+                    onClick={() => void transferTo(m.memberId)}
+                    className="flex items-center gap-1.5 rounded-full border bg-background px-3 py-1 text-[12px] font-medium text-text-2 hover:bg-accent disabled:opacity-60"
+                  >
+                    <span
+                      className={cn(
+                        "h-[6px] w-[6px] shrink-0 rounded-full",
+                        m.online ? "bg-[#22c55e]" : "bg-border-strong"
+                      )}
+                    />
+                    {transferring === m.memberId ? "Transferindo…" : m.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </section>
 
         {/* Stepper de etapa */}

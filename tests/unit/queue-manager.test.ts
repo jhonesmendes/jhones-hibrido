@@ -352,14 +352,17 @@ describe("distributeConversation", () => {
 });
 
 describe("claimQueuedConversation", () => {
-  it("membro do depto pega uma conversa 'waiting': designa igual a assignConversationToAgent", async () => {
+  it("membro do depto pega uma conversa 'waiting': designa E já confirma o aceite (sem passo extra)", async () => {
     departmentRows = [{ ...DEPT, distributionMode: "manual" }];
     setQueueRow("waiting");
     memberDepartmentRows = [{ memberId: "mb_1" }];
     const result = await claimQueuedConversation("cq_1", "mb_1");
     expect(result.ok).toBe(true);
-    expect(conversationQueueRows[0]?.status).toBe("assigned");
+    expect(conversationQueueRows[0]?.status).toBe("accepted");
     expect(conversationQueueRows[0]?.assignedTo).toBe("mb_1");
+    // Claim é uma decisão do próprio agente — não dispara o toast "Nova
+    // conversa" que faz sentido só quando o SISTEMA escolheu por ele.
+    expect(notifyCalls).toHaveLength(0);
   });
 
   it("quem não pertence ao departamento não consegue pegar", async () => {
