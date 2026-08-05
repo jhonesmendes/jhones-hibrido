@@ -58,6 +58,5 @@ volumes:
    name: ${POSTGRES_VOLUME:-vocero_pg}
 
 networks:
-  vocero-net:   
-    
-    
+  vocero-net:
+    driver: bridge
