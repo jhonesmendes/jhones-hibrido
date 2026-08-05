@@ -58,10 +58,15 @@ function MediaContent({
   m,
   onOpenLightbox,
   onForward,
+  onMediaLoad,
 }: {
   m: MessageDto;
   onOpenLightbox: () => void;
   onForward: () => void;
+  /** Imagem/vídeo carrega depois do primeiro scroll pro fim — sem isso, a
+   * altura real da mídia só entra em cena tarde demais e a conversa fica
+   * "parada" acima da mensagem nova até o usuário rolar manualmente. */
+  onMediaLoad: () => void;
 }) {
   if (!m.mediaUrl) {
     return (
@@ -85,6 +90,7 @@ function MediaContent({
             src={m.mediaUrl}
             alt={m.text ?? mediaLabel(m.type)}
             loading="lazy"
+            onLoad={onMediaLoad}
             className="max-h-72 max-w-full rounded-md"
           />
           <span className="absolute inset-0 hidden items-center justify-center gap-2 bg-black/30 group-hover:flex">
@@ -124,6 +130,7 @@ function MediaContent({
             controls={false}
             preload="metadata"
             src={m.mediaUrl}
+            onLoadedData={onMediaLoad}
             className="max-h-72 max-w-full rounded-md"
           />
           <span className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/30">
@@ -182,19 +189,44 @@ export function MessageThread({ messages }: { messages: MessageDto[] }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [forwardMessageId, setForwardMessageId] = useState<string | null>(null);
+  // Só acompanha mensagem nova se o usuário já estava perto do fim — senão
+  // puxaria a conversa pra baixo enquanto alguém rola pra cima lendo o
+  // histórico. Começa true: ao abrir uma conversa, sempre vai pro fim.
+  const nearBottomRef = useRef(true);
 
   const lightboxItems = messages.filter(
     (m) => m.mediaUrl && LIGHTBOX_TYPES.has(m.type)
   );
 
-  useEffect(() => {
+  function scrollToBottomIfNear() {
     const el = scrollRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [messages.length]);
+    if (el && nearBottomRef.current) el.scrollTop = el.scrollHeight;
+  }
+
+  function handleScroll() {
+    const el = scrollRef.current;
+    if (!el) return;
+    nearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+  }
+
+  useEffect(() => {
+    // messages.length === 0: acabou de trocar de conversa (o pai limpa a
+    // lista antes de buscar a nova) — reseta pra sempre abrir no fim.
+    if (messages.length === 0) {
+      nearBottomRef.current = true;
+      return;
+    }
+    scrollToBottomIfNear();
+    // Mídia (imagem/vídeo) carrega DEPOIS deste efeito rodar — sem
+    // reafirmar o scroll quando ela termina de carregar (onMediaLoad, mais
+    // abaixo), a altura real só entra em cena tarde demais e a conversa
+    // fica "parada" acima da mensagem nova.
+  }, [messages]);
 
   return (
     <div
       ref={scrollRef}
+      onScroll={handleScroll}
       className="chat-wallpaper flex flex-1 flex-col gap-[3px] overflow-y-auto px-[6%] py-5"
     >
       {messages.map((m, i) => {
@@ -243,6 +275,7 @@ export function MessageThread({ messages }: { messages: MessageDto[] }) {
                       setLightboxIndex(lightboxItems.findIndex((it) => it.id === m.id))
                     }
                     onForward={() => setForwardMessageId(m.id)}
+                    onMediaLoad={scrollToBottomIfNear}
                   />
                 )}
                 <span className="float-right ml-2 mt-1 flex items-center gap-1">
