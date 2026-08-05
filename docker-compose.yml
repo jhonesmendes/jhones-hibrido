@@ -1,14 +1,16 @@
 services:
   app:
     image: ghcr.io/jhonesmendes/jhones-hibrido:latest
+
+    restart: unless-stopped
+
     ports:
       - "${APP_PORT:-3000}:3000"
-    restart: unless-stopped
 
     environment:
       APP_BASE_URL: ${APP_BASE_URL}
 
-      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-vocero}
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
 
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
@@ -34,18 +36,19 @@ services:
 
   postgres:
     image: postgres:16-alpine
+
     restart: unless-stopped
 
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB:-vocero}
+      POSTGRES_DB: ${POSTGRES_DB}
 
     volumes:
-      - ${POSTGRES_VOLUME:-vocero_pg}:/var/lib/postgresql/data
+      - vocero_pg:/var/lib/postgresql/data
 
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d ${POSTGRES_DB:-vocero}"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -55,8 +58,9 @@ services:
 
 volumes:
   vocero_pg:
-   name: ${POSTGRES_VOLUME:-vocero_pg}
+    name: ${POSTGRES_VOLUME}
 
 networks:
   vocero-net:
+    name: ${NETWORK_NAME}
     driver: bridge
