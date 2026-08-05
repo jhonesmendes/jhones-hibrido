@@ -56,3 +56,8 @@ services:
 volumes:
   vocero_pg:
    name: ${POSTGRES_VOLUME:-vocero_pg}
+
+networks:
+  vocero-net:   
+    
+    
