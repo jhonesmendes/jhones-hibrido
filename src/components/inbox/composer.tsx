@@ -192,6 +192,22 @@ export function Composer({
     if (replyTo) onCancelReply();
   }
 
+  /** Cola uma imagem copiada (print de tela, Ctrl+V) direto como anexo —
+   * mesmo caminho de envio do clipe/gravação. Cola de texto normal segue
+   * intocada (só intercepta quando o clipboard tem uma imagem de verdade). */
+  function onPaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of items) {
+      if (item.type.startsWith("image/")) {
+        e.preventDefault();
+        const file = item.getAsFile();
+        if (file) void submitFile(file);
+        return;
+      }
+    }
+  }
+
   function onFilePicked(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = "";
@@ -391,6 +407,7 @@ export function Composer({
               setPickerDismissed(false);
               autogrow();
             }}
+            onPaste={onPaste}
             onKeyDown={(e) => {
               if (showPicker && pickerResults.length > 0) {
                 if (e.key === "ArrowDown") {
