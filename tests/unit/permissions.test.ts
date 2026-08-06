@@ -226,6 +226,42 @@ describe("requireConversationAccess", () => {
       })
     ).resolves.toBeUndefined();
   });
+
+  // Grupo nunca tem "um" dono (assignedTo sempre null) — a regra de "só o
+  // que é meu" nunca bateria pra ele, então ganha um bypass próprio.
+  it("grupo sem departamento: visível a qualquer agente, mesmo sem view_all nem atribuição", async () => {
+    permissionRows = [];
+    await expect(
+      requireConversationAccess(session("agent", "mb_1"), {
+        assignedTo: null,
+        contactKind: "group",
+      })
+    ).resolves.toBeUndefined();
+  });
+
+  it("grupo de um departamento: membro do dept vê, mesmo sem view_all nem atribuição", async () => {
+    permissionRows = [];
+    channelRow = { role: "agent" };
+    await expect(
+      requireConversationAccess(session("agent", "mb_1"), {
+        assignedTo: null,
+        departmentId: "dep_1",
+        contactKind: "group",
+      })
+    ).resolves.toBeUndefined();
+  });
+
+  it("grupo de um departamento: quem não pertence ao dept continua recusado (o bypass de grupo não pula o gate de departamento)", async () => {
+    permissionRows = [];
+    channelRow = undefined; // departmentRole() não encontra vínculo
+    await expect(
+      requireConversationAccess(session("agent", "mb_1"), {
+        assignedTo: null,
+        departmentId: "dep_1",
+        contactKind: "group",
+      })
+    ).rejects.toThrow(ForbiddenError);
+  });
 });
 
 describe("hasPermissionInDept", () => {

@@ -23,7 +23,10 @@ export const PATCH = withAuth(async (session, req: Request, ctx: Params) => {
 
   const existing = await getConversation(session.organizationId, id);
   if (!existing) return apiError(404, "not_found", "Conversa não encontrada");
-  await requireConversationAccess(session, existing.conversation);
+  await requireConversationAccess(session, {
+    ...existing.conversation,
+    contactKind: existing.contact.kind,
+  });
   if (body.data.assignedTo !== undefined) {
     await requirePermission(session, "conversations:assign");
   }

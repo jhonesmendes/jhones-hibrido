@@ -336,11 +336,16 @@ export async function ingestInboundMessage(input: {
     );
   }
 
+  // Grupo nunca entra na fila (não tem "um" dono — ver guard mais abaixo),
+  // então o `queueEnabled` do canal não se aplica a ele: sem isso, um grupo
+  // NOVO criado depois da fila ativada nunca ganha departamento nenhum (a
+  // fila jamais roteia ele pra setar depois) e fica invisível pra sempre.
+  const skipsQueueEntirely = queueEnabled && contact.kind !== "group";
   const conversation = await getOrCreateConversation(
     organizationId,
     contact.id,
     conversationChannel,
-    queueEnabled ? null : channelDepartmentId
+    skipsQueueEntirely ? null : channelDepartmentId
   );
 
   const waTimestamp = toDate(input.timestamp);
@@ -429,11 +434,12 @@ export async function ingestInboundMessage(input: {
             lastInboundAt: waTimestamp,
             lastMessageAt: waTimestamp,
             unreadCount: sql`${schema.conversation.unreadCount} + 1`,
-            // Sem fila: sticky, igual ao canal. Com fila: NUNCA mexido aqui
-            // — uma vez roteada, quem decide department_id é
+            // Sem fila (ou grupo, que nunca passa por ela): sticky, igual ao
+            // canal. Com fila e conversa individual: NUNCA mexido aqui —
+            // uma vez roteada, quem decide department_id é
             // queue/manager.ts (acceptQueuedConversation); antes de
             // roteada, fica null de propósito (ver comentário acima).
-            ...(queueEnabled ? {} : { departmentId: channelDepartmentId }),
+            ...(skipsQueueEntirely ? {} : { departmentId: channelDepartmentId }),
             updatedAt: new Date(),
           }
     )

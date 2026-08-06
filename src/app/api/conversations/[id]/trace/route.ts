@@ -17,7 +17,10 @@ export const GET = withAuth(async (session, _req: Request, ctx: Params) => {
   const { id } = await ctx.params;
   const row = await getConversation(session.organizationId, id);
   if (!row) return apiError(404, "not_found", "Conversa não encontrada");
-  await requireConversationAccess(session, row.conversation);
+  await requireConversationAccess(session, {
+    ...row.conversation,
+    contactKind: row.contact.kind,
+  });
 
   const events = await getConversationTrace(session.organizationId, id);
   return Response.json({ events });

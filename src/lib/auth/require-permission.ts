@@ -121,7 +121,15 @@ export async function hasPermissionInDept(
  */
 export async function requireConversationAccess(
   session: SessionContext,
-  conversation: { assignedTo: string | null; departmentId?: string | null }
+  conversation: {
+    assignedTo: string | null;
+    departmentId?: string | null;
+    /** Grupo nunca tem "um" dono (`assignedTo` sempre vazio) — se chegou
+     * até aqui é porque o gate de departamento acima já passou (ou não
+     * havia departamento), então basta pertencer ao time (ou não haver
+     * time nenhum ainda) pra ver, igual ao WhatsApp Web normal. */
+    contactKind?: "individual" | "group";
+  }
 ): Promise<void> {
   if (conversation.departmentId && session.role !== "owner") {
     const role = await departmentRole(session.memberId, conversation.departmentId);
@@ -129,6 +137,7 @@ export async function requireConversationAccess(
       throw new ForbiddenError("Conversa de outro departamento");
     }
   }
+  if (conversation.contactKind === "group") return;
   const effective = await resolvePermissions(session.memberId, session.role);
   if (effective.has("conversations:view_all")) return;
   if (conversation.assignedTo === session.memberId) return;

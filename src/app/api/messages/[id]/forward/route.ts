@@ -27,12 +27,14 @@ export const POST = withAuth(async (session, req: Request, ctx: Params) => {
     .select({
       assignedTo: schema.conversation.assignedTo,
       departmentId: schema.conversation.departmentId,
+      contactKind: schema.contact.kind,
     })
     .from(schema.message)
     .innerJoin(
       schema.conversation,
       eq(schema.conversation.id, schema.message.conversationId)
     )
+    .innerJoin(schema.contact, eq(schema.contact.id, schema.conversation.contactId))
     .where(
       scoped(
         schema.message.organizationId,

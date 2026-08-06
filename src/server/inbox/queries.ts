@@ -68,8 +68,27 @@ export async function listConversations(
         organizationId,
         eq(schema.conversation.isTest, false),
         since ? gt(schema.conversation.updatedAt, since) : undefined,
+        // Grupo nunca tem "um" dono (assigned_to sempre fica vazio — ver
+        // ingest.ts), então a regra de "só o que é meu" nunca bateria pra
+        // ele. Em vez disso: visível pra qualquer membro do departamento
+        // dono do grupo (ou de todos, se o grupo ainda não tem
+        // departamento) — não precisa da permissão de ver TUDO da org só
+        // pra ver os grupos do próprio time, igual ao WhatsApp Web normal.
         assignedToFilter
-          ? eq(schema.conversation.assignedTo, assignedToFilter)
+          ? or(
+              eq(schema.conversation.assignedTo, assignedToFilter),
+              and(
+                eq(schema.contact.kind, "group"),
+                or(
+                  isNull(schema.conversation.departmentId),
+                  sql`exists (
+                    select 1 from member_department md
+                    where md.member_id = ${assignedToFilter}
+                      and md.department_id = ${schema.conversation.departmentId}
+                  )`
+                )
+              )
+            )
           : undefined,
         // Sem departmentId (conversa ainda não roteada a nenhum departamento)
         // fica visível a todos — mesmo com um filtro ativo (ver comentário
