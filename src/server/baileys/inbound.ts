@@ -11,6 +11,14 @@ export function baileysMessageId(id: string): string {
   return `unof:baileys:${id}`;
 }
 
+/** Inverso de `baileysMessageId` — devolve o ID cru que o Baileys entende
+ * (ex.: pra citar/responder uma mensagem ao enviar). `null` se não for um
+ * `wa_message_id` deste canal (ex.: veio do canal oficial). */
+export function rawBaileysId(waMessageId: string): string | null {
+  const prefix = "unof:baileys:";
+  return waMessageId.startsWith(prefix) ? waMessageId.slice(prefix.length) : null;
+}
+
 function jidToPhone(jid: string): string {
   const raw = jid.replace(/:\d+/, "").replace(/@.*$/, "");
   // O WhatsApp é inconsistente sobre qual formato usa pro mesmo contato BR
@@ -140,6 +148,22 @@ function extractType(message: proto.IMessage | null | undefined): string | null 
   return null;
 }
 
+/** `wa_message_id` cru da mensagem citada (resposta), quando existe —
+ * `contextInfo.stanzaId` vive em local diferente por tipo de mensagem no
+ * proto do Baileys, não existe um campo único. */
+function extractQuotedStanzaId(message: proto.IMessage | null | undefined): string | null {
+  if (!message) return null;
+  return (
+    message.extendedTextMessage?.contextInfo?.stanzaId ??
+    message.imageMessage?.contextInfo?.stanzaId ??
+    message.videoMessage?.contextInfo?.stanzaId ??
+    message.audioMessage?.contextInfo?.stanzaId ??
+    message.documentMessage?.contextInfo?.stanzaId ??
+    message.stickerMessage?.contextInfo?.stanzaId ??
+    null
+  );
+}
+
 function extractMimeType(message: proto.IMessage | null | undefined): string | null {
   if (!message) return null;
   return (
@@ -223,6 +247,7 @@ export async function handleIncomingMessages(
     const media = MEDIA_TYPES.has(type) ? await downloadMedia(msg) : null;
     const text = extractText(msg.message);
     const fromMe = msg.key.fromMe ?? false;
+    const quotedStanzaId = extractQuotedStanzaId(msg.message);
 
     // Prefixa com quem falou dentro do grupo — sem isso, o operador vê só
     // "mensagem" sem saber qual dos participantes escreveu.
@@ -247,6 +272,7 @@ export async function handleIncomingMessages(
       mediaUrl: null,
       media,
       contactKind: isGroup ? "group" : "individual",
+      replyToWaMessageId: quotedStanzaId ? baileysMessageId(quotedStanzaId) : null,
     });
 
     if (!fromMe) {

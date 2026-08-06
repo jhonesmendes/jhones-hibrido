@@ -37,6 +37,7 @@ export function serializeMessage(
     mimeType: media?.mimeType ?? null,
     status: m.status,
     aiGenerated: m.aiGenerated,
+    replyToMessageId: m.replyToMessageId,
     createdAt: (m.waTimestamp ?? m.createdAt).toISOString(),
   };
 }

@@ -10,6 +10,7 @@ import {
   FileText,
   Forward,
   Paperclip,
+  Reply,
   Sparkles,
   ZoomIn,
 } from "lucide-react";
@@ -185,7 +186,35 @@ function MediaContent({
 /** Tipos exibidos em tela cheia no lightbox, com tira de miniaturas entre eles. */
 const LIGHTBOX_TYPES = new Set(["image", "video", "sticker"]);
 
-export function MessageThread({ messages }: { messages: MessageDto[] }) {
+/** Resumo da mensagem citada — a original pode não estar mais carregada no
+ * histórico visível (ex.: muito antiga); nesse caso mostra um aviso genérico
+ * em vez de simplesmente sumir com a citação. */
+function QuotedPreview({ target }: { target: MessageDto | null }) {
+  if (!target) {
+    return (
+      <div className="mb-1 rounded border-l-2 border-text-4 bg-black/5 px-2 py-1 text-xs italic text-text-3">
+        Mensagem original não encontrada
+      </div>
+    );
+  }
+  const label =
+    target.type === "text" || target.type === "template"
+      ? target.text
+      : target.filename || mediaLabel(target.type);
+  return (
+    <div className="mb-1 rounded border-l-2 border-brand bg-black/5 px-2 py-1 text-xs text-text-2">
+      <p className="line-clamp-2 break-words">{label}</p>
+    </div>
+  );
+}
+
+export function MessageThread({
+  messages,
+  onReply,
+}: {
+  messages: MessageDto[];
+  onReply: (m: MessageDto) => void;
+}) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [forwardMessageId, setForwardMessageId] = useState<string | null>(null);
@@ -197,6 +226,7 @@ export function MessageThread({ messages }: { messages: MessageDto[] }) {
   const lightboxItems = messages.filter(
     (m) => m.mediaUrl && LIGHTBOX_TYPES.has(m.type)
   );
+  const messageById = new Map(messages.map((m) => [m.id, m]));
 
   function scrollToBottomIfNear() {
     const el = scrollRef.current;
@@ -264,6 +294,9 @@ export function MessageThread({ messages }: { messages: MessageDto[] }) {
                   !grouped && (out ? "rounded-tr-[5px]" : "rounded-tl-[5px]")
                 )}
               >
+                {m.replyToMessageId && (
+                  <QuotedPreview target={messageById.get(m.replyToMessageId) ?? null} />
+                )}
                 {m.type === "text" || m.type === "template" ? (
                   <span className="whitespace-pre-wrap break-words">
                     {m.text}
@@ -279,6 +312,14 @@ export function MessageThread({ messages }: { messages: MessageDto[] }) {
                   />
                 )}
                 <span className="float-right ml-2 mt-1 flex items-center gap-1">
+                  <button
+                    onClick={() => onReply(m)}
+                    aria-label="Responder"
+                    title="Responder"
+                    className="rounded p-0.5 text-text-4 hover:bg-black/10 hover:text-foreground"
+                  >
+                    <Reply className="h-3 w-3" strokeWidth={1.7} />
+                  </button>
                   {m.aiGenerated && (
                     <span
                       className="inline-flex items-center gap-0.5 text-[10px] font-medium text-brand"

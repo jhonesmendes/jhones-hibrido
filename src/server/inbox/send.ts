@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { newId } from "@/lib/db/ids";
 import {
@@ -21,10 +21,59 @@ import {
   BaileysSendError,
   sendMedia as sendBaileysMedia,
   sendText as sendBaileysText,
+  type QuotedMessage,
 } from "@/server/baileys/sender";
-import { baileysMessageId } from "@/server/baileys/inbound";
+import { baileysMessageId, rawBaileysId } from "@/server/baileys/inbound";
 import { resolveDefaultUnofficialChannelId } from "@/server/settings/unofficial-channels";
 import { logTrace } from "@/server/observability/trace";
+
+/** Mensagem sendo respondida/citada — resolvida uma vez a partir do
+ * `replyToMessageId` recebido do composer, reusada tanto pro contexto do
+ * canal oficial (`context.message_id`) quanto pro `quoted` do Baileys. */
+type ReplyTarget = {
+  id: string;
+  waMessageId: string | null;
+  direction: "in" | "out";
+  text: string | null;
+};
+
+/** `replyToMessageId` só vale se apontar pra mensagem desta MESMA
+ * conversa — evita citar algo de outra thread por engano/manipulação. */
+async function resolveReplyTarget(
+  organizationId: string,
+  conversationId: string,
+  replyToMessageId: string | null | undefined
+): Promise<ReplyTarget | null> {
+  if (!replyToMessageId) return null;
+  const db = getDb();
+  const rows = await db
+    .select({
+      id: schema.message.id,
+      waMessageId: schema.message.waMessageId,
+      direction: schema.message.direction,
+      text: schema.message.text,
+    })
+    .from(schema.message)
+    .where(
+      and(
+        eq(schema.message.id, replyToMessageId),
+        eq(schema.message.organizationId, organizationId),
+        eq(schema.message.conversationId, conversationId)
+      )
+    )
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+/** `null` quando a mensagem citada não tem `wa_message_id` do canal não
+ * oficial (ex.: citando algo do canal oficial, ou id malformado) — nesse
+ * caso o envio segue sem citação em vez de falhar. */
+function toBaileysQuotedTarget(target: ReplyTarget | null): QuotedMessage | undefined {
+  if (!target?.waMessageId) return undefined;
+  const raw = rawBaileysId(target.waMessageId);
+  if (!raw) return undefined;
+  return { waMessageId: raw, fromMe: target.direction === "out", text: target.text };
+}
 
 /** Erro tipado do envio; `code` mapeia para HTTP na camada de API. */
 export class SendError extends Error {
@@ -89,6 +138,8 @@ export async function sendText(input: {
    * `null`/omitido quando foi automação (IA, fila, campanha, follow-up). Só
    * para o rastro técnico (`trace_event`), nunca afeta o envio em si. */
   actorMemberId?: string | null;
+  /** Mensagem sendo respondida/citada (botão "Responder" no balão). */
+  replyToMessageId?: string | null;
 }): Promise<SendResult> {
   const db = getDb();
 
@@ -116,6 +167,12 @@ export async function sendText(input: {
     );
   }
 
+  const replyTarget = await resolveReplyTarget(
+    input.organizationId,
+    input.conversationId,
+    input.replyToMessageId
+  );
+
   // Roteamento por canal: por padrão a conversa segue o canal da última
   // mensagem recebida (sticky); um override pontual do composer vale só
   // para este envio, sem alterar o roteamento automático de entradas.
@@ -127,7 +184,7 @@ export async function sendText(input: {
     );
   }
   if (effectiveChannel === "unofficial") {
-    return sendViaUnofficial(input, row.contact, row.conversation.unofficialChannelId);
+    return sendViaUnofficial(input, row.contact, row.conversation.unofficialChannelId, replyTarget);
   }
 
   if (!isWindowOpen(row.conversation.lastInboundAt)) {
@@ -156,6 +213,7 @@ export async function sendText(input: {
     to: normalizeRecipient(row.contact.phone),
     type: "text",
     text: { body: input.text },
+    ...(replyTarget?.waMessageId ? { context: { message_id: replyTarget.waMessageId } } : {}),
   });
 
   const inserted = await db
@@ -170,6 +228,7 @@ export async function sendText(input: {
       text: input.text,
       status: "pending",
       aiGenerated: input.aiGenerated ?? false,
+      replyToMessageId: replyTarget?.id ?? null,
     })
     .returning();
   const message = inserted[0]!;
@@ -215,6 +274,7 @@ export async function sendMedia(input: {
   channelOverride?: "official" | "unofficial";
   /** Ver comentário equivalente em `sendText`. */
   actorMemberId?: string | null;
+  replyToMessageId?: string | null;
 }): Promise<SendResult> {
   const db = getDb();
 
@@ -238,6 +298,12 @@ export async function sendMedia(input: {
     );
   }
 
+  const replyTarget = await resolveReplyTarget(
+    input.organizationId,
+    input.conversationId,
+    input.replyToMessageId
+  );
+
   const effectiveChannel = input.channelOverride ?? row.conversation.channel;
   const kind = mediaKindFromMime(input.mimeType);
 
@@ -252,7 +318,8 @@ export async function sendMedia(input: {
       input,
       row.contact,
       kind,
-      row.conversation.unofficialChannelId
+      row.conversation.unofficialChannelId,
+      replyTarget
     );
   }
 
@@ -303,6 +370,7 @@ export async function sendMedia(input: {
     to: normalizeRecipient(row.contact.phone),
     type: kind,
     [kind]: mediaObject,
+    ...(replyTarget?.waMessageId ? { context: { message_id: replyTarget.waMessageId } } : {}),
   });
 
   const inserted = await db
@@ -317,6 +385,7 @@ export async function sendMedia(input: {
       text: input.caption ?? null,
       mediaUrl: LOCAL_MEDIA_MARKER,
       status: "pending",
+      replyToMessageId: replyTarget?.id ?? null,
     })
     .returning();
   const message = inserted[0]!;
@@ -373,7 +442,8 @@ async function sendMediaViaUnofficial(
   },
   contact: { phone: string; kind: string },
   kind: MediaKind,
-  unofficialChannelId: string | null
+  unofficialChannelId: string | null,
+  replyTarget: ReplyTarget | null = null
 ): Promise<SendResult> {
   const db = getDb();
   const target =
@@ -394,12 +464,17 @@ async function sendMediaViaUnofficial(
 
   let providerMessageId: string;
   try {
-    providerMessageId = await sendBaileysMedia(channelId, target, {
-      buffer: input.buffer,
-      mimeType: input.mimeType,
-      filename: input.filename ?? null,
-      caption: input.caption,
-    });
+    providerMessageId = await sendBaileysMedia(
+      channelId,
+      target,
+      {
+        buffer: input.buffer,
+        mimeType: input.mimeType,
+        filename: input.filename ?? null,
+        caption: input.caption,
+      },
+      toBaileysQuotedTarget(replyTarget)
+    );
   } catch (err) {
     if (err instanceof BaileysSendError) {
       if (err.code === "not_connected") {
@@ -429,6 +504,7 @@ async function sendMediaViaUnofficial(
       text: input.caption ?? null,
       mediaUrl: LOCAL_MEDIA_MARKER,
       status: "sent",
+      replyToMessageId: replyTarget?.id ?? null,
     })
     .onConflictDoNothing({ target: [schema.message.waMessageId] })
     .returning();
@@ -491,7 +567,8 @@ async function sendViaUnofficial(
     actorMemberId?: string | null;
   },
   contact: { phone: string; kind: string },
-  unofficialChannelId: string | null
+  unofficialChannelId: string | null,
+  replyTarget: ReplyTarget | null = null
 ): Promise<SendResult> {
   const db = getDb();
   const target =
@@ -512,7 +589,12 @@ async function sendViaUnofficial(
 
   let providerMessageId: string;
   try {
-    providerMessageId = await sendBaileysText(channelId, target, input.text);
+    providerMessageId = await sendBaileysText(
+      channelId,
+      target,
+      input.text,
+      toBaileysQuotedTarget(replyTarget)
+    );
   } catch (err) {
     if (err instanceof BaileysSendError) {
       if (err.code === "not_connected") {
@@ -542,6 +624,7 @@ async function sendViaUnofficial(
       text: input.text,
       status: "sent",
       aiGenerated: input.aiGenerated ?? false,
+      replyToMessageId: replyTarget?.id ?? null,
     })
     .onConflictDoNothing({ target: [schema.message.waMessageId] })
     .returning();

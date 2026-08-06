@@ -23,6 +23,7 @@ const sendMediaSchema = z.object({
   filename: z.string().trim().max(255).optional(),
   caption: z.string().trim().max(1024).optional(),
   channel: z.enum(["official", "unofficial"]).optional(),
+  replyToMessageId: z.string().min(1).optional(),
 });
 
 const SEND_ERROR_STATUS: Record<SendError["code"], number> = {
@@ -67,6 +68,7 @@ export const POST = withAuth(async (session, req: Request, ctx: Params) => {
       caption: body.data.caption,
       channelOverride: body.data.channel,
       actorMemberId: session.memberId,
+      replyToMessageId: body.data.replyToMessageId,
     });
     return Response.json({ messageId: result.messageId });
   } catch (err) {

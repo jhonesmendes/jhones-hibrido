@@ -57,6 +57,9 @@ export type WebhookMessage = {
   audio?: WebhookMedia;
   video?: WebhookMedia;
   sticker?: WebhookMedia;
+  /** Presente quando esta mensagem é resposta a outra (`id` = wa_message_id
+   * da mensagem citada). */
+  context?: { id?: string };
 };
 
 export type WebhookStatus = {

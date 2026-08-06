@@ -27,6 +27,9 @@ export function InboxClient() {
   );
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [messages, setMessages] = useState<MessageDto[]>([]);
+  const [replyTo, setReplyTo] = useState<MessageDto | null>(null);
+  const replyToRef = useRef<MessageDto | null>(null);
+  replyToRef.current = replyTo;
   const [panelOpen, setPanelOpen] = useState(true);
   // É incrementado a cada evento SSE que pode mudar a etapa/lead ou o
   // estado do agente: o painel de detalhes observa isso e refaz o fetch ao vivo.
@@ -90,6 +93,7 @@ export function InboxClient() {
     (id: string) => {
       setSelectedId(id);
       setMessages([]);
+      setReplyTo(null);
       void refetchMessages(id);
       setActiveConversationForPush(id);
       void fetch(`/api/conversations/${id}`, {
@@ -199,7 +203,11 @@ export function InboxClient() {
         {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ text, channel }),
+          body: JSON.stringify({
+            text,
+            channel,
+            replyToMessageId: replyToRef.current?.id,
+          }),
         }
       ).catch(() => null);
       if (!res) return "Sem conexão com o servidor";
@@ -243,6 +251,7 @@ export function InboxClient() {
             mimeType: file.type || "application/octet-stream",
             filename: file.name,
             channel,
+            replyToMessageId: replyToRef.current?.id,
           }),
         }
       ).catch(() => null);
@@ -365,11 +374,13 @@ export function InboxClient() {
                 )}
               </div>
             </header>
-            <MessageThread messages={messages} />
+            <MessageThread messages={messages} onReply={setReplyTo} />
             <Composer
               conversation={selected}
               onSend={sendText}
               onSendMedia={sendMedia}
+              replyTo={replyTo}
+              onCancelReply={() => setReplyTo(null)}
               onSent={() => {
                 if (selectedIdRef.current)
                   void refetchMessages(selectedIdRef.current);

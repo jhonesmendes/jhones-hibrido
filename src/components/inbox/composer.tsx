@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { BadgeCheck, Clock3, Mic, Paperclip, Send, Square, Wifi } from "lucide-react";
-import type { ConversationDto, TemplateDto } from "@/lib/types";
+import { BadgeCheck, Clock3, Mic, Paperclip, Send, Square, Wifi, X } from "lucide-react";
+import type { ConversationDto, MessageDto, TemplateDto } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { formatRemaining } from "./helpers";
+import { formatRemaining, mediaLabel } from "./helpers";
 import { TemplateSender } from "./template-sender";
+import { EmojiPicker } from "./emoji-picker";
 
 type ChannelType = "official" | "unofficial";
 
@@ -22,11 +23,18 @@ export function Composer({
   onSend,
   onSendMedia,
   onSent,
+  replyTo,
+  onCancelReply,
 }: {
   conversation: ConversationDto;
   onSend: (text: string, channel?: ChannelType) => Promise<string | null>;
   onSendMedia: (file: File, channel?: ChannelType) => Promise<string | null>;
   onSent: () => void;
+  /** Mensagem selecionada via "Responder" no balão — o pai já injeta o
+   * `replyToMessageId` no envio (ver `sendText`/`sendMedia` em
+   * inbox-client.tsx); aqui só mostra a tira e permite cancelar. */
+  replyTo: MessageDto | null;
+  onCancelReply: () => void;
 }) {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
@@ -99,6 +107,22 @@ export function Composer({
     el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
   }
 
+  /** Insere na posição do cursor (não só no fim) — permite escolher o emoji
+   * no meio de uma frase já digitada. */
+  function insertEmoji(emoji: string) {
+    const el = taRef.current;
+    const start = el?.selectionStart ?? text.length;
+    const end = el?.selectionEnd ?? text.length;
+    const next = text.slice(0, start) + emoji + text.slice(end);
+    setText(next);
+    const cursor = start + emoji.length;
+    setTimeout(() => {
+      autogrow();
+      el?.focus();
+      el?.setSelectionRange(cursor, cursor);
+    }, 0);
+  }
+
   /**
    * Insere o corpo do modelo e deixa a primeira variável numerada
    * selecionada — escrever por cima a substitui; não tocando, ela vai no
@@ -134,6 +158,7 @@ export function Composer({
     }
     setText("");
     if (taRef.current) taRef.current.style.height = "auto";
+    if (replyTo) onCancelReply();
   }
 
   async function submitFile(file: File) {
@@ -146,7 +171,11 @@ export function Composer({
     setError(null);
     const err = await onSendMedia(file, channelOverride ?? undefined);
     setSending(false);
-    if (err) setError(err);
+    if (err) {
+      setError(err);
+      return;
+    }
+    if (replyTo) onCancelReply();
   }
 
   function onFilePicked(e: React.ChangeEvent<HTMLInputElement>) {
@@ -242,6 +271,25 @@ export function Composer({
   return (
     <div className="border-t bg-background px-[18px] pb-3.5 pt-3">
       {channelSelector}
+      {replyTo && (
+        <div className="mb-2.5 flex items-start justify-between gap-2 rounded-md border-l-2 border-brand bg-secondary/60 py-1.5 pl-2.5 pr-1.5">
+          <div className="min-w-0">
+            <p className="text-[11px] font-medium text-brand-text">Respondendo</p>
+            <p className="line-clamp-1 break-words text-xs text-text-2">
+              {replyTo.type === "text" || replyTo.type === "template"
+                ? replyTo.text
+                : replyTo.filename || mediaLabel(replyTo.type)}
+            </p>
+          </div>
+          <button
+            onClick={onCancelReply}
+            aria-label="Cancelar resposta"
+            className="rounded p-1 text-text-3 hover:bg-accent hover:text-foreground"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
       {templates.length > 0 && (
         <div className="mb-2.5 flex flex-wrap gap-1.5">
           {templates.slice(0, 4).map((t) => (
@@ -311,6 +359,7 @@ export function Composer({
           >
             <Paperclip className="h-4 w-4" strokeWidth={1.7} />
           </button>
+          <EmojiPicker onSelect={insertEmoji} />
           <textarea
             ref={taRef}
             placeholder="Escreva uma resposta… (dica: use / para inserir um modelo)"

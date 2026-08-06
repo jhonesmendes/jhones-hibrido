@@ -233,6 +233,7 @@ export async function processMessagesValue(value: WebhookValue): Promise<void> {
       text: msg.text?.body ?? mediaField?.caption ?? null,
       timestamp: msg.timestamp,
       media,
+      replyToWaMessageId: msg.context?.id ?? null,
     });
   }
 }
@@ -291,6 +292,12 @@ export async function ingestInboundMessage(input: {
   media?: { mimeType: string; dataBase64: string; filename?: string | null } | null;
   /** Grupo do canal não oficial (a Cloud API oficial não suporta grupos). */
   contactKind?: "individual" | "group";
+  /** `wa_message_id` da mensagem citada (resposta/quote) — oficial:
+   * `context.id` do webhook; não oficial: `contextInfo.stanzaId` já
+   * prefixado por `baileysMessageId()`. Resolvido pro id interno abaixo;
+   * `null`/ausente quando não é resposta a nada, ou quando a mensagem
+   * citada não está (mais) nesta organização. */
+  replyToWaMessageId?: string | null;
 }): Promise<void> {
   const db = getDb();
   const { organizationId } = input;
@@ -338,6 +345,21 @@ export async function ingestInboundMessage(input: {
 
   const waTimestamp = toDate(input.timestamp);
 
+  let replyToMessageId: string | null = null;
+  if (input.replyToWaMessageId) {
+    const quoted = await db
+      .select({ id: schema.message.id })
+      .from(schema.message)
+      .where(
+        and(
+          eq(schema.message.organizationId, organizationId),
+          eq(schema.message.waMessageId, input.replyToWaMessageId)
+        )
+      )
+      .limit(1);
+    replyToMessageId = quoted[0]?.id ?? null;
+  }
+
   // Idempotência dura: mesmo wa_message_id → sem efeitos adicionais.
   // Cobre também o eco do gateway para envios feitos a partir do CRM.
   const inserted = await db
@@ -353,6 +375,7 @@ export async function ingestInboundMessage(input: {
       mediaUrl: input.mediaUrl ?? (input.media ? LOCAL_MEDIA_MARKER : null),
       status: fromMe ? "sent" : "delivered",
       waTimestamp,
+      replyToMessageId,
     })
     .onConflictDoNothing({ target: [schema.message.waMessageId] })
     .returning();

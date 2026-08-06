@@ -1,4 +1,5 @@
 import {
+  type AnyPgColumn,
   boolean,
   index,
   integer,
@@ -513,6 +514,13 @@ export const message = pgTable(
     waTimestamp: timestamp("wa_timestamp"),
     /** URL da mídia no gateway (imagem, áudio, vídeo, documento, sticker). */
     mediaUrl: text("media_url"),
+    /** Mensagem citada (responder/quote) — nula quando não é resposta a
+     * nada. `set null` em vez de cascade: apagar a mensagem original não
+     * deve arrastar a que a citou. */
+    replyToMessageId: text("reply_to_message_id").references(
+      (): AnyPgColumn => message.id,
+      { onDelete: "set null" }
+    ),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (t) => [

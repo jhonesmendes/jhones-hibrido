@@ -29,6 +29,8 @@ export type MessageDto = {
   mimeType: string | null;
   status: "pending" | "sent" | "delivered" | "read" | "failed";
   aiGenerated: boolean;
+  /** Mensagem citada (resposta/quote) — null quando não é resposta a nada. */
+  replyToMessageId: string | null;
   createdAt: string;
 };
 

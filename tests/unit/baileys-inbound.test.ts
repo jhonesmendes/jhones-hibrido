@@ -4,7 +4,7 @@ import type { WASocket, WAMessage } from "@whiskeysockets/baileys";
 const ingestInboundMessage = vi.fn();
 vi.mock("@/server/inbox/ingest", () => ({ ingestInboundMessage }));
 
-const { handleIncomingMessages, baileysMessageId } = await import(
+const { handleIncomingMessages, baileysMessageId, rawBaileysId } = await import(
   "@/server/baileys/inbound"
 );
 
@@ -33,6 +33,16 @@ describe("baileysMessageId", () => {
   });
 });
 
+describe("rawBaileysId", () => {
+  it("inverso de baileysMessageId: tira o prefixo", () => {
+    expect(rawBaileysId("unof:baileys:ABC")).toBe("ABC");
+  });
+
+  it("id de outro canal (sem o prefixo): null", () => {
+    expect(rawBaileysId("wamid.HBg")).toBeNull();
+  });
+});
+
 describe("handleIncomingMessages", () => {
   beforeEach(() => {
     ingestInboundMessage.mockReset();
@@ -53,6 +63,32 @@ describe("handleIncomingMessages", () => {
       fromMe: false,
       waMessageId: "unof:baileys:ABC123",
       mediaUrl: null,
+    });
+  });
+
+  it("mensagem simples sem citação: replyToWaMessageId nulo", async () => {
+    await handleIncomingMessages("org_1", "uch_1", fakeSock, [makeMsg()]);
+    const arg = ingestInboundMessage.mock.calls[0]![0];
+    expect(arg.replyToWaMessageId).toBeNull();
+  });
+
+  it("resposta a outra mensagem: contextInfo.stanzaId vira replyToWaMessageId prefixado", async () => {
+    await handleIncomingMessages("org_1", "uch_1", fakeSock, [
+      makeMsg({
+        message: {
+          extendedTextMessage: {
+            text: "respondendo",
+            contextInfo: { stanzaId: "ORIG123" },
+          },
+        },
+      }),
+    ]);
+    expect(ingestInboundMessage).toHaveBeenCalledTimes(1);
+    const arg = ingestInboundMessage.mock.calls[0]![0];
+    expect(arg).toMatchObject({
+      type: "text",
+      text: "respondendo",
+      replyToWaMessageId: "unof:baileys:ORIG123",
     });
   });
 

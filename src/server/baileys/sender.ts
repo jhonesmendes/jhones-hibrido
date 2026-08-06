@@ -1,3 +1,4 @@
+import type { WAMessage } from "@whiskeysockets/baileys";
 import { getLiveStatus, getSocket } from "@/server/baileys/manager";
 
 export class BaileysSendError extends Error {
@@ -38,12 +39,33 @@ async function resolveJid(
   return match.jid;
 }
 
+/** Mínimo necessário pro Baileys renderizar "respondendo a: ..." no
+ * destinatário — não precisamos guardar o proto bruto da mensagem original,
+ * só reconstruir esse tanto a partir do que já temos no banco. */
+export type QuotedMessage = {
+  /** ID cru do Baileys (sem o prefixo `unof:baileys:` usado no nosso banco). */
+  waMessageId: string;
+  fromMe: boolean;
+  text: string | null;
+};
+
+/** `remoteJid` vem do `jid` já resolvido pra esse envio (mesmo destinatário
+ * da mensagem em si) — sem precisar resolver de novo nem guardar à parte. */
+function toBaileysQuoted(jid: string, quoted?: QuotedMessage): WAMessage | undefined {
+  if (!quoted) return undefined;
+  return {
+    key: { remoteJid: jid, id: quoted.waMessageId, fromMe: quoted.fromMe },
+    message: { conversation: quoted.text ?? "" },
+  } as WAMessage;
+}
+
 /** Envia texto livre pelo motor nativo; devolve o ID da mensagem.
  * `target` é um telefone (individual) ou um JID de grupo (`...@g.us`). */
 export async function sendText(
   channelId: string,
   target: string,
-  text: string
+  text: string,
+  quoted?: QuotedMessage
 ): Promise<string> {
   const sock = getSocket(channelId);
   const live = await getLiveStatus(channelId);
@@ -58,7 +80,12 @@ export async function sendText(
 
   try {
     const jid = await resolveJid(sock, target);
-    const result = await sock.sendMessage(jid, { text });
+    const quotedMsg = toBaileysQuoted(jid, quoted);
+    const result = await sock.sendMessage(
+      jid,
+      { text },
+      quotedMsg ? { quoted: quotedMsg } : undefined
+    );
     if (!result?.key.id) {
       throw new BaileysSendError(
         "send_failed",
@@ -80,7 +107,8 @@ export async function sendText(
 export async function sendMedia(
   channelId: string,
   target: string,
-  file: { buffer: Buffer; mimeType: string; filename: string | null; caption?: string }
+  file: { buffer: Buffer; mimeType: string; filename: string | null; caption?: string },
+  quoted?: QuotedMessage
 ): Promise<string> {
   const sock = getSocket(channelId);
   const live = await getLiveStatus(channelId);
@@ -94,7 +122,12 @@ export async function sendMedia(
   try {
     const jid = await resolveJid(sock, target);
     const content = buildBaileysMediaContent(file);
-    const result = await sock.sendMessage(jid, content);
+    const quotedMsg = toBaileysQuoted(jid, quoted);
+    const result = await sock.sendMessage(
+      jid,
+      content,
+      quotedMsg ? { quoted: quotedMsg } : undefined
+    );
     if (!result?.key.id) {
       throw new BaileysSendError(
         "send_failed",
