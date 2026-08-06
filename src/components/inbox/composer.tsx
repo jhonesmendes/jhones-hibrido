@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { formatRemaining, mediaLabel } from "./helpers";
 import { TemplateSender } from "./template-sender";
 import { EmojiPicker } from "./emoji-picker";
+import { SpellcheckBadge } from "./spellcheck-badge";
 
 type ChannelType = "official" | "unofficial";
 
@@ -120,6 +121,19 @@ export function Composer({
       autogrow();
       el?.focus();
       el?.setSelectionRange(cursor, cursor);
+    }, 0);
+  }
+
+  /** Troca o trecho [start, end) do texto pela sugestão escolhida no
+   * balão de correção ortográfica (ver SpellcheckBadge). */
+  function fixSpelling(start: number, end: number, replacement: string) {
+    const next = text.slice(0, start) + replacement + text.slice(end);
+    setText(next);
+    const cursor = start + replacement.length;
+    setTimeout(() => {
+      autogrow();
+      taRef.current?.focus();
+      taRef.current?.setSelectionRange(cursor, cursor);
     }, 0);
   }
 
@@ -365,6 +379,12 @@ export function Composer({
             placeholder="Escreva uma resposta… (dica: use / para inserir um modelo)"
             value={text}
             rows={1}
+            // Corretor ortográfico nativo do navegador (sublinhado + sugestões
+            // no botão direito) — sem depender de nenhum serviço externo
+            // (Constituição II). Precisa do dicionário de PT-BR ativado nas
+            // configurações de idioma do navegador pra funcionar de fato.
+            spellCheck
+            lang="pt-BR"
             onChange={(e) => {
               setText(e.target.value);
               setPickerIndex(0);
@@ -437,9 +457,12 @@ export function Composer({
           )}
         </div>
       </div>
-      <div className="mt-1.5 flex items-center justify-between">
-        {error ? <p className="text-xs text-destructive">{error}</p> : <span />}
-        <p className="text-[11px] text-text-3">
+      <div className="mt-1.5 flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <SpellcheckBadge text={text} onFix={fixSpelling} />
+          {error && <p className="text-xs text-destructive">{error}</p>}
+        </div>
+        <p className="shrink-0 text-[11px] text-text-3">
           {effectiveChannel === "unofficial"
             ? "WhatsApp Web · sem janela de 24h"
             : `Janela aberta · restam ${formatRemaining(conversation.windowRemainingMs)}`}
