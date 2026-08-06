@@ -30,6 +30,10 @@ export function InboxClient() {
   const [replyTo, setReplyTo] = useState<MessageDto | null>(null);
   const replyToRef = useRef<MessageDto | null>(null);
   replyToRef.current = replyTo;
+  // Nome do agente IA configurado pra esta conversa (assinatura das
+  // mensagens automáticas no balão — "Bob", etc.), null enquanto não há
+  // perfil resolvido nem conversa selecionada.
+  const [aiAgentName, setAiAgentName] = useState<string | null>(null);
   const [panelOpen, setPanelOpen] = useState(true);
   // É incrementado a cada evento SSE que pode mudar a etapa/lead ou o
   // estado do agente: o painel de detalhes observa isso e refaz o fetch ao vivo.
@@ -94,6 +98,7 @@ export function InboxClient() {
       setSelectedId(id);
       setMessages([]);
       setReplyTo(null);
+      setAiAgentName(null);
       void refetchMessages(id);
       setActiveConversationForPush(id);
       void fetch(`/api/conversations/${id}`, {
@@ -101,6 +106,14 @@ export function InboxClient() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ markRead: true }),
       });
+      // Assinatura das mensagens da IA no balão ("Bob", etc.) — mesmo
+      // perfil que o painel de detalhes usa pro toggle "Respondendo".
+      fetch(`/api/conversations/${id}/agent-status`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d: { profileName?: string | null } | null) => {
+          if (selectedIdRef.current === id) setAiAgentName(d?.profileName ?? null);
+        })
+        .catch(() => {});
     },
     [refetchMessages]
   );
@@ -374,7 +387,11 @@ export function InboxClient() {
                 )}
               </div>
             </header>
-            <MessageThread messages={messages} onReply={setReplyTo} />
+            <MessageThread
+              messages={messages}
+              onReply={setReplyTo}
+              aiAgentName={aiAgentName}
+            />
             <Composer
               conversation={selected}
               onSend={sendText}

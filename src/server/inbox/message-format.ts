@@ -22,7 +22,9 @@ function hasServableMedia(m: typeof schema.message.$inferSelect): boolean {
 
 export function serializeMessage(
   m: typeof schema.message.$inferSelect,
-  media?: { filename: string | null; sizeBytes: number | null; mimeType: string | null } | null
+  media?: { filename: string | null; sizeBytes: number | null; mimeType: string | null } | null,
+  /** Assinatura no painel interno (quem mandou) — nunca vai pro WhatsApp. */
+  senderName?: string | null
 ) {
   return {
     id: m.id,
@@ -38,6 +40,7 @@ export function serializeMessage(
     status: m.status,
     aiGenerated: m.aiGenerated,
     replyToMessageId: m.replyToMessageId,
+    senderName: senderName ?? null,
     createdAt: (m.waTimestamp ?? m.createdAt).toISOString(),
   };
 }

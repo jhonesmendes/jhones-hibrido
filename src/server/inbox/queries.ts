@@ -150,12 +150,17 @@ export async function listMessages(
       filename: schema.messageMedia.filename,
       sizeBytes: schema.messageMedia.sizeBytes,
       mimeType: schema.messageMedia.mimeType,
+      // Assinatura no painel interno (quem mandou) — nunca vai pro
+      // WhatsApp, só existe pra quem está visualizando a conversa aqui.
+      senderName: schema.user.name,
     })
     .from(schema.message)
     .leftJoin(
       schema.messageMedia,
       eq(schema.messageMedia.messageId, schema.message.id)
     )
+    .leftJoin(schema.member, eq(schema.member.id, schema.message.sentByMemberId))
+    .leftJoin(schema.user, eq(schema.user.id, schema.member.userId))
     .where(
       scoped(
         schema.message.organizationId,
@@ -165,6 +170,20 @@ export async function listMessages(
       )
     )
     .orderBy(schema.message.createdAt);
+}
+
+/** Nome de quem mandou (assinatura no painel) — usado pelo `send.ts` pra
+ * incluir no evento SSE ao vivo (`message.new`), senão só quem reabrisse a
+ * conversa depois veria a assinatura; outros acompanhando ao vivo, não. */
+export async function getMemberName(memberId: string): Promise<string | null> {
+  const db = getDb();
+  const rows = await db
+    .select({ name: schema.user.name })
+    .from(schema.member)
+    .innerJoin(schema.user, eq(schema.user.id, schema.member.userId))
+    .where(eq(schema.member.id, memberId))
+    .limit(1);
+  return rows[0]?.name ?? null;
 }
 
 export function serializeConversation(

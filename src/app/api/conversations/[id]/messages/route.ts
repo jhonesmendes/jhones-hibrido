@@ -30,11 +30,15 @@ export const GET = withAuth(async (session, req: Request, ctx: Params) => {
   );
   return Response.json({
     messages: messages.map((row) =>
-      serializeMessage(row.message, {
-        filename: row.filename,
-        sizeBytes: row.sizeBytes,
-        mimeType: row.mimeType,
-      })
+      serializeMessage(
+        row.message,
+        {
+          filename: row.filename,
+          sizeBytes: row.sizeBytes,
+          mimeType: row.mimeType,
+        },
+        row.senderName
+      )
     ),
   });
 });

@@ -26,6 +26,7 @@ import {
 import { baileysMessageId, rawBaileysId } from "@/server/baileys/inbound";
 import { resolveDefaultUnofficialChannelId } from "@/server/settings/unofficial-channels";
 import { logTrace } from "@/server/observability/trace";
+import { getMemberName } from "@/server/inbox/queries";
 
 /** Mensagem sendo respondida/citada — resolvida uma vez a partir do
  * `replyToMessageId` recebido do composer, reusada tanto pro contexto do
@@ -135,8 +136,10 @@ export async function sendText(input: {
   /** Override pontual do canal de envio (seletor manual no composer). */
   channelOverride?: "official" | "unofficial";
   /** Quem mandou enviar — um member_id quando foi um agente pelo composer;
-   * `null`/omitido quando foi automação (IA, fila, campanha, follow-up). Só
-   * para o rastro técnico (`trace_event`), nunca afeta o envio em si. */
+   * `null`/omitido quando foi automação (IA, fila, campanha, follow-up).
+   * Grava em `message.sent_by_member_id` (assinatura no painel interno,
+   * nunca vai pro WhatsApp) e no rastro técnico (`trace_event`) — nunca
+   * afeta o envio em si. */
   actorMemberId?: string | null;
   /** Mensagem sendo respondida/citada (botão "Responder" no balão). */
   replyToMessageId?: string | null;
@@ -229,6 +232,7 @@ export async function sendText(input: {
       status: "pending",
       aiGenerated: input.aiGenerated ?? false,
       replyToMessageId: replyTarget?.id ?? null,
+      sentByMemberId: input.actorMemberId ?? null,
     })
     .returning();
   const message = inserted[0]!;
@@ -242,7 +246,11 @@ export async function sendText(input: {
     type: "message.new",
     data: {
       conversationId: input.conversationId,
-      message: serializeMessage(message),
+      message: serializeMessage(
+        message,
+        null,
+        input.actorMemberId ? await getMemberName(input.actorMemberId) : null
+      ),
     },
   });
 
@@ -386,6 +394,7 @@ export async function sendMedia(input: {
       mediaUrl: LOCAL_MEDIA_MARKER,
       status: "pending",
       replyToMessageId: replyTarget?.id ?? null,
+      sentByMemberId: input.actorMemberId ?? null,
     })
     .returning();
   const message = inserted[0]!;
@@ -409,11 +418,15 @@ export async function sendMedia(input: {
     type: "message.new",
     data: {
       conversationId: input.conversationId,
-      message: serializeMessage(message, {
-        filename: input.filename ?? null,
-        sizeBytes: input.buffer.length,
-        mimeType: input.mimeType,
-      }),
+      message: serializeMessage(
+        message,
+        {
+          filename: input.filename ?? null,
+          sizeBytes: input.buffer.length,
+          mimeType: input.mimeType,
+        },
+        input.actorMemberId ? await getMemberName(input.actorMemberId) : null
+      ),
     },
   });
 
@@ -505,6 +518,7 @@ async function sendMediaViaUnofficial(
       mediaUrl: LOCAL_MEDIA_MARKER,
       status: "sent",
       replyToMessageId: replyTarget?.id ?? null,
+      sentByMemberId: input.actorMemberId ?? null,
     })
     .onConflictDoNothing({ target: [schema.message.waMessageId] })
     .returning();
@@ -532,11 +546,15 @@ async function sendMediaViaUnofficial(
       type: "message.new",
       data: {
         conversationId: input.conversationId,
-        message: serializeMessage(message, {
-          filename: input.filename ?? null,
-          sizeBytes: input.buffer.length,
-          mimeType: input.mimeType,
-        }),
+        message: serializeMessage(
+          message,
+          {
+            filename: input.filename ?? null,
+            sizeBytes: input.buffer.length,
+            mimeType: input.mimeType,
+          },
+          input.actorMemberId ? await getMemberName(input.actorMemberId) : null
+        ),
       },
     });
     await logTrace({
@@ -625,6 +643,7 @@ async function sendViaUnofficial(
       status: "sent",
       aiGenerated: input.aiGenerated ?? false,
       replyToMessageId: replyTarget?.id ?? null,
+      sentByMemberId: input.actorMemberId ?? null,
     })
     .onConflictDoNothing({ target: [schema.message.waMessageId] })
     .returning();
@@ -640,7 +659,11 @@ async function sendViaUnofficial(
       type: "message.new",
       data: {
         conversationId: input.conversationId,
-        message: serializeMessage(message),
+        message: serializeMessage(
+          message,
+          null,
+          input.actorMemberId ? await getMemberName(input.actorMemberId) : null
+        ),
       },
     });
     await logTrace({

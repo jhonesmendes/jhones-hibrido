@@ -31,6 +31,9 @@ export type MessageDto = {
   aiGenerated: boolean;
   /** Mensagem citada (resposta/quote) — null quando não é resposta a nada. */
   replyToMessageId: string | null;
+  /** Assinatura no painel interno (agente humano que mandou) — null pra
+   * mensagens do cliente, automação, ou mensagens antigas sem essa info. */
+  senderName: string | null;
   createdAt: string;
 };
 

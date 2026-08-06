@@ -208,12 +208,28 @@ function QuotedPreview({ target }: { target: MessageDto | null }) {
   );
 }
 
+/** Assinatura de quem mandou (só faz sentido pra saída): agente humano
+ * (`senderName`) tem prioridade — é informação real, gravada no envio;
+ * `aiGenerated` sem `senderName` é a IA respondendo sozinha. Sem nenhum
+ * dos dois (mensagem antiga, ou automação sem member associado): nada. */
+function senderLabel(m: MessageDto, aiAgentName: string | null): string | null {
+  if (m.direction !== "out") return null;
+  if (m.senderName) return m.senderName;
+  if (m.aiGenerated) return aiAgentName ?? "IA";
+  return null;
+}
+
 export function MessageThread({
   messages,
   onReply,
+  aiAgentName,
 }: {
   messages: MessageDto[];
   onReply: (m: MessageDto) => void;
+  /** Nome do agente IA configurado pra esta conversa — assinatura das
+   * mensagens automáticas (ex.: "Bob"). `null` = ainda não resolvido ou
+   * sem perfil de IA configurado (cai no rótulo genérico "IA"). */
+  aiAgentName: string | null;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
@@ -265,8 +281,16 @@ export function MessageThread({
           !prev ||
           new Date(prev.createdAt).toDateString() !==
             new Date(m.createdAt).toDateString();
+        const label = senderLabel(m, aiAgentName);
+        // Não agrupa (reinicia o "cantinho" do balão) quando o remetente
+        // muda dentro da mesma direção — senão duas mensagens de agentes
+        // diferentes ficariam visualmente coladas como se fosse a mesma
+        // pessoa falando.
         const grouped =
-          !newDay && prev !== undefined && prev.direction === m.direction;
+          !newDay &&
+          prev !== undefined &&
+          prev.direction === m.direction &&
+          senderLabel(prev, aiAgentName) === label;
         const out = m.direction === "out";
 
         return (
@@ -294,6 +318,16 @@ export function MessageThread({
                   !grouped && (out ? "rounded-tr-[5px]" : "rounded-tl-[5px]")
                 )}
               >
+                {!grouped && label && (
+                  <p
+                    className={cn(
+                      "mb-0.5 text-xs font-semibold",
+                      m.aiGenerated && !m.senderName ? "text-sky-600" : "text-emerald-600"
+                    )}
+                  >
+                    {label}
+                  </p>
+                )}
                 {m.replyToMessageId && (
                   <QuotedPreview target={messageById.get(m.replyToMessageId) ?? null} />
                 )}

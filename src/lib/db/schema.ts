@@ -521,6 +521,13 @@ export const message = pgTable(
       (): AnyPgColumn => message.id,
       { onDelete: "set null" }
     ),
+    /** Agente humano que mandou (via composer) — assinatura no painel
+     * interno (`get("sender name")`), NUNCA vai pro WhatsApp. Nulo pra
+     * mensagens automáticas (IA/fila/campanha/follow-up), inbound, e
+     * mensagens antigas anteriores a este campo. */
+    sentByMemberId: text("sent_by_member_id").references(() => member.id, {
+      onDelete: "set null",
+    }),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (t) => [
