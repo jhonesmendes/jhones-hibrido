@@ -105,10 +105,25 @@ export const member = pgTable(
     ),
     /** Perfil de agente IA padrão deste atendente (v0.1) — usado quando a
      * conversa está atribuída a ele (`conversation.assignedTo`) e não tem
-     * override próprio. Null = não define padrão neste nível da cadeia. */
+     * override próprio. Null = não define padrão neste nível da chain. */
     agentProfileId: text("agent_profile_id").references(() => agentProfile.id, {
       onDelete: "set null",
     }),
+    /** Aparência pessoal (Configurações → Preferências), mesmo padrão de
+     * `groupsInInbox`: por membro, salva no servidor (acompanha em
+     * qualquer dispositivo), nunca afeta outros agentes. Todos nullable =
+     * "usar o padrão da organização/sistema" — igual a nunca ter mexido. */
+    accentHex: text("accent_hex"),
+    /** 30–100: quão saturada a cor de destaque pessoal fica (ver
+     * `resolvePersonalAccentSet` em lib/branding.ts). Null = 75 (padrão). */
+    accentIntensity: integer("accent_intensity"),
+    /** Preset ("warm"|"cool"|"stone"|"forest") ou hex customizado
+     * ("#rrggbb") do fundo do painel de conversa. Null/"default" = usa
+     * `--chat-bg` do tema normal, sem override nenhum. */
+    chatBg: text("chat_bg"),
+    /** 0–100: intensidade da mistura do `chatBg` sobre o neutro base. Null
+     * = 40 (padrão). */
+    chatBgIntensity: integer("chat_bg_intensity"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (t) => [

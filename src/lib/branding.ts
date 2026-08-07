@@ -97,6 +97,27 @@ function luminance({ r, g, b }: Rgb): number {
   return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
 }
 
+/** Escurece até ter contraste ≥ 3:1 com branco (base clara demais deixaria
+ * texto branco ilegível em cima) — mesma regra pro org e pro pessoal. */
+function ensureContrast(base: Rgb): Rgb {
+  let out = base;
+  while (1.05 / (luminance(out) + 0.05) < 3 && luminance(out) > 0.005) {
+    out = mix(out, BLACK, 0.12);
+  }
+  return out;
+}
+
+function deriveAccentSet(base: Rgb): AccentSet {
+  const safe = ensureContrast(base);
+  return {
+    accent: rgbToHex(safe),
+    hover: rgbToHex(mix(safe, BLACK, 0.16)),
+    soft: rgbToHex(mix(safe, WHITE, 0.82)),
+    tint: rgbToHex(mix(safe, WHITE, 0.94)),
+    text: rgbToHex(mix(safe, BLACK, 0.28)),
+  };
+}
+
 /**
  * Conjunto completo para qualquer acento: preset exato se existir; senão, se
  * deriva. Uma base clara demais (texto branco ilegível sobre ela) é escurecida
@@ -106,18 +127,71 @@ export function resolveAccentSet(accentHex: string): AccentSet {
   const preset = ACCENT_PRESETS[accentHex.toLowerCase()];
   if (preset) return preset.set;
   if (!isValidHex(accentHex)) return ACCENT_PRESETS["#3f5972"]!.set;
+  return deriveAccentSet(hexToRgb(accentHex.toLowerCase()));
+}
 
-  let base = hexToRgb(accentHex.toLowerCase());
-  // contraste com branco = (1.05) / (L + 0.05); exigir ≥ 3
-  while (1.05 / (luminance(base) + 0.05) < 3 && luminance(base) > 0.005) {
-    base = mix(base, BLACK, 0.12);
+function rgbToHsl({ r, g, b }: Rgb): { h: number; s: number; l: number } {
+  const rn = r / 255, gn = g / 255, bn = b / 255;
+  const max = Math.max(rn, gn, bn), min = Math.min(rn, gn, bn);
+  const l = (max + min) / 2;
+  if (max === min) return { h: 0, s: 0, l };
+  const d = max - min;
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h: number;
+  if (max === rn) h = (gn - bn) / d + (gn < bn ? 6 : 0);
+  else if (max === gn) h = (bn - rn) / d + 2;
+  else h = (rn - gn) / d + 4;
+  return { h: h / 6, s, l };
+}
+
+function hslToRgb({ h, s, l }: { h: number; s: number; l: number }): Rgb {
+  if (s === 0) {
+    const v = Math.round(l * 255);
+    return { r: v, g: v, b: v };
   }
+  const hue2rgb = (p: number, q: number, t: number) => {
+    let tt = t;
+    if (tt < 0) tt += 1;
+    if (tt > 1) tt -= 1;
+    if (tt < 1 / 6) return p + (q - p) * 6 * tt;
+    if (tt < 1 / 2) return q;
+    if (tt < 2 / 3) return p + (q - p) * (2 / 3 - tt) * 6;
+    return p;
+  };
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+  const p = 2 * l - q;
   return {
-    accent: rgbToHex(base),
-    hover: rgbToHex(mix(base, BLACK, 0.16)),
-    soft: rgbToHex(mix(base, WHITE, 0.82)),
-    tint: rgbToHex(mix(base, WHITE, 0.94)),
-    text: rgbToHex(mix(base, BLACK, 0.28)),
+    r: Math.round(hue2rgb(p, q, h + 1 / 3) * 255),
+    g: Math.round(hue2rgb(p, q, h) * 255),
+    b: Math.round(hue2rgb(p, q, h - 1 / 3) * 255),
+  };
+}
+
+/** 30 (suave) a 100 (vibrante) — escala a saturação da cor escolhida antes
+ * de derivar hover/soft/tint/text, mesma matemática de contraste do
+ * acento da organização. Diferente do org (que usa os 4 presets exatos
+ * "de mão" quando bate), o pessoal sempre deriva pela roda de cor — é
+ * assim que a intensidade consegue enfraquecer/reforçar até um preset. */
+export function resolvePersonalAccentSet(accentHex: string, intensity = 75): AccentSet {
+  const hex = isValidHex(accentHex) ? accentHex.toLowerCase() : "#3f5972";
+  const hsl = rgbToHsl(hexToRgb(hex));
+  const scale = Math.max(30, Math.min(100, intensity)) / 100;
+  const scaled = hslToRgb({ ...hsl, s: hsl.s * scale });
+  return deriveAccentSet(scaled);
+}
+
+const DARK_BG: Rgb = { r: 0x13, g: 0x14, b: 0x17 }; // #131417, ver globals.css .dark
+
+/** Mesmo matiz do claro, superfícies misturadas com o fundo escuro e texto
+ * clareado pra manter contraste — compartilhado pelo org e pelo pessoal. */
+function deriveDarkFromLight(light: AccentSet): AccentSet {
+  const base = hexToRgb(light.accent);
+  return {
+    accent: rgbToHex(mix(base, WHITE, 0.08)),
+    hover: rgbToHex(mix(base, WHITE, 0.2)),
+    soft: rgbToHex(mix(base, DARK_BG, 0.6)),
+    tint: rgbToHex(mix(base, DARK_BG, 0.8)),
+    text: rgbToHex(mix(base, WHITE, 0.62)),
   };
 }
 
@@ -126,16 +200,12 @@ export function resolveAccentSet(accentHex: string): AccentSet {
  * fundo escuro e texto clareado para manter contraste.
  */
 export function resolveDarkAccentSet(accentHex: string): AccentSet {
-  const light = resolveAccentSet(accentHex);
-  const base = hexToRgb(light.accent);
-  const darkBg: Rgb = hexToRgb("#131417");
-  return {
-    accent: rgbToHex(mix(base, WHITE, 0.08)),
-    hover: rgbToHex(mix(base, WHITE, 0.2)),
-    soft: rgbToHex(mix(base, darkBg, 0.6)),
-    tint: rgbToHex(mix(base, darkBg, 0.8)),
-    text: rgbToHex(mix(base, WHITE, 0.62)),
-  };
+  return deriveDarkFromLight(resolveAccentSet(accentHex));
+}
+
+/** Variante escura do acento pessoal — mesma intensidade aplicada. */
+export function resolveDarkPersonalAccentSet(accentHex: string, intensity = 75): AccentSet {
+  return deriveDarkFromLight(resolvePersonalAccentSet(accentHex, intensity));
 }
 
 /** CSS de variáveis para injetar no <head> (SSR, sem flash). */
@@ -146,6 +216,76 @@ export function accentCssVariables(accentHex: string): string {
     `:root{--accent:${s.accent};--accent-hover:${s.hover};--accent-soft:${s.soft};--accent-tint:${s.tint};--accent-text:${s.text};}` +
     `.dark{--accent:${d.accent};--accent-hover:${d.hover};--accent-soft:${d.soft};--accent-tint:${d.tint};--accent-text:${d.text};}`
   );
+}
+
+/** CSS de variáveis do acento PESSOAL — mesma forma do `accentCssVariables`
+ * da organização, mas injetado DEPOIS dele no `<head>` (ver layout.tsx),
+ * então vence por ordem de cascata quando o membro tiver escolhido um. */
+export function personalAccentCssVariables(accentHex: string, intensity = 75): string {
+  const s = resolvePersonalAccentSet(accentHex, intensity);
+  const d = resolveDarkPersonalAccentSet(accentHex, intensity);
+  return (
+    `:root{--accent:${s.accent};--accent-hover:${s.hover};--accent-soft:${s.soft};--accent-tint:${s.tint};--accent-text:${s.text};}` +
+    `.dark{--accent:${d.accent};--accent-hover:${d.hover};--accent-soft:${d.soft};--accent-tint:${d.tint};--accent-text:${d.text};}`
+  );
+}
+
+/** 8 cores vivas pra escolha PESSOAL — deliberadamente mais vibrantes que
+ * os 4 presets sóbrios da organização acima (esses são pensados pra
+ * marca/white-label; aqui é gosto de cada um, então pode ser mais ousado). */
+export const PERSONAL_ACCENT_PRESETS: { label: string; hex: string }[] = [
+  { label: "Azul", hex: "#2563eb" },
+  { label: "Violeta", hex: "#7c3aed" },
+  { label: "Verde-azulado", hex: "#0d9488" },
+  { label: "Verde", hex: "#16a34a" },
+  { label: "Âmbar", hex: "#d97706" },
+  { label: "Coral", hex: "#e05a3a" },
+  { label: "Rosa", hex: "#db2777" },
+  { label: "Cinza", hex: "#64748b" },
+];
+
+/** Presets do fundo do painel de conversa — cor "pura" na intensidade
+ * máxima; o slider de intensidade mistura em direção ao neutro do tema. */
+export const CHAT_BG_PRESETS: Record<string, { label: string; hex: string }> = {
+  warm: { label: "Quente", hex: "#fdf8f0" },
+  cool: { label: "Frio", hex: "#f0f4fd" },
+  stone: { label: "Pedra", hex: "#f5f3ee" },
+  forest: { label: "Floresta", hex: "#f0f5f1" },
+};
+
+const CHAT_BG_LIGHT: Rgb = { r: 0xf4, g: 0xf5, b: 0xf7 }; // #f4f5f7, ver globals.css :root
+const CHAT_BG_DARK: Rgb = { r: 0x0f, g: 0x10, b: 0x13 }; // #0f1013, ver globals.css .dark
+
+/**
+ * `bg` é um preset (`warm`/`cool`/`stone`/`forest`) ou hex customizado
+ * (`#rrggbb`); `null`/`"default"`/inválido = sem override, usa o `--chat-bg`
+ * normal do tema. No escuro a mistura é mais fraca (a cor "crua" ficaria
+ * berrante/suja sobre um fundo quase preto) — mesma ideia de
+ * `deriveDarkFromLight`, só que aplicada a uma superfície, não a um acento.
+ */
+export function resolveChatBgHex(
+  bg: string | null | undefined,
+  intensity: number,
+  dark: boolean
+): string | null {
+  if (!bg || bg === "default") return null;
+  const raw = CHAT_BG_PRESETS[bg]?.hex ?? bg;
+  if (!isValidHex(raw)) return null;
+  const target = hexToRgb(raw);
+  const pct = Math.max(0, Math.min(100, intensity)) / 100;
+  const base = dark ? CHAT_BG_DARK : CHAT_BG_LIGHT;
+  const factor = dark ? pct * 0.4 : pct; // ver comentário acima
+  return rgbToHex(mix(base, target, factor));
+}
+
+/** CSS de variáveis do fundo do painel — mesmo esquema dos acentos:
+ * `null` quando `bg` é "default"/vazio, então não gera `<style>` nenhum
+ * (o chamador decide não renderizar a tag nesse caso). */
+export function chatBgCssVariables(bg: string, intensity = 40): string | null {
+  const light = resolveChatBgHex(bg, intensity, false);
+  const darkHex = resolveChatBgHex(bg, intensity, true);
+  if (!light || !darkHex) return null;
+  return `:root{--chat-bg:${light};}.dark{--chat-bg:${darkHex};}`;
 }
 
 export function normalizeBranding(input: Partial<Branding> | null): Branding {

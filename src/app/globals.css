@@ -146,6 +146,23 @@
   --wallpaper-size: 160px 160px;
 }
 
+/*
+  Sidebar recolhível: estado (`vocero-nav-collapsed`) aplicado ANTES da
+  hidratação via atributo em <html> (mesma técnica do tema/papel de
+  parede acima) — sem isso, a sidebar nasceria expandida e "encolheria"
+  visivelmente assim que o React montasse. Só no desktop (md: = 768px,
+  igual ao breakpoint do Tailwind): no mobile a sidebar é sempre o
+  drawer cheio, recolher não faz sentido ali.
+*/
+@media (min-width: 768px) {
+  :root[data-nav-collapsed] .app-nav-aside {
+    width: 52px !important;
+  }
+  :root[data-nav-collapsed] .app-nav-label {
+    display: none !important;
+  }
+}
+
 .chat-wallpaper {
   background-color: var(--chat-bg);
   background-image: var(--wallpaper-image);

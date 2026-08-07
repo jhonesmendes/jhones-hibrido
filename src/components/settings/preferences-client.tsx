@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Users } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { AppearanceClient } from "./appearance-client";
 
 const OPTIONS = [
   {
@@ -53,6 +54,8 @@ export function PreferencesClient() {
           Ajustes pessoais de exibição — só valem para a sua conta
         </p>
       </div>
+
+      <AppearanceClient />
 
       <Card>
         <CardHeader>

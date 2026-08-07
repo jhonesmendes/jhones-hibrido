@@ -232,6 +232,13 @@
       "when": 1785988796818,
       "tag": "0032_message_sent_by_member",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1786128258329,
+      "tag": "0033_member_personal_appearance",
+      "breakpoints": true
     }
   ]
 }

@@ -43,6 +43,34 @@ export async function getBranding(
   });
 }
 
+export type MemberAppearance = {
+  accentHex: string | null;
+  accentIntensity: number | null;
+  chatBg: string | null;
+  chatBgIntensity: number | null;
+};
+
+/** Aparência pessoal do membro logado, pra injetar no SSR do `<head>` sem
+ * flash (mesma ideia do `getBranding` acima, um nível abaixo: por membro,
+ * não por organização). `null` sem sessão (login/registro). */
+export async function getMemberAppearance(
+  memberId: string | null | undefined
+): Promise<MemberAppearance | null> {
+  if (!memberId) return null;
+  const db = getDb();
+  const rows = await db
+    .select({
+      accentHex: schema.member.accentHex,
+      accentIntensity: schema.member.accentIntensity,
+      chatBg: schema.member.chatBg,
+      chatBgIntensity: schema.member.chatBgIntensity,
+    })
+    .from(schema.member)
+    .where(eq(schema.member.id, memberId))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
 /** Logo cifrado em `organization.logo` (coluna dedicada); nome/acento em metadata. */
 export async function saveBranding(
   organizationId: string,

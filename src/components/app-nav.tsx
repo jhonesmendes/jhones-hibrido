@@ -14,6 +14,8 @@ import {
   LogOut,
   Megaphone,
   Menu,
+  PanelLeft,
+  PanelLeftClose,
   Settings,
   Sparkles,
   Users,
@@ -42,9 +44,13 @@ const NAV = [
   { href: "/contacts", label: "Contatos", icon: Users },
   { href: "/campanhas", label: "Campanhas", icon: Megaphone },
   { href: "/agent", label: "Agente", icon: Sparkles },
-  { href: "/lab", label: "Laboratório", icon: FlaskConical },
+  // Configuração/análise de operação, não atendimento do dia a dia — fora
+  // da tela do agente comum (ver mesma checagem no server, /lab/page.tsx).
+  { href: "/lab", label: "Laboratório", icon: FlaskConical, hideFromAgent: true },
   { href: "/n8n-panel", label: "Painel N8N", icon: Workflow },
 ] as const;
+
+const NAV_COLLAPSED_KEY = "vocero-nav-collapsed";
 
 export function AppNav({
   branding,
@@ -60,6 +66,12 @@ export function AppNav({
   const [unread, setUnread] = useState(0);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [queueAssignment, setQueueAssignment] = useState<QueueAssignment | null>(null);
+  // Sidebar recolhível (desktop): começa false pra bater com o SSR (sem
+  // acesso a localStorage) — o script anti-flash no layout raiz já cuida da
+  // largura/labels certas antes da hidratação via atributo em <html>; isso
+  // aqui só sincroniza o estado do React depois de montar, mesmo padrão do
+  // ThemeToggle.
+  const [navCollapsed, setNavCollapsed] = useState(false);
   // Preferência pessoal: se grupos estão fora da Caixa de Entrada, o badge
   // do menu também não deve contar as não lidas deles.
   const groupsInInboxRef = useRef(true);
@@ -92,7 +104,26 @@ export function AppNav({
     // antes — cobre o caso de o navegador ter perdido a inscrição.
     void ensureServiceWorker();
     if (getNotificationPermission() === "granted") void ensurePushSubscription();
+
+    try {
+      setNavCollapsed(localStorage.getItem(NAV_COLLAPSED_KEY) === "1");
+    } catch {
+      // localStorage indisponível (modo privado restrito etc.) — segue expandido.
+    }
   }, []);
+
+  function toggleNavCollapsed() {
+    setNavCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(NAV_COLLAPSED_KEY, next ? "1" : "0");
+      } catch {
+        // cortesia, não trava a UI se falhar
+      }
+      document.documentElement.toggleAttribute("data-nav-collapsed", next);
+      return next;
+    });
+  }
 
   useEvents({
     onMessageNew: () => void refetchUnread(),
@@ -151,9 +182,10 @@ export function AppNav({
 
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r bg-subtle px-3 pb-3.5 pt-4 transition-transform duration-200",
+          "app-nav-aside fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r bg-subtle px-3 pb-3.5 pt-4 transition-[width,transform] duration-200",
           drawerOpen ? "translate-x-0" : "-translate-x-full",
-          "md:static md:z-auto md:w-56 md:shrink-0 md:translate-x-0"
+          "md:static md:z-auto md:shrink-0 md:translate-x-0",
+          navCollapsed ? "md:w-[52px] md:px-2" : "md:w-56"
         )}
       >
         <button
@@ -165,8 +197,8 @@ export function AppNav({
         </button>
 
         {/* Brand white-label — o ícone do cliente substitui a inicial; o
-          crédito "Vocero CRM" embaixo fica sempre visível. */}
-      <div className="mb-4 flex items-center gap-2.5 px-2">
+          crédito "Vocero CRM" embaixo fica sempre visível (exceto recolhida). */}
+      <div className={cn("mb-4 flex items-center gap-2.5 px-2", navCollapsed && "md:justify-center md:px-0")}>
         <span
           className="flex h-[30px] w-[30px] shrink-0 items-center justify-center overflow-hidden rounded-sm bg-brand text-[15px] font-bold text-white"
           aria-hidden
@@ -178,7 +210,7 @@ export function AppNav({
             branding.name.charAt(0).toUpperCase()
           )}
         </span>
-        <span className="min-w-0">
+        <span className={cn("app-nav-label min-w-0", navCollapsed && "md:hidden")}>
           <span className="block truncate text-[16px] font-[650] leading-tight tracking-tight">
             {branding.name}
           </span>
@@ -186,54 +218,63 @@ export function AppNav({
         </span>
       </div>
 
-      <DepartmentSwitcher role={role} />
+      <div className={cn("app-nav-label", navCollapsed && "md:hidden")}>
+        <DepartmentSwitcher role={role} />
+      </div>
 
       {(role === "owner" || role === "admin") && (
         <Link
           href="/dashboard"
+          title="Dashboard"
           className={cn(
             "mb-1 flex items-center gap-[11px] rounded-sm px-2.5 py-2 text-sm font-medium transition-colors",
             pathname.startsWith("/dashboard")
               ? "bg-brand-tint font-semibold text-brand-text"
-              : "text-text-2 hover:bg-accent"
+              : "text-text-2 hover:bg-accent",
+            navCollapsed && "md:justify-center md:px-0"
           )}
         >
           <LayoutDashboard
             className={cn(
-              "h-[18px] w-[18px]",
+              "h-[18px] w-[18px] shrink-0",
               pathname.startsWith("/dashboard") ? "text-brand" : "text-text-3"
             )}
             strokeWidth={1.7}
           />
-          Dashboard
+          <span className={cn("app-nav-label", navCollapsed && "md:hidden")}>Dashboard</span>
         </Link>
       )}
 
       <nav className="flex flex-col gap-0.5">
-        {NAV.map((item) => {
+        {NAV.filter((item) => !("hideFromAgent" in item && item.hideFromAgent && role === "agent")).map((item) => {
           const active =
             pathname === item.href || pathname.startsWith(`${item.href}/`);
           return (
             <Link
               key={item.href}
               href={item.href}
+              title={item.label}
               className={cn(
                 "flex items-center gap-[11px] rounded-sm px-2.5 py-2 text-sm font-medium transition-colors",
                 active
                   ? "bg-brand-tint font-semibold text-brand-text"
-                  : "text-text-2 hover:bg-accent"
+                  : "text-text-2 hover:bg-accent",
+                navCollapsed && "md:justify-center md:px-0"
               )}
             >
               <item.icon
-                className={cn("h-[18px] w-[18px]", active ? "text-brand" : "text-text-3")}
+                className={cn("h-[18px] w-[18px] shrink-0", active ? "text-brand" : "text-text-3")}
                 strokeWidth={1.7}
               />
-              <span className="flex-1">{item.label}</span>
+              <span className={cn("app-nav-label flex-1", navCollapsed && "md:hidden")}>
+                {item.label}
+              </span>
               {"badge" in item && item.badge && unread > 0 && (
                 <span
                   className={cn(
-                    "flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1.5 text-[10.5px] font-semibold",
-                    active ? "bg-brand text-white" : "bg-border-strong text-text-2"
+                    "app-nav-label flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1.5 text-[10.5px] font-semibold",
+                    active ? "bg-brand text-white" : "bg-border-strong text-text-2",
+                    navCollapsed && "md:hidden"
                   )}
                 >
                   {unread}
@@ -253,67 +294,97 @@ export function AppNav({
       {(role === "owner" || role === "admin") && (
         <Link
           href="/audit"
+          title="Auditoria"
           className={cn(
             "flex items-center gap-[11px] rounded-sm px-2.5 py-2 text-sm font-medium transition-colors",
             pathname.startsWith("/audit")
               ? "bg-brand-tint font-semibold text-brand-text"
-              : "text-text-2 hover:bg-accent"
+              : "text-text-2 hover:bg-accent",
+            navCollapsed && "md:justify-center md:px-0"
           )}
         >
           <ListChecks
             className={cn(
-              "h-[18px] w-[18px]",
+              "h-[18px] w-[18px] shrink-0",
               pathname.startsWith("/audit") ? "text-brand" : "text-text-3"
             )}
             strokeWidth={1.7}
           />
-          Auditoria
+          <span className={cn("app-nav-label", navCollapsed && "md:hidden")}>Auditoria</span>
         </Link>
       )}
 
       <Link
         href="/documentacao"
+        title="Documentação"
         className={cn(
           "flex items-center gap-[11px] rounded-sm px-2.5 py-2 text-sm font-medium transition-colors",
           pathname.startsWith("/documentacao")
             ? "bg-brand-tint font-semibold text-brand-text"
-            : "text-text-2 hover:bg-accent"
+            : "text-text-2 hover:bg-accent",
+          navCollapsed && "md:justify-center md:px-0"
         )}
       >
         <BookOpen
           className={cn(
-            "h-[18px] w-[18px]",
+            "h-[18px] w-[18px] shrink-0",
             pathname.startsWith("/documentacao") ? "text-brand" : "text-text-3"
           )}
           strokeWidth={1.7}
         />
-        Documentação
+        <span className={cn("app-nav-label", navCollapsed && "md:hidden")}>Documentação</span>
       </Link>
 
       <Link
         href="/settings"
+        title="Configurações"
         className={cn(
           "flex items-center gap-[11px] rounded-sm px-2.5 py-2 text-sm font-medium transition-colors",
           pathname.startsWith("/settings")
             ? "bg-brand-tint font-semibold text-brand-text"
-            : "text-text-2 hover:bg-accent"
+            : "text-text-2 hover:bg-accent",
+          navCollapsed && "md:justify-center md:px-0"
         )}
       >
         <Settings
           className={cn(
-            "h-[18px] w-[18px]",
+            "h-[18px] w-[18px] shrink-0",
             pathname.startsWith("/settings") ? "text-brand" : "text-text-3"
           )}
           strokeWidth={1.7}
         />
-        Configurações
+        <span className={cn("app-nav-label", navCollapsed && "md:hidden")}>Configurações</span>
       </Link>
 
-      <div className="mt-1 flex items-center gap-2.5 rounded-sm px-2.5 py-2 hover:bg-accent">
+      {/* Recolher/expandir (só desktop — no mobile o drawer já cobre isso). */}
+      <button
+        type="button"
+        onClick={toggleNavCollapsed}
+        aria-label={navCollapsed ? "Expandir menu" : "Recolher menu"}
+        title={navCollapsed ? "Expandir menu" : "Recolher menu"}
+        className={cn(
+          "mt-1 hidden items-center gap-[11px] rounded-sm px-2.5 py-2 text-sm font-medium text-text-3 transition-colors hover:bg-accent hover:text-foreground md:flex",
+          navCollapsed && "md:justify-center md:px-0"
+        )}
+      >
+        {navCollapsed ? (
+          <PanelLeft className="h-[18px] w-[18px] shrink-0" strokeWidth={1.7} />
+        ) : (
+          <PanelLeftClose className="h-[18px] w-[18px] shrink-0" strokeWidth={1.7} />
+        )}
+        <span className={cn("app-nav-label", navCollapsed && "md:hidden")}>Recolher menu</span>
+      </button>
+
+      <div
+        className={cn(
+          "mt-1 flex items-center gap-2.5 rounded-sm px-2.5 py-2 hover:bg-accent",
+          navCollapsed && "md:justify-center md:px-0"
+        )}
+      >
         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-soft text-xs font-semibold text-brand-text">
           {initials(userName)}
         </span>
-        <span className="min-w-0 flex-1">
+        <span className={cn("app-nav-label min-w-0 flex-1", navCollapsed && "md:hidden")}>
           <span className="block truncate text-[13px] font-semibold">{userName}</span>
           <span className="flex min-w-0 items-center gap-1 text-[11px] text-text-3">
             <span className="shrink-0">{role === "owner" ? "Proprietário" : "Equipe"} ·</span>

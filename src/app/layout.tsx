@@ -1,7 +1,13 @@
 import type { Metadata, Viewport } from "next";
 import { Geist } from "next/font/google";
-import { accentCssVariables, DEFAULT_BRANDING } from "@/lib/branding";
-import { getBranding } from "@/server/branding";
+import {
+  accentCssVariables,
+  chatBgCssVariables,
+  DEFAULT_BRANDING,
+  personalAccentCssVariables,
+} from "@/lib/branding";
+import { getBranding, getMemberAppearance } from "@/server/branding";
+import { getSessionOrNull } from "@/lib/auth/session";
 import "./globals.css";
 
 // next/font baixa a fonte no BUILD e a serve self-hosted (sem CDN).
@@ -39,6 +45,9 @@ export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   const branding = await getBranding().catch(() => DEFAULT_BRANDING);
+  const session = await getSessionOrNull().catch(() => null);
+  const appearance = await getMemberAppearance(session?.memberId).catch(() => null);
+
   return (
     <html lang="pt-BR" className={geist.variable} suppressHydrationWarning>
       <head>
@@ -46,6 +55,25 @@ export default async function RootLayout({
         <style
           dangerouslySetInnerHTML={{ __html: accentCssVariables(branding.accent) }}
         />
+        {/* Acento PESSOAL do membro logado — injetado DEPOIS do da org, então
+            vence na cascata quando o membro escolheu o dele (sem flash, o
+            servidor já sabe na primeira resposta). */}
+        {appearance?.accentHex && (
+          <style
+            dangerouslySetInnerHTML={{
+              __html: personalAccentCssVariables(
+                appearance.accentHex,
+                appearance.accentIntensity ?? 75
+              ),
+            }}
+          />
+        )}
+        {/* Fundo pessoal do painel de conversa — mesma ideia do acento acima. */}
+        {appearance?.chatBg &&
+          (() => {
+            const css = chatBgCssVariables(appearance.chatBg, appearance.chatBgIntensity ?? 40);
+            return css ? <style dangerouslySetInnerHTML={{ __html: css }} /> : null;
+          })()}
         {/* Tema claro/escuro/sistema aplicado ANTES da hidratação (sem flash) */}
         <script
           dangerouslySetInnerHTML={{
@@ -62,6 +90,15 @@ export default async function RootLayout({
             __html:
               `(function(){try{var w=localStorage.getItem("vocero-chat-wallpaper");` +
               `if(w&&w!=="icons")document.documentElement.setAttribute("data-wallpaper",w);}catch(e){}})();`,
+          }}
+        />
+        {/* Sidebar recolhível: idem, aplicada ANTES da hidratação (ver
+            comentário da regra @media em globals.css). */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              `(function(){try{var c=localStorage.getItem("vocero-nav-collapsed");` +
+              `if(c==="1")document.documentElement.setAttribute("data-nav-collapsed","1");}catch(e){}})();`,
           }}
         />
       </head>

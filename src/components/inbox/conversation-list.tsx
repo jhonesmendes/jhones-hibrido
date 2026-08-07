@@ -257,19 +257,16 @@ export function ConversationList({
             Nenhum resultado para este filtro.
           </p>
         ) : (
-          <ul>
+          <ul className="px-2 py-1.5">
             {visible.map((c) => {
               const unread = c.unreadCount > 0;
               const active = selectedId === c.id;
               return (
-                <li key={c.id} className="relative border-b border-border/70">
-                  {active && (
-                    <span className="absolute inset-y-0 left-0 w-[3px] bg-brand" />
-                  )}
+                <li key={c.id} className="mb-0.5">
                   <button
                     onClick={() => onSelect(c.id)}
                     className={cn(
-                      "flex w-full items-start gap-[11px] px-4 py-[var(--row-py)] text-left transition-colors",
+                      "flex w-full items-start gap-[11px] rounded-lg px-3 py-2.5 text-left transition-colors",
                       active ? "bg-[var(--bg-active)]" : "hover:bg-subtle"
                     )}
                   >
@@ -316,11 +313,11 @@ export function ConversationList({
                           </span>
                         )}
                       </span>
-                      <span className="mt-1.5 flex items-center gap-1.5">
+                      <span className="mt-1.5 flex flex-wrap items-center gap-1">
                         {c.stageName && (
-                          <span className="inline-flex items-center gap-1.5 rounded-full border bg-secondary px-2 py-0.5 text-[11px] text-text-2">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-secondary px-2 py-[3px] text-[10px] font-medium text-text-2">
                             <span
-                              className="h-[7px] w-[7px] rounded-full"
+                              className="h-[6px] w-[6px] shrink-0 rounded-full"
                               style={{
                                 background: STAGE_DOT[c.stageName] ?? "#9ca3af",
                               }}
@@ -329,14 +326,14 @@ export function ConversationList({
                           </span>
                         )}
                         {c.channel === "unofficial" && (
-                          <span className="inline-flex items-center gap-1 rounded-full border border-[#d6dcec] bg-[#f2f5fb] px-2 py-0.5 text-[11px] text-[#5a6c99]">
-                            <Zap className="h-3 w-3" strokeWidth={1.7} />
+                          <span className="inline-flex items-center gap-1 rounded-full bg-[#f2f5fb] px-2 py-[3px] text-[10px] font-medium text-[#5a6c99] dark:bg-[#0f1c17] dark:text-[#7ab88f]">
+                            <Zap className="h-2.5 w-2.5 shrink-0" strokeWidth={1.9} />
                             WhatsApp Web
                           </span>
                         )}
                         {c.handoffAt && (
-                          <span className="inline-flex items-center gap-1 rounded-full border border-[#ece2cf] bg-[#faf7f0] px-2 py-0.5 text-[11px] text-[#8a6d3b]">
-                            <UserRound className="h-3 w-3" strokeWidth={1.7} />
+                          <span className="inline-flex items-center gap-1 rounded-full bg-[#faf7f0] px-2 py-[3px] text-[10px] font-medium text-[#8a6d3b] dark:bg-[#241a30] dark:text-[#c4b5fd]">
+                            <UserRound className="h-2.5 w-2.5 shrink-0" strokeWidth={1.9} />
                             Atendimento humano
                           </span>
                         )}
