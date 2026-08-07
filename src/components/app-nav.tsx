@@ -287,7 +287,7 @@ export function AppNav({
 
       <div className="flex-1" />
 
-      <div className="mb-1.5 px-0.5">
+      <div className={cn("app-nav-label mb-1.5 px-0.5", navCollapsed && "md:hidden")}>
         <ThemeToggle />
       </div>
 
