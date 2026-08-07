@@ -123,6 +123,26 @@ export async function POST(req: Request, ctx: Params) {
     return Response.json({ success: true });
   }
 
+  // POST {templateId} → edição de modelo existente (rejeitado → tentar de
+  // novo): volta pra PENDING, mesmo comportamento da Meta de verdade.
+  if (path.length === 1) {
+    const state = getWaMockState();
+    const tpl = state.templates.find((t) => t.id === path[0]);
+    if (!tpl) {
+      return Response.json(
+        { error: { message: "Modelo não encontrado", code: 100 } },
+        { status: 404 }
+      );
+    }
+    const bodyComponent = (
+      body.components as { type?: string; text?: string }[] | undefined
+    )?.find((c) => (c.type ?? "").toUpperCase() === "BODY");
+    if (body.category) tpl.category = String(body.category);
+    if (bodyComponent?.text) tpl.body = bodyComponent.text;
+    tpl.status = "PENDING";
+    return Response.json({ success: true });
+  }
+
   return Response.json({});
 }
 
@@ -132,5 +152,18 @@ export async function DELETE(req: Request, ctx: Params) {
   const token = bearerToken(req);
   if (token.endsWith("-invalid")) return invalidTokenResponse();
   await ctx.params;
+
+  // DELETE {wabaId}/message_templates?name=...&hsm_id=... → remove do
+  // estado do mock de verdade (senão o Sincronizar continuaria achando o
+  // modelo "apagado" de volta).
+  const url = new URL(req.url);
+  const name = url.searchParams.get("name");
+  const hsmId = url.searchParams.get("hsm_id");
+  if (name) {
+    const state = getWaMockState();
+    state.templates = state.templates.filter(
+      (t) => !(t.name === name && (!hsmId || t.id === hsmId))
+    );
+  }
   return Response.json({ success: true });
 }

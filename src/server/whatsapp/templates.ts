@@ -176,6 +176,142 @@ export async function createTemplate(
   return inserted[0]!;
 }
 
+/**
+ * Edita um modelo existente (nome/idioma são fixos na Meta — só categoria e
+ * corpo mudam) e reenvia pra revisão. Único jeito de tentar aprovação de
+ * novo depois de rejeitado, sem precisar apagar e recriar do zero.
+ */
+export async function updateTemplate(
+  organizationId: string,
+  templateId: string,
+  input: { category: string; body: string }
+): Promise<TemplateRow> {
+  const variableError = validateBodyVariables(input.body);
+  if (variableError) throw new TemplateError("invalid", variableError);
+
+  const db = getDb();
+  const rows = await db
+    .select()
+    .from(schema.template)
+    .where(
+      scoped(
+        schema.template.organizationId,
+        organizationId,
+        eq(schema.template.id, templateId)
+      )
+    )
+    .limit(1);
+  const template = rows[0];
+  if (!template) throw new TemplateError("not_found", "Modelo não encontrado");
+  if (!template.waTemplateId) {
+    throw new TemplateError("invalid", "Modelo sem ID na Meta — sincronize antes de editar");
+  }
+
+  const creds = await getCredentialsByOrg(organizationId);
+  if (!creds) throw new TemplateError("not_connected", "Conecte seu número de WhatsApp primeiro");
+  if (creds.status === "reconnect_required") {
+    throw new TemplateError("reconnect_required", "Reconecte seu número antes de editar modelos");
+  }
+
+  const hasVariable = countVariables(input.body) === 1;
+  try {
+    await graphRequest(template.waTemplateId, {
+      method: "POST",
+      token: creds.token,
+      body: {
+        category: input.category,
+        components: [
+          {
+            type: "BODY",
+            text: input.body,
+            ...(hasVariable ? { example: { body_text: [["exemplo"]] } } : {}),
+          },
+        ],
+      },
+    });
+  } catch (err) {
+    if (err instanceof MetaApiError) {
+      if (err.isAuthError) {
+        await markReconnectRequired(creds.id);
+        throw new TemplateError("reconnect_required", "O token expirou: reconecte o número");
+      }
+      if (err.status === 0 || err.status >= 500) {
+        throw new TemplateError("meta_unavailable", "A Meta não está disponível agora");
+      }
+      throw new TemplateError("meta_error", err.message);
+    }
+    throw err;
+  }
+
+  const updated = await db
+    .update(schema.template)
+    .set({
+      category: input.category,
+      body: input.body,
+      status: "pending",
+      rejectionReason: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(schema.template.id, templateId))
+    .returning();
+  return updated[0]!;
+}
+
+/** Remove o modelo na Meta e localmente. Mensagens antigas que usaram esse
+ * modelo já têm o texto renderizado gravado — apagar o registro não afeta
+ * o histórico. */
+export async function deleteTemplate(
+  organizationId: string,
+  templateId: string
+): Promise<void> {
+  const db = getDb();
+  const rows = await db
+    .select()
+    .from(schema.template)
+    .where(
+      scoped(
+        schema.template.organizationId,
+        organizationId,
+        eq(schema.template.id, templateId)
+      )
+    )
+    .limit(1);
+  const template = rows[0];
+  if (!template) throw new TemplateError("not_found", "Modelo não encontrado");
+
+  const creds = await getCredentialsByOrg(organizationId);
+  if (creds && creds.status !== "reconnect_required") {
+    try {
+      const query = template.waTemplateId
+        ? `name=${encodeURIComponent(template.name)}&hsm_id=${encodeURIComponent(template.waTemplateId)}`
+        : `name=${encodeURIComponent(template.name)}`;
+      await graphRequest(`${creds.wabaId}/message_templates?${query}`, {
+        method: "DELETE",
+        token: creds.token,
+      });
+    } catch (err) {
+      // Já sumiu na Meta (ex.: apagado por lá antes) não deve travar a
+      // limpeza local — qualquer outro erro real, sim.
+      if (err instanceof MetaApiError && err.status !== 404) throw err;
+    }
+  }
+
+  try {
+    await db.delete(schema.template).where(eq(schema.template.id, templateId));
+  } catch (err) {
+    // 23503 = violação de chave estrangeira (ex.: usado numa campanha) —
+    // o modelo já foi apagado na Meta acima, então avisa claro em vez de
+    // deixar o erro cru do Postgres subir.
+    if (err && typeof err === "object" && "code" in err && err.code === "23503") {
+      throw new TemplateError(
+        "invalid",
+        "Este modelo está em uso numa campanha — remova a campanha antes de excluir"
+      );
+    }
+    throw err;
+  }
+}
+
 function mapMetaStatus(
   status: string | undefined
 ): TemplateRow["status"] | null {
