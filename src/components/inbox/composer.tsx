@@ -194,17 +194,33 @@ export function Composer({
 
   /** Cola uma imagem copiada (print de tela, Ctrl+V) direto como anexo —
    * mesmo caminho de envio do clipe/gravação. Cola de texto normal segue
-   * intocada (só intercepta quando o clipboard tem uma imagem de verdade). */
+   * intocada (só intercepta quando o clipboard tem uma imagem de verdade).
+   * Checa tanto `items` (API principal) quanto `files` (alguns
+   * navegadores/ferramentas de print preenchem só esse) — cobre mais
+   * combinações de SO/navegador/ferramenta de captura. */
   function onPaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
-    const items = e.clipboardData?.items;
-    if (!items) return;
-    for (const item of items) {
+    const cd = e.clipboardData;
+    if (!cd) return;
+
+    let file: File | null = null;
+    for (const item of cd.items ?? []) {
       if (item.type.startsWith("image/")) {
-        e.preventDefault();
-        const file = item.getAsFile();
-        if (file) void submitFile(file);
-        return;
+        file = item.getAsFile();
+        break;
       }
+    }
+    if (!file) {
+      for (const f of cd.files ?? []) {
+        if (f.type.startsWith("image/")) {
+          file = f;
+          break;
+        }
+      }
+    }
+
+    if (file) {
+      e.preventDefault();
+      void submitFile(file);
     }
   }
 
