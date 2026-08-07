@@ -41,7 +41,9 @@ async function loadDictionary(): Promise<Typo> {
 // Só letras (com acento) e apóstrofo/hífen internos — ignora pontuação,
 // números, emoji, `{{variáveis de modelo}}`.
 const WORD_RE = /\p{L}+(?:['’-]\p{L}+)*/gu;
-const MIN_WORD_LENGTH = 3;
+// 2, não 1: pega erro comum de abreviação sem acento ("so" → "só", "vc",
+// "pq"), mas ainda ignora letra solta/inicial (que quase nunca é erro real).
+const MIN_WORD_LENGTH = 2;
 const MAX_SUGGESTIONS = 3;
 
 self.onmessage = async (e: MessageEvent<Request>) => {

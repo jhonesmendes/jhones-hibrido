@@ -315,8 +315,8 @@ export function AppNav({
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[13px] font-semibold">{userName}</span>
-          <span className="flex items-center gap-1 text-[11px] text-text-3">
-            {role === "owner" ? "Proprietário" : "Equipe"} ·
+          <span className="flex min-w-0 items-center gap-1 text-[11px] text-text-3">
+            <span className="shrink-0">{role === "owner" ? "Proprietário" : "Equipe"} ·</span>
             <StatusSelector />
           </span>
         </span>

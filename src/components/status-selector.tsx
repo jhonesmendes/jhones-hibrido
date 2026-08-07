@@ -55,7 +55,7 @@ export function StatusSelector() {
   }
 
   return (
-    <div className="relative">
+    <div className="relative min-w-0">
       <button
         type="button"
         disabled={busy}
@@ -63,13 +63,13 @@ export function StatusSelector() {
           e.stopPropagation();
           setOpen((v) => !v);
         }}
-        className="flex items-center gap-1 rounded-sm px-1 py-0.5 text-[11px] text-text-3 hover:bg-accent"
+        className="flex min-w-0 items-center gap-1 rounded-sm px-1 py-0.5 text-[11px] text-text-3 hover:bg-accent"
       >
         <span
           className="h-[7px] w-[7px] shrink-0 rounded-full"
           style={{ background: STATUS_DOT[status] }}
         />
-        {STATUS_LABEL[status]}
+        <span className="truncate">{STATUS_LABEL[status]}</span>
         <ChevronsUpDown className="h-3 w-3 shrink-0" />
       </button>
       {open && (
