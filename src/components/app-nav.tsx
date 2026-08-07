@@ -378,7 +378,7 @@ export function AppNav({
       <div
         className={cn(
           "mt-1 flex items-center gap-2.5 rounded-sm px-2.5 py-2 hover:bg-accent",
-          navCollapsed && "md:justify-center md:px-0"
+          navCollapsed && "md:flex-col md:justify-center md:gap-1.5 md:px-0 md:hover:bg-transparent"
         )}
       >
         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-soft text-xs font-semibold text-brand-text">
@@ -394,7 +394,7 @@ export function AppNav({
         <button
           aria-label="Sair"
           title="Sair"
-          className="rounded p-1 text-text-3 hover:text-foreground"
+          className="rounded p-1 text-text-3 hover:bg-accent hover:text-foreground"
           onClick={async () => {
             await signOut();
             router.push("/login");
