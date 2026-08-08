@@ -1,0 +1,2 @@
+ALTER TABLE "template" ADD COLUMN "credential_id" text;--> statement-breakpoint
+ALTER TABLE "template" ADD CONSTRAINT "template_credential_id_meta_credentials_id_fk" FOREIGN KEY ("credential_id") REFERENCES "public"."meta_credentials"("id") ON DELETE set null ON UPDATE no action;

@@ -239,6 +239,13 @@
       "when": 1786128258329,
       "tag": "0033_member_personal_appearance",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1786165785862,
+      "tag": "0034_sharp_the_call",
+      "breakpoints": true
     }
   ]
 }

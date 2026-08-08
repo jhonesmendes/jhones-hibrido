@@ -8,7 +8,7 @@ import {
 } from "@/server/inbox/ingest";
 import { sendText } from "@/server/inbox/send";
 import { sendTemplate } from "@/server/whatsapp/templates";
-import { getCredentialsByOrg } from "@/server/whatsapp/credentials";
+import { getCredentialsById, getCredentialsByOrg } from "@/server/whatsapp/credentials";
 import {
   isAnyUnofficialChannelConnected,
   resolveDefaultUnofficialChannelId,
@@ -20,14 +20,32 @@ import { getCampaign } from "@/server/campaigns/queries";
 /** Resolve o canal específico que a campanha usa pra criar/reusar a
  * conversa de cada destinatário — nunca "sticky"/mutado depois (era o bug:
  * campanha não oficial virava dona do canal de uma conversa oficial já
- * existente do contato). Oficial: único número da org hoje (v0.1). Não
- * oficial: canal do departamento da campanha, senão o padrão da org. */
+ * existente do contato). Oficial: número da WABA em que o modelo da
+ * campanha foi registrado (uma org pode ter mais de uma WABA — usar sempre
+ * "o número padrão" desalinhava a conversa do número que realmente envia).
+ * Não oficial: canal do departamento da campanha, senão o padrão da org. */
 async function resolveCampaignChannel(
   organizationId: string,
-  campaign: { channel: "official" | "unofficial"; departmentId: string | null }
+  campaign: {
+    channel: "official" | "unofficial";
+    departmentId: string | null;
+    templateId: string | null;
+  }
 ): Promise<ConversationChannel | null> {
   if (campaign.channel === "official") {
-    const credentials = await getCredentialsByOrg(organizationId);
+    const db = getDb();
+    const templateCredentialId = campaign.templateId
+      ? (
+          await db
+            .select({ credentialId: schema.template.credentialId })
+            .from(schema.template)
+            .where(eq(schema.template.id, campaign.templateId))
+            .limit(1)
+        )[0]?.credentialId
+      : null;
+    const credentials = templateCredentialId
+      ? await getCredentialsById(templateCredentialId, organizationId)
+      : await getCredentialsByOrg(organizationId);
     return credentials ? { type: "official", metaCredentialId: credentials.id } : null;
   }
   const departmentChannelId = campaign.departmentId

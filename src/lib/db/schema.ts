@@ -713,6 +713,11 @@ export const template = pgTable(
     departmentId: text("department_id").references(() => department.id, {
       onDelete: "set null",
     }),
+    // Modelo é registrado por WABA na Meta: sem isso, criar/editar/sincronizar
+    // sempre caía no número "padrão" da org e nunca alcançava outras WABAs.
+    credentialId: text("credential_id").references(() => metaCredentials.id, {
+      onDelete: "set null",
+    }),
     language: text("language").notNull(),
     category: text("category").notNull(),
     body: text("body").notNull(),

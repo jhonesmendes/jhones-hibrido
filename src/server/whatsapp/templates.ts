@@ -5,9 +5,12 @@ import { graphRequest, MetaApiError, normalizeRecipient } from "@/lib/meta/clien
 import { scoped } from "@/lib/db/tenant";
 import { publish } from "@/server/events/bus";
 import {
+  getCredentialsById,
   getCredentialsByOrg,
   getCredentialsByWabaId,
+  listCredentialsByOrg,
   markReconnectRequired,
+  type Credentials,
 } from "@/server/whatsapp/credentials";
 import { callGraphSend, SendError } from "@/server/inbox/send";
 import { serializeMessage } from "@/server/inbox/ingest";
@@ -93,23 +96,35 @@ export function serializeTemplate(t: TemplateRow) {
     body: t.body,
     status: t.status,
     rejectionReason: t.rejectionReason,
+    credentialId: t.credentialId,
+    departmentId: t.departmentId,
   };
 }
 
-/** Cria o modelo e o envia para aprovação da Meta (FR-050). */
+/** Cria o modelo e o envia para aprovação da Meta (FR-050). Modelo é
+ * registrado numa WABA específica — `credentialId` escolhe qual número/WABA
+ * (uma org pode ter mais de uma WABA conectada; usar sempre "o número
+ * padrão" fazia modelos nunca chegarem à segunda WABA). */
 export async function createTemplate(
   organizationId: string,
-  input: { name: string; language: string; category: string; body: string }
+  input: {
+    name: string;
+    language: string;
+    category: string;
+    body: string;
+    credentialId: string;
+    departmentId?: string | null;
+  }
 ): Promise<TemplateRow> {
   const variableError = validateBodyVariables(input.body);
   if (variableError) throw new TemplateError("invalid", variableError);
 
-  const creds = await getCredentialsByOrg(organizationId);
+  const creds = await getCredentialsById(input.credentialId, organizationId);
   if (!creds) {
-    throw new TemplateError("not_connected", "Conecte seu número de WhatsApp primeiro");
+    throw new TemplateError("not_connected", "Número selecionado não encontrado");
   }
   if (creds.status === "reconnect_required") {
-    throw new TemplateError("reconnect_required", "Reconecte seu número antes de criar modelos");
+    throw new TemplateError("reconnect_required", "Reconecte esse número antes de criar modelos");
   }
 
   const name = input.name
@@ -166,6 +181,8 @@ export async function createTemplate(
       body: input.body,
       status: "pending",
       waTemplateId,
+      credentialId: input.credentialId,
+      departmentId: input.departmentId ?? null,
     })
     .onConflictDoUpdate({
       target: [
@@ -179,11 +196,51 @@ export async function createTemplate(
         status: "pending",
         rejectionReason: null,
         waTemplateId,
+        credentialId: input.credentialId,
+        departmentId: input.departmentId ?? null,
         updatedAt: new Date(),
       },
     })
     .returning();
   return inserted[0]!;
+}
+
+/** Reatribui só o departamento (metadado local — não existe na Meta, não
+ * precisa reenviar nada). O número/WABA (`credentialId`) não é editável
+ * depois de criado: o modelo já está registrado numa WABA específica. */
+export async function updateTemplateAssignment(
+  organizationId: string,
+  templateId: string,
+  departmentId: string | null
+): Promise<TemplateRow> {
+  const db = getDb();
+  const updated = await db
+    .update(schema.template)
+    .set({ departmentId, updatedAt: new Date() })
+    .where(
+      scoped(
+        schema.template.organizationId,
+        organizationId,
+        eq(schema.template.id, templateId)
+      )
+    )
+    .returning();
+  const row = updated[0];
+  if (!row) throw new TemplateError("not_found", "Modelo não encontrado");
+  return row;
+}
+
+/** Resolve as credenciais de um modelo já criado: usa a WABA em que ele foi
+ * registrado; cai no número padrão da org só para linhas antigas, criadas
+ * antes desse campo existir. */
+async function resolveTemplateCredentials(
+  organizationId: string,
+  template: TemplateRow
+): Promise<Credentials | null> {
+  if (template.credentialId) {
+    return getCredentialsById(template.credentialId, organizationId);
+  }
+  return getCredentialsByOrg(organizationId);
 }
 
 /**
@@ -217,7 +274,7 @@ export async function updateTemplate(
     throw new TemplateError("invalid", "Modelo sem ID na Meta — sincronize antes de editar");
   }
 
-  const creds = await getCredentialsByOrg(organizationId);
+  const creds = await resolveTemplateCredentials(organizationId, template);
   if (!creds) throw new TemplateError("not_connected", "Conecte seu número de WhatsApp primeiro");
   if (creds.status === "reconnect_required") {
     throw new TemplateError("reconnect_required", "Reconecte seu número antes de editar modelos");
@@ -288,7 +345,7 @@ export async function deleteTemplate(
   const template = rows[0];
   if (!template) throw new TemplateError("not_found", "Modelo não encontrado");
 
-  const creds = await getCredentialsByOrg(organizationId);
+  const creds = await resolveTemplateCredentials(organizationId, template);
   if (creds && creds.status !== "reconnect_required") {
     try {
       const query = template.waTemplateId
@@ -337,29 +394,24 @@ function mapMetaStatus(
  * Sincroniza estados a partir do Graph (`GET {waba}/message_templates`).
  * Cobre o modo agência: os webhooks de modelos NÃO seguem o override de
  * callback, então o pull é a via universal (DV-VC-04/DV-VC-15).
+ *
+ * Uma org pode ter mais de um número conectado em WABAs diferentes — cada
+ * WABA tem sua própria lista de modelos na Meta, então percorre todas (sem
+ * repetir a mesma WABA 2x se dois números a compartilham) em vez de só
+ * consultar "o número padrão".
  */
 export async function syncTemplates(organizationId: string): Promise<number> {
-  const creds = await getCredentialsByOrg(organizationId);
-  if (!creds) {
+  const allCreds = await listCredentialsByOrg(organizationId);
+  const connected = allCreds.filter(
+    (c) => c.isActive && c.status !== "reconnect_required"
+  );
+  if (allCreds.length === 0) {
     throw new TemplateError("not_connected", "Conecte seu número de WhatsApp primeiro");
   }
 
-  let data: {
-    data?: { id?: string; name?: string; language?: string; status?: string; quality_score?: unknown; rejected_reason?: string }[];
-  };
-  try {
-    data = await graphRequest(`${creds.wabaId}/message_templates`, {
-      token: creds.token,
-    });
-  } catch (err) {
-    if (err instanceof MetaApiError) {
-      if (err.isAuthError) {
-        await markReconnectRequired(creds.id, { source: "syncTemplates", err });
-        throw new TemplateError("reconnect_required", "O token expirou: reconecte o número");
-      }
-      throw new TemplateError("meta_unavailable", "Não foi possível consultar a Meta");
-    }
-    throw err;
+  const wabaCreds = new Map<string, Credentials>();
+  for (const c of connected) {
+    if (!wabaCreds.has(c.wabaId)) wabaCreds.set(c.wabaId, c);
   }
 
   const db = getDb();
@@ -369,26 +421,56 @@ export async function syncTemplates(organizationId: string): Promise<number> {
     .where(scoped(schema.template.organizationId, organizationId));
 
   let updated = 0;
-  for (const remote of data.data ?? []) {
-    const status = mapMetaStatus(remote.status);
-    if (!status) continue;
-    const match = local.find(
-      (t) =>
-        (remote.id && t.waTemplateId === remote.id) ||
-        (t.name === remote.name && t.language === remote.language)
-    );
-    if (!match || match.status === status) continue;
-    await db
-      .update(schema.template)
-      .set({
-        status,
-        rejectionReason: remote.rejected_reason ?? null,
-        waTemplateId: match.waTemplateId ?? remote.id ?? null,
-        updatedAt: new Date(),
-      })
-      .where(eq(schema.template.id, match.id));
-    updated += 1;
+  let anySucceeded = false;
+  let lastError: TemplateError | null = null;
+
+  for (const creds of wabaCreds.values()) {
+    let data: {
+      data?: { id?: string; name?: string; language?: string; status?: string; quality_score?: unknown; rejected_reason?: string }[];
+    };
+    try {
+      data = await graphRequest(`${creds.wabaId}/message_templates`, {
+        token: creds.token,
+      });
+      anySucceeded = true;
+    } catch (err) {
+      if (err instanceof MetaApiError) {
+        if (err.isAuthError) {
+          await markReconnectRequired(creds.id, { source: "syncTemplates", err });
+          lastError = new TemplateError("reconnect_required", "O token expirou: reconecte o número");
+          continue;
+        }
+        lastError = new TemplateError("meta_unavailable", "Não foi possível consultar a Meta");
+        continue;
+      }
+      throw err;
+    }
+
+    for (const remote of data.data ?? []) {
+      const status = mapMetaStatus(remote.status);
+      if (!status) continue;
+      const match = local.find(
+        (t) =>
+          (remote.id && t.waTemplateId === remote.id) ||
+          (t.name === remote.name && t.language === remote.language)
+      );
+      if (!match) continue;
+      if (match.status === status && match.credentialId === creds.id) continue;
+      await db
+        .update(schema.template)
+        .set({
+          status,
+          rejectionReason: remote.rejected_reason ?? null,
+          waTemplateId: match.waTemplateId ?? remote.id ?? null,
+          credentialId: creds.id,
+          updatedAt: new Date(),
+        })
+        .where(eq(schema.template.id, match.id));
+      updated += 1;
+    }
   }
+
+  if (!anySucceeded && lastError) throw lastError;
   return updated;
 }
 
@@ -488,7 +570,7 @@ export async function sendTemplate(input: {
     );
   }
 
-  const creds = await getCredentialsByOrg(input.organizationId);
+  const creds = await resolveTemplateCredentials(input.organizationId, template);
   if (!creds) throw new TemplateError("not_connected", "Sem número conectado");
   if (creds.status === "reconnect_required") {
     throw new TemplateError("reconnect_required", "Reconecte o número");

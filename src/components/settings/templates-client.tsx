@@ -21,18 +21,48 @@ const STATUS_BADGE: Record<
   rejected: { label: "Rejeitado", variant: "destructive" },
 };
 
+type ChannelOption = {
+  id: string;
+  name: string;
+  displayPhoneNumber: string | null;
+  wabaId: string;
+  isActive: boolean;
+  status: "connected" | "reconnect_required";
+};
+
+type DepartmentOption = { id: string; name: string };
+
+function channelLabel(c: ChannelOption): string {
+  return c.displayPhoneNumber ? `${c.name} · ${c.displayPhoneNumber}` : c.name;
+}
+
 export function TemplatesClient() {
   const [templates, setTemplates] = useState<TemplateDto[]>([]);
+  const [channels, setChannels] = useState<ChannelOption[]>([]);
+  const [departments, setDepartments] = useState<DepartmentOption[]>([]);
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const refetch = useCallback(async () => {
-    const res = await fetch("/api/templates").catch(() => null);
-    if (!res?.ok) return;
-    const data = (await res.json()) as { templates: TemplateDto[] };
-    setTemplates(data.templates);
+    const [tRes, cRes, dRes] = await Promise.all([
+      fetch("/api/templates").catch(() => null),
+      fetch("/api/settings/whatsapp/numbers").catch(() => null),
+      fetch("/api/settings/departments").catch(() => null),
+    ]);
+    if (tRes?.ok) {
+      const data = (await tRes.json()) as { templates: TemplateDto[] };
+      setTemplates(data.templates);
+    }
+    if (cRes?.ok) {
+      const data = (await cRes.json()) as { numbers: ChannelOption[] };
+      setChannels(data.numbers);
+    }
+    if (dRes?.ok) {
+      const data = (await dRes.json()) as { departments: DepartmentOption[] };
+      setDepartments(data.departments);
+    }
   }, []);
 
   useEffect(() => {
@@ -78,6 +108,16 @@ export function TemplatesClient() {
     }
   }
 
+  async function changeDepartment(t: TemplateDto, departmentId: string | null) {
+    const res = await fetch(`/api/templates/${t.id}/assignment`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ departmentId }),
+    }).catch(() => null);
+    if (res?.ok) void refetch();
+    else alert("Não foi possível mudar o departamento do modelo");
+  }
+
   return (
     <div className="max-w-3xl space-y-6">
       <div className="flex items-start justify-between gap-4">
@@ -97,11 +137,12 @@ export function TemplatesClient() {
       </div>
       {syncMsg && <p className="text-xs text-muted-foreground">{syncMsg}</p>}
 
-      <CreateForm onCreated={() => void refetch()} />
+      <CreateForm channels={channels} departments={departments} onCreated={() => void refetch()} />
 
       <div className="space-y-2">
-        {templates.map((t) =>
-          editingId === t.id ? (
+        {templates.map((t) => {
+          const channel = channels.find((c) => c.id === t.credentialId) ?? null;
+          return editingId === t.id ? (
             <EditForm
               key={t.id}
               template={t}
@@ -151,9 +192,31 @@ export function TemplatesClient() {
                   Motivo da rejeição: {t.rejectionReason}
                 </p>
               )}
+              <div className="mt-3 flex flex-wrap items-center gap-3 border-t pt-3 text-xs">
+                <span className="text-muted-foreground">
+                  Número: {channel ? channelLabel(channel) : "—"}
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-muted-foreground">Departamento:</span>
+                  <select
+                    value={t.departmentId ?? ""}
+                    onChange={(e) =>
+                      void changeDepartment(t, e.target.value || null)
+                    }
+                    className="h-7 rounded-md border border-input bg-card px-1.5 text-xs"
+                  >
+                    <option value="">Todos os departamentos</option>
+                    {departments.map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
             </div>
-          )
-        )}
+          );
+        })}
         {templates.length === 0 && (
           <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
             Nenhum modelo ainda. Crie o primeiro acima — por exemplo um
@@ -166,13 +229,25 @@ export function TemplatesClient() {
   );
 }
 
-function CreateForm({ onCreated }: { onCreated: () => void }) {
+function CreateForm({
+  channels,
+  departments,
+  onCreated,
+}: {
+  channels: ChannelOption[];
+  departments: DepartmentOption[];
+  onCreated: () => void;
+}) {
   const [name, setName] = useState("");
   const [language, setLanguage] = useState("pt_BR");
   const [category, setCategory] = useState<"UTILITY" | "MARKETING">("UTILITY");
   const [body, setBody] = useState("");
+  const [credentialId, setCredentialId] = useState("");
+  const [departmentId, setDepartmentId] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const usableChannels = channels.filter((c) => c.isActive);
 
   async function create() {
     setSaving(true);
@@ -180,7 +255,14 @@ function CreateForm({ onCreated }: { onCreated: () => void }) {
     const res = await fetch("/api/templates", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ name, language, category, body }),
+      body: JSON.stringify({
+        name,
+        language,
+        category,
+        body,
+        credentialId,
+        departmentId: departmentId || null,
+      }),
     }).catch(() => null);
     setSaving(false);
     if (!res?.ok) {
@@ -205,6 +287,49 @@ function CreateForm({ onCreated }: { onCreated: () => void }) {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        {usableChannels.length === 0 ? (
+          <p className="text-sm text-destructive">
+            Conecte um número em Configurações → Canais antes de criar modelos.
+          </p>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="tpl-channel">
+                Número (o modelo é registrado nessa WABA)
+              </Label>
+              <select
+                id="tpl-channel"
+                value={credentialId}
+                onChange={(e) => setCredentialId(e.target.value)}
+                className="flex h-9 w-full rounded-md border border-input bg-card px-3 text-sm"
+              >
+                <option value="">Escolha o número…</option>
+                {usableChannels.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {channelLabel(c)}
+                    {c.status === "reconnect_required" ? " (reconectar)" : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="tpl-dept">Departamento (opcional)</Label>
+              <select
+                id="tpl-dept"
+                value={departmentId}
+                onChange={(e) => setDepartmentId(e.target.value)}
+                className="flex h-9 w-full rounded-md border border-input bg-card px-3 text-sm"
+              >
+                <option value="">Todos os departamentos</option>
+                {departments.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        )}
         <div className="grid gap-4 md:grid-cols-3">
           <div className="space-y-1.5">
             <Label htmlFor="tpl-name">Nome</Label>
@@ -256,7 +381,7 @@ function CreateForm({ onCreated }: { onCreated: () => void }) {
         </div>
         {error && <p className="text-sm text-destructive">{error}</p>}
         <Button
-          disabled={saving || !name.trim() || !body.trim()}
+          disabled={saving || !name.trim() || !body.trim() || !credentialId}
           onClick={() => void create()}
         >
           {saving ? "Enviando à Meta…" : "Criar e enviar para aprovação"}

@@ -45,6 +45,8 @@ export type TemplateDto = {
   body: string;
   status: "draft" | "pending" | "approved" | "rejected";
   rejectionReason: string | null;
+  credentialId: string | null;
+  departmentId: string | null;
 };
 
 export type StageDto = {

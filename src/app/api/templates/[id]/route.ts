@@ -20,6 +20,9 @@ const patchSchema = z.object({
 /** Editar (rejeitado → tentar de novo, sem apagar e recriar). Nome/idioma
  * são fixos na Meta, só categoria e corpo mudam aqui. */
 export const PATCH = withAuth(async (session, req: Request, ctx: Params) => {
+  if (session.role !== "owner" && session.role !== "admin") {
+    return apiError(403, "forbidden", "Só owner/admin editam modelos");
+  }
   const { id } = await ctx.params;
   const body = await parseBody(req, patchSchema);
   if (!body.ok) return body.response;
@@ -36,6 +39,9 @@ export const PATCH = withAuth(async (session, req: Request, ctx: Params) => {
 });
 
 export const DELETE = withAuth(async (session, _req: Request, ctx: Params) => {
+  if (session.role !== "owner" && session.role !== "admin") {
+    return apiError(403, "forbidden", "Só owner/admin excluem modelos");
+  }
   const { id } = await ctx.params;
   try {
     await deleteTemplate(session.organizationId, id);
