@@ -240,10 +240,30 @@ export async function saveCredentials(input: {
 
 /** Marca UM número como vencido (token inválido detectado em runtime).
  * v0.1: por id, não mais por org inteira — senão um token vencido de um
- * número derrubava todos os outros números da mesma organização. */
+ * número derrubava todos os outros números da mesma organização.
+ * `context` é só para diagnóstico (log) — a Meta às vezes classifica erros
+ * de permissão/escopo como OAuthException, o que parece "token vencido" sem
+ * ser: logar a resposta bruta evita ter que adivinhar depois. */
 export async function markReconnectRequired(
-  credentialId: string
+  credentialId: string,
+  context?: { source: string; err?: unknown }
 ): Promise<void> {
+  if (context) {
+    const err = context.err;
+    const detail =
+      err && typeof err === "object"
+        ? {
+            status: (err as { status?: unknown }).status,
+            code: (err as { code?: unknown }).code,
+            type: (err as { type?: unknown }).type,
+            message: (err as { message?: unknown }).message,
+          }
+        : err;
+    console.error(
+      `[whatsapp] reconnect_required — credencial=${credentialId} origem=${context.source}`,
+      detail
+    );
+  }
   const db = getDb();
   await db
     .update(schema.metaCredentials)

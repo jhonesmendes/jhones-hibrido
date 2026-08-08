@@ -697,7 +697,7 @@ export async function callGraphSend(
   } catch (err) {
     if (err instanceof MetaApiError) {
       if (err.isAuthError) {
-        await markReconnectRequired(credentials.id);
+        await markReconnectRequired(credentials.id, { source: "callGraphSend", err });
         throw new SendError(
           "reconnect_required",
           "O token do WhatsApp expirou: reconecte o número em Configurações"

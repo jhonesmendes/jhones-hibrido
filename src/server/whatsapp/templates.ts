@@ -133,7 +133,7 @@ export async function createTemplate(
   } catch (err) {
     if (err instanceof MetaApiError) {
       if (err.isAuthError) {
-        await markReconnectRequired(creds.id);
+        await markReconnectRequired(creds.id, { source: "createTemplate", err });
         throw new TemplateError("reconnect_required", "O token expirou: reconecte o número");
       }
       if (err.status === 0 || err.status >= 500) {
@@ -232,7 +232,7 @@ export async function updateTemplate(
   } catch (err) {
     if (err instanceof MetaApiError) {
       if (err.isAuthError) {
-        await markReconnectRequired(creds.id);
+        await markReconnectRequired(creds.id, { source: "updateTemplate", err });
         throw new TemplateError("reconnect_required", "O token expirou: reconecte o número");
       }
       if (err.status === 0 || err.status >= 500) {
@@ -345,7 +345,7 @@ export async function syncTemplates(organizationId: string): Promise<number> {
   } catch (err) {
     if (err instanceof MetaApiError) {
       if (err.isAuthError) {
-        await markReconnectRequired(creds.id);
+        await markReconnectRequired(creds.id, { source: "syncTemplates", err });
         throw new TemplateError("reconnect_required", "O token expirou: reconecte o número");
       }
       throw new TemplateError("meta_unavailable", "Não foi possível consultar a Meta");
