@@ -38,6 +38,31 @@ function normalizePath(path: string[]): string[] {
   return path[0] && /^v\d+/.test(path[0]) ? path.slice(1) : path;
 }
 
+/** Espelha a exigência real da Meta: todo `{{n}}` no corpo precisa de um
+ * exemplo em `example.body_text` — senão ela recusa com code 100 "Invalid
+ * parameter" (não é erro de token, mas o tipo devolvido é OAuthException). */
+function invalidExampleResponse(
+  bodyComponent: { text?: string; example?: { body_text?: unknown[][] } } | undefined
+): Response | null {
+  const variableCount = new Set(
+    [...(bodyComponent?.text ?? "").matchAll(/\{\{\s*(\d+)\s*\}\}/g)].map((m) => m[1])
+  ).size;
+  if (variableCount === 0) return null;
+  const exampleCount = bodyComponent?.example?.body_text?.[0]?.length ?? 0;
+  if (exampleCount >= variableCount) return null;
+  return Response.json(
+    {
+      error: {
+        message: "Invalid parameter",
+        type: "OAuthException",
+        code: 100,
+        fbtrace_id: "mock",
+      },
+    },
+    { status: 400 }
+  );
+}
+
 export async function GET(req: Request, ctx: Params) {
   const guard = mockGuard();
   if (guard) return guard;
@@ -104,8 +129,12 @@ export async function POST(req: Request, ctx: Params) {
   if (path.length === 2 && path[1] === "message_templates") {
     const state = getWaMockState();
     const bodyComponent = (
-      body.components as { type?: string; text?: string }[] | undefined
+      body.components as
+        | { type?: string; text?: string; example?: { body_text?: unknown[][] } }[]
+        | undefined
     )?.find((c) => (c.type ?? "").toUpperCase() === "BODY");
+    const invalidExample = invalidExampleResponse(bodyComponent);
+    if (invalidExample) return invalidExample;
     const tpl: MockTemplate = {
       id: `tplmock_${nextN()}`,
       name: String(body.name ?? ""),
@@ -135,8 +164,12 @@ export async function POST(req: Request, ctx: Params) {
       );
     }
     const bodyComponent = (
-      body.components as { type?: string; text?: string }[] | undefined
+      body.components as
+        | { type?: string; text?: string; example?: { body_text?: unknown[][] } }[]
+        | undefined
     )?.find((c) => (c.type ?? "").toUpperCase() === "BODY");
+    const invalidExample = invalidExampleResponse(bodyComponent);
+    if (invalidExample) return invalidExample;
     if (body.category) tpl.category = String(body.category);
     if (bodyComponent?.text) tpl.body = bodyComponent.text;
     tpl.status = "PENDING";

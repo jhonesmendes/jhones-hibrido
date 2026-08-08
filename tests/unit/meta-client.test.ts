@@ -31,10 +31,11 @@ describe("MetaApiError.isAuthError", () => {
     );
   });
 
-  it("OAuthException es error de auth", () => {
+  it("type OAuthException SIN code 190 NO es error de auth (ej.: code 100 'Invalid parameter')", () => {
     expect(
-      new MetaApiError("x", { status: 400, type: "OAuthException" }).isAuthError
-    ).toBe(true);
+      new MetaApiError("x", { status: 400, type: "OAuthException", code: 100 })
+        .isAuthError
+    ).toBe(false);
   });
 
   it("un 500 cualquiera NO es error de auth", () => {

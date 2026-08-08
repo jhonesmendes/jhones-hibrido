@@ -69,6 +69,19 @@ export function renderBody(body: string, variables: string[] = []): string {
   return body.replace(VARIABLE_REGEX, (_, idx: string) => variables[Number(idx) - 1] ?? "");
 }
 
+/** A Meta exige `example.body_text` com 1 valor de exemplo por variável do
+ * corpo — faltando qualquer uma delas, ela recusa com "Invalid parameter"
+ * (code 100), erro que nada tem a ver com token vencido. */
+function bodyExampleComponent(body: string): { example: { body_text: string[][] } } | Record<string, never> {
+  const variableCount = countVariables(body);
+  if (variableCount === 0) return {};
+  return {
+    example: {
+      body_text: [Array.from({ length: variableCount }, (_, i) => `exemplo${i + 1}`)],
+    },
+  };
+}
+
 type TemplateRow = typeof schema.template.$inferSelect;
 
 export function serializeTemplate(t: TemplateRow) {
@@ -105,7 +118,6 @@ export async function createTemplate(
     .replace(/[^a-z0-9_]/g, "");
   if (!name) throw new TemplateError("invalid", "Nome de modelo inválido");
 
-  const hasVariable = countVariables(input.body) === 1;
   let waTemplateId: string | null = null;
   try {
     const res = await graphRequest<{ id?: string; status?: string }>(
@@ -121,9 +133,7 @@ export async function createTemplate(
             {
               type: "BODY",
               text: input.body,
-              ...(hasVariable
-                ? { example: { body_text: [["exemplo"]] } }
-                : {}),
+              ...bodyExampleComponent(input.body),
             },
           ],
         },
@@ -213,7 +223,6 @@ export async function updateTemplate(
     throw new TemplateError("reconnect_required", "Reconecte seu número antes de editar modelos");
   }
 
-  const hasVariable = countVariables(input.body) === 1;
   try {
     await graphRequest(template.waTemplateId, {
       method: "POST",
@@ -224,7 +233,7 @@ export async function updateTemplate(
           {
             type: "BODY",
             text: input.body,
-            ...(hasVariable ? { example: { body_text: [["exemplo"]] } } : {}),
+            ...bodyExampleComponent(input.body),
           },
         ],
       },
