@@ -38,6 +38,7 @@ export function serializeMessage(
     sizeBytes: media?.sizeBytes ?? null,
     mimeType: media?.mimeType ?? null,
     status: m.status,
+    error: m.error,
     aiGenerated: m.aiGenerated,
     replyToMessageId: m.replyToMessageId,
     senderName: senderName ?? null,

@@ -21,7 +21,13 @@ import { mediaLabel } from "./helpers";
 import { MediaLightbox } from "./media-lightbox";
 import { ForwardModal } from "./forward-modal";
 
-function StatusTicks({ status }: { status: MessageDto["status"] }) {
+function StatusTicks({
+  status,
+  error,
+}: {
+  status: MessageDto["status"];
+  error?: string | null;
+}) {
   const cls = "h-[13px] w-[13px]";
   if (status === "pending") return <Clock3 className={cn(cls, "text-text-4")} strokeWidth={1.7} />;
   if (status === "sent") return <Check className={cn(cls, "text-text-4")} strokeWidth={1.7} />;
@@ -29,7 +35,16 @@ function StatusTicks({ status }: { status: MessageDto["status"] }) {
     return <CheckCheck className={cn(cls, "text-text-4")} strokeWidth={1.7} />;
   if (status === "read")
     return <CheckCheck className={cn(cls, "text-brand")} strokeWidth={1.7} />;
-  return <AlertTriangle className={cn(cls, "text-destructive")} strokeWidth={1.7} />;
+  return (
+    <button
+      type="button"
+      onClick={() => alert(error ?? "Falha no envio (motivo não informado pela Meta)")}
+      title={error ?? "Falha no envio — clique para detalhes"}
+      className="cursor-pointer"
+    >
+      <AlertTriangle className={cn(cls, "text-destructive")} strokeWidth={1.7} />
+    </button>
+  );
 }
 
 function dayLabel(iso: string): string {
@@ -365,7 +380,7 @@ export function MessageThread({
                   <span className="text-[10.5px] text-text-4">
                     {bubbleTime(m.createdAt)}
                   </span>
-                  {out && <StatusTicks status={m.status} />}
+                  {out && <StatusTicks status={m.status} error={m.error} />}
                 </span>
               </div>
             </div>

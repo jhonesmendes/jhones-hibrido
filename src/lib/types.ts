@@ -28,6 +28,8 @@ export type MessageDto = {
   sizeBytes: number | null;
   mimeType: string | null;
   status: "pending" | "sent" | "delivered" | "read" | "failed";
+  /** Motivo da falha (vindo do status webhook da Meta) — null exceto quando status = "failed". */
+  error: string | null;
   aiGenerated: boolean;
   /** Mensagem citada (resposta/quote) — null quando não é resposta a nada. */
   replyToMessageId: string | null;

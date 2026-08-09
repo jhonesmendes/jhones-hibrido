@@ -67,7 +67,12 @@ export type WebhookStatus = {
   status: string;
   timestamp: string;
   recipient_id?: string;
-  errors?: { code: number; title?: string; message?: string }[];
+  errors?: {
+    code: number;
+    title?: string;
+    message?: string;
+    error_data?: { details?: string };
+  }[];
 };
 
 export type WebhookValue = {

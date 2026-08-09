@@ -47,12 +47,23 @@ export async function applyStatusUpdate(
   if (!msg) return;
   if (!isUpgrade(msg.status, next)) return;
 
+  const firstError = status.errors?.[0];
   const error =
     next === "failed"
-      ? (status.errors?.[0]?.message ??
-        status.errors?.[0]?.title ??
-        "Falha no envio")
+      ? [
+          firstError?.code ? `[${firstError.code}]` : null,
+          firstError?.message ?? firstError?.title ?? "Falha no envio",
+          firstError?.error_data?.details ?? null,
+        ]
+          .filter(Boolean)
+          .join(" — ")
       : null;
+
+  if (next === "failed") {
+    // A mensagem que a Meta mostra (ex.: "Something went wrong") costuma ser
+    // genérica demais — o payload cru às vezes tem mais pista no error_data.
+    console.error(`[whatsapp] mensagem falhou — wa_message_id=${status.id}`, status.errors);
+  }
 
   await db
     .update(schema.message)
