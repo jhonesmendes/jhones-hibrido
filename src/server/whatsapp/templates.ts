@@ -426,7 +426,16 @@ export async function syncTemplates(organizationId: string): Promise<number> {
 
   for (const creds of wabaCreds.values()) {
     let data: {
-      data?: { id?: string; name?: string; language?: string; status?: string; quality_score?: unknown; rejected_reason?: string }[];
+      data?: {
+        id?: string;
+        name?: string;
+        language?: string;
+        category?: string;
+        status?: string;
+        quality_score?: unknown;
+        rejected_reason?: string;
+        components?: { type?: string; text?: string }[];
+      }[];
     };
     try {
       data = await graphRequest(`${creds.wabaId}/message_templates`, {
@@ -454,7 +463,44 @@ export async function syncTemplates(organizationId: string): Promise<number> {
           (remote.id && t.waTemplateId === remote.id) ||
           (t.name === remote.name && t.language === remote.language)
       );
-      if (!match) continue;
+
+      if (!match) {
+        // Modelo existe na Meta mas nunca foi visto localmente (ex.: banco
+        // limpo/reinstalação, ou criado direto no Gerenciador do WhatsApp) —
+        // importa em vez de ignorar, senão "Sincronizar" nunca traz nada novo.
+        if (!remote.name || !remote.language) continue;
+        const bodyText =
+          remote.components?.find((c) => (c.type ?? "").toUpperCase() === "BODY")
+            ?.text ?? "";
+        const inserted = await db
+          .insert(schema.template)
+          .values({
+            id: newId("template"),
+            organizationId,
+            name: remote.name,
+            language: remote.language,
+            category: remote.category ?? "UTILITY",
+            body: bodyText,
+            status,
+            rejectionReason: remote.rejected_reason ?? null,
+            waTemplateId: remote.id ?? null,
+            credentialId: creds.id,
+          })
+          .onConflictDoNothing({
+            target: [
+              schema.template.organizationId,
+              schema.template.name,
+              schema.template.language,
+            ],
+          })
+          .returning();
+        if (inserted[0]) {
+          local.push(inserted[0]);
+          updated += 1;
+        }
+        continue;
+      }
+
       if (match.status === status && match.credentialId === creds.id) continue;
       await db
         .update(schema.template)
