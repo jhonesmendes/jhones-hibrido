@@ -345,7 +345,14 @@ export async function deleteTemplate(
   const template = rows[0];
   if (!template) throw new TemplateError("not_found", "Modelo não encontrado");
 
-  const creds = await resolveTemplateCredentials(organizationId, template);
+  // Só tenta apagar na Meta quando dá pra saber COM CERTEZA a WABA dona do
+  // modelo (credentialId explícito) — o fallback "número padrão da org" não
+  // serve aqui: apagar via uma WABA que não é a dona do modelo é rejeitado
+  // pela Meta com um erro (não 404), e isso não pode travar a limpeza local
+  // (ex.: modelo importado de um número já desconectado/removido).
+  const creds = template.credentialId
+    ? await getCredentialsById(template.credentialId, organizationId)
+    : null;
   if (creds && creds.status !== "reconnect_required") {
     try {
       const query = template.waTemplateId
