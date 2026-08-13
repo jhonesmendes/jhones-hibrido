@@ -1,0 +1,77 @@
+services:
+  app:
+    image: ghcr.io/jhonesmendes/jhones-hibrido:latest
+
+    restart: unless-stopped
+
+    ports:
+      - "${APP_PORT:-3000}:3000"
+
+    environment:
+      # --- Exigidas pela validação de ambiente, mas NÃO usadas em modo
+      # painel (nenhum cliente se cadastra aqui) — valores quaisquer servem,
+      # contanto que o formato seja válido.
+      APP_BASE_URL: ${APP_BASE_URL}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      META_WEBHOOK_VERIFY_TOKEN: ${META_WEBHOOK_VERIFY_TOKEN}
+
+      # --- Banco DESTE deploy: só guarda admin_client (metadados dos
+      # clientes) — nunca organization/license de verdade.
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+
+      # --- O que liga o modo painel de verdade.
+      ADMIN_PANEL_HOST: ${ADMIN_PANEL_HOST}
+      ADMIN_OPERATOR_EMAIL: ${ADMIN_OPERATOR_EMAIL}
+      ADMIN_OPERATOR_PASSWORD: ${ADMIN_OPERATOR_PASSWORD}
+      ADMIN_SESSION_SECRET: ${ADMIN_SESSION_SECRET}
+
+      # --- Relatório diário por e-mail (opcional).
+      ADMIN_REPORT_EMAIL: ${ADMIN_REPORT_EMAIL:-}
+      ADMIN_SMTP_HOST: ${ADMIN_SMTP_HOST:-}
+      ADMIN_SMTP_PORT: ${ADMIN_SMTP_PORT:-587}
+      ADMIN_SMTP_SECURE: ${ADMIN_SMTP_SECURE:-false}
+      ADMIN_SMTP_USER: ${ADMIN_SMTP_USER:-}
+      ADMIN_SMTP_PASSWORD: ${ADMIN_SMTP_PASSWORD:-}
+      ADMIN_SMTP_FROM_EMAIL: ${ADMIN_SMTP_FROM_EMAIL:-}
+      ADMIN_SMTP_FROM_NAME: ${ADMIN_SMTP_FROM_NAME:-Vocero}
+
+      ALLOW_SIGNUP: "false"
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    networks:
+      - vocero-admin-net
+
+  postgres:
+    image: postgres:16-alpine
+
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+
+    volumes:
+      - vocero_admin_pg:/var/lib/postgresql/data
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+    networks:
+      - vocero-admin-net
+
+volumes:
+  vocero_admin_pg:
+    name: ${POSTGRES_VOLUME:-vocero_admin_pg}
+
+networks:
+  vocero-admin-net:
+    name: ${NETWORK_NAME:-vocero-admin-net}
+    driver: bridge
