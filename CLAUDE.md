@@ -1,9 +1,13 @@
 # Vocero CRM — Guia para Claude
 
-Vocero é um CRM de WhatsApp open source (MIT), self-hosted, com agente de IA e
-Laboratório de autoavaliação. Uma instância = um negócio. Este arquivo orienta o
-Claude Code (ou outro assistente) para operar e **modificar** este repositório —
-o caso típico: uma agência adaptando o Vocero para um cliente.
+Vocero é um CRM de WhatsApp proprietário (código fechado, todos os direitos
+reservados — ver [LICENSE](LICENSE)), self-hosted, com agente de IA e
+Laboratório de autoavaliação. Uma instância = um negócio. É o produto
+comercial do proprietário, vendido/entregue a clientes contratantes — não é
+distribuído como software livre. Este arquivo orienta o Claude Code (ou outro
+assistente) para operar e **modificar** este repositório — o caso típico: uma
+instância entregue a um cliente, ou o próprio dono agindo como Provedor de
+Tecnologia (Tech Provider) para múltiplos clientes.
 
 ## Stack
 

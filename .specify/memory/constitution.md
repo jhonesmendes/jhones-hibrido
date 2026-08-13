@@ -1,6 +1,29 @@
 <!--
 RELATÓRIO DE IMPACTO DE SINCRONIZAÇÃO
 ==================
+Versão: 2.2.0 → 2.2.1
+
+Mudanças:
+  - Preâmbulo: corrige a descrição do produto — deixou de ser "open source
+    (MIT) e gratuito"; passa a ser proprietário (código fechado, todos os
+    direitos reservados, ver LICENSE), entregue pelo dono a clientes
+    contratantes (papel de Provedor de Tecnologia / Tech Provider da Meta).
+    Nenhuma regra técnica dos Princípios I–IX muda — é uma correção de
+    enquadramento legal/comercial, não uma mudança de arquitetura ou
+    comportamento do produto.
+
+Bump: PATCH (2.2.0 → 2.2.1) — clarificação textual do preâmbulo, sem alterar
+nenhum princípio, restrição ou regra MUST/MUST NOT existente.
+
+Templates dependentes: nenhum impacto — nenhum template referencia a
+licença/modelo de distribuição.
+
+TODOs adiados: nenhum.
+-->
+
+<!--
+RELATÓRIO DE IMPACTO DE SINCRONIZAÇÃO (HISTÓRICO)
+==================
 Versão: 2.1.0 → 2.2.0
 
 Mudanças:
@@ -53,9 +76,10 @@ TODOs adiados: nenhum.
 
 # Constituição do Vocero CRM
 
-Vocero CRM é um CRM de WhatsApp com agente de IA, open source (MIT), self-hosted e
-gratuito, projetado para que agências de IA o implantem no VPS de seus
-clientes: uma instância = um negócio. Esta constituição define as regras não
+Vocero CRM é um CRM de WhatsApp com agente de IA, proprietário (código fechado,
+todos os direitos reservados) e self-hosted, projetado para que o proprietário
+(atuando como Provedor de Tecnologia) o implante no VPS de seus clientes: uma
+instância = um negócio. Esta constituição define as regras não
 negociáveis do produto. Aplica-se a todas as fases do fluxo de trabalho (specify,
 plan, tasks, implement). Qualquer conflito entre uma decisão de implementação e
 esta constituição SE RESOLVE A FAVOR desta constituição.
@@ -340,4 +364,4 @@ prática, convenção ou preferência; diante de um conflito, a constituição v
 - **Propagação**: ao emendar a constituição, revisam-se e, se necessário, atualizam-se
   os templates dependentes (plan, spec, tasks).
 
-**Version**: 2.2.0 | **Ratified**: 2026-07-09 | **Last Amended**: 2026-07-28
+**Version**: 2.2.1 | **Ratified**: 2026-07-09 | **Last Amended**: 2026-08-13
