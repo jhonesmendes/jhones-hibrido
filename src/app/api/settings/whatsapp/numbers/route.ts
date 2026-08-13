@@ -7,6 +7,7 @@ import {
 } from "@/server/whatsapp/credentials";
 import { subscribeAppToWaba, testConnection } from "@/server/whatsapp/connect";
 import { logAudit } from "@/server/auth/audit";
+import { requireLicenseLimit } from "@/server/license/guards";
 
 export const dynamic = "force-dynamic";
 
@@ -52,6 +53,19 @@ export const POST = withAuth(async (session, req: Request) => {
   }
   const body = await parseBody(req, postSchema);
   if (!body.ok) return body.response;
+
+  // Reconectar um número já cadastrado (mesmo phoneNumberId) não consome
+  // vaga nova — só bloqueia quando é de fato um número novo pra org.
+  const existing = await listCredentialsByOrg(session.organizationId);
+  const isNewNumber = !existing.some((c) => c.phoneNumberId === body.data.phoneNumberId);
+  if (isNewNumber) {
+    const limitGuard = await requireLicenseLimit(
+      session.organizationId,
+      "maxOfficialNumbers",
+      existing.filter((c) => c.isActive).length
+    );
+    if (limitGuard) return limitGuard;
+  }
 
   const check = await testConnection(body.data.phoneNumberId, body.data.token);
   if (!check.ok) {

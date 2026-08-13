@@ -10,6 +10,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PERMISSIONS, type Permission, type Role } from "@/lib/auth/permissions";
 import { HelpLink } from "@/components/docs/help-link";
+import { LicenseLimitDialog } from "@/components/settings/license-limit-dialog";
+import { useLimitAction } from "@/hooks/use-limit-action";
 
 type ChannelAccess = { canView: boolean; canSend: boolean };
 
@@ -64,6 +66,7 @@ export function TeamClient() {
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState<Member | null>(null);
   const [inviting, setInviting] = useState(false);
+  const { limitError, clearLimitError, runWithLimitCheck } = useLimitAction();
 
   const refetch = useCallback(async () => {
     const res = await fetch("/api/settings/team").catch(() => null);
@@ -111,8 +114,13 @@ export function TeamClient() {
       body: JSON.stringify({ name, email, password: tempPassword }),
     }).catch(() => null);
     setSaving(false);
-    if (!res?.ok) {
-      const data = (await res?.json().catch(() => null)) as {
+    if (!res) {
+      setError("Não foi possível criar a conta");
+      return;
+    }
+    if (!res.ok) {
+      if (await runWithLimitCheck(res, "agentes")) return; // diálogo de limite já cobre o feedback
+      const data = (await res.json().catch(() => null)) as {
         error?: { message?: string };
       } | null;
       setError(data?.error?.message ?? "Não foi possível criar a conta");
@@ -307,6 +315,8 @@ export function TeamClient() {
           onCreated={() => void refetchInvites()}
         />
       )}
+
+      {limitError && <LicenseLimitDialog {...limitError} onClose={clearLimitError} />}
     </div>
   );
 }
@@ -331,6 +341,7 @@ function InviteDialog({
   const [copied, setCopied] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { limitError, clearLimitError, runWithLimitCheck } = useLimitAction();
 
   useEffect(() => {
     fetch("/api/settings/departments")
@@ -354,8 +365,13 @@ function InviteDialog({
       }),
     }).catch(() => null);
     setSaving(false);
-    if (!res?.ok) {
-      const data = (await res?.json().catch(() => null)) as {
+    if (!res) {
+      setError("Não foi possível gerar o convite");
+      return;
+    }
+    if (!res.ok) {
+      if (await runWithLimitCheck(res, role === "admin" ? "administradores" : "agentes")) return;
+      const data = (await res.json().catch(() => null)) as {
         error?: { message?: string };
       } | null;
       setError(data?.error?.message ?? "Não foi possível gerar o convite");
@@ -485,6 +501,7 @@ function InviteDialog({
           </div>
         )}
       </div>
+      {limitError && <LicenseLimitDialog {...limitError} onClose={clearLimitError} />}
     </div>
   );
 }

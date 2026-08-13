@@ -6,6 +6,7 @@ import {
   listMemberDepartments,
 } from "@/server/settings/departments";
 import { logAudit } from "@/server/auth/audit";
+import { requireLicenseLimit } from "@/server/license/guards";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +36,14 @@ export const POST = withAuth(async (session, req: Request) => {
   }
   const body = await parseBody(req, createSchema);
   if (!body.ok) return body.response;
+
+  const currentDepartments = await listDepartments(session.organizationId);
+  const limitGuard = await requireLicenseLimit(
+    session.organizationId,
+    "maxDepartments",
+    currentDepartments.length
+  );
+  if (limitGuard) return limitGuard;
 
   const department = await createDepartment(session.organizationId, body.data);
 

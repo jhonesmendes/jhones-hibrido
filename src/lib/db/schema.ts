@@ -1174,3 +1174,43 @@ export const traceEvent = pgTable(
     index("trace_event_org_created_idx").on(t.organizationId, t.createdAt),
   ]
 );
+
+/**
+ * Licença comercial desta instância (1 linha, já que "uma instância = um
+ * negócio" — só existe 1 organização real por banco). Os limites/estado são
+ * definidos e mantidos pelo painel central do operador (serviço à parte,
+ * com seu próprio banco) via a API interna `src/app/api/internal/license/`,
+ * autenticada por `LICENSE_CONTROL_SECRET` — nunca pelo próprio cliente.
+ */
+export const license = pgTable("license", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id")
+    .notNull()
+    .unique()
+    .references(() => organization.id, { onDelete: "cascade" }),
+
+  /** trial | starter | business | enterprise */
+  type: text("type").notNull().default("trial"),
+  /** active | expired | suspended */
+  status: text("status").notNull().default("active"),
+
+  maxOfficialNumbers: integer("max_official_numbers").notNull().default(1),
+  maxWebNumbers: integer("max_web_numbers").notNull().default(1),
+  maxDepartments: integer("max_departments").notNull().default(1),
+  maxAdmins: integer("max_admins").notNull().default(1),
+  maxAgents: integer("max_agents").notNull().default(3),
+  /** Somado a maxAgents — ajustado pelo operador sem mudar o plano base. */
+  addonAgents: integer("addon_agents").notNull().default(0),
+
+  /** Oculta o owner da lista de equipe pra quem não é owner (Starter/Business). */
+  hideOwner: boolean("hide_owner").notNull().default(false),
+
+  startsAt: timestamp("starts_at").notNull().defaultNow(),
+  /** null = sem vencimento (Enterprise/negociado à parte). */
+  expiresAt: timestamp("expires_at"),
+  trialEndsAt: timestamp("trial_ends_at"),
+
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});

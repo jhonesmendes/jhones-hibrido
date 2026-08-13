@@ -6,6 +6,7 @@ import { logAudit } from "@/server/auth/audit";
 import { getEnv } from "@/lib/env";
 import { getDb, schema } from "@/lib/db";
 import { scoped } from "@/lib/db/tenant";
+import { requireLicenseLimit } from "@/server/license/guards";
 
 export const dynamic = "force-dynamic";
 
@@ -68,8 +69,24 @@ export const POST = withAuth(async (session, req: Request) => {
   const body = await parseBody(req, bodySchema);
   if (!body.ok) return body.response;
 
+  const db = getDb();
+  const currentOfRole = await db
+    .select({ id: schema.member.id })
+    .from(schema.member)
+    .where(
+      and(
+        scoped(schema.member.organizationId, session.organizationId),
+        eq(schema.member.role, body.data.role)
+      )
+    );
+  const limitGuard = await requireLicenseLimit(
+    session.organizationId,
+    body.data.role === "admin" ? "maxAdmins" : "maxAgents",
+    currentOfRole.length
+  );
+  if (limitGuard) return limitGuard;
+
   if (body.data.departmentId) {
-    const db = getDb();
     const rows = await db
       .select({ id: schema.department.id })
       .from(schema.department)

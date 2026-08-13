@@ -59,6 +59,17 @@ export async function onUserCreated(userId: string, userName: string) {
       id: newId("agentProfile"),
       organizationId: orgId,
     });
+    // Licença trial de 14 dias — os demais limites vêm dos defaults da
+    // coluna (mesmo valor do plano trial). O painel central do operador
+    // assume o controle a partir daqui (upgrade, suspensão, add-on).
+    const trialEnd = new Date();
+    trialEnd.setDate(trialEnd.getDate() + 14);
+    await tx.insert(schema.license).values({
+      id: newId("license"),
+      organizationId: orgId,
+      trialEndsAt: trialEnd,
+      expiresAt: trialEnd,
+    });
   });
 }
 

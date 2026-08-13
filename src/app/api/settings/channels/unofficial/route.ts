@@ -6,6 +6,7 @@ import {
 } from "@/server/settings/unofficial-channels";
 import { getLiveStatus } from "@/server/baileys/manager";
 import { logAudit } from "@/server/auth/audit";
+import { requireLicenseLimit } from "@/server/license/guards";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -50,6 +51,14 @@ export const POST = withAuth(async (session, req: Request) => {
   }
   const body = await parseBody(req, postSchema);
   if (!body.ok) return body.response;
+
+  const currentChannels = await listUnofficialChannels(session.organizationId);
+  const limitGuard = await requireLicenseLimit(
+    session.organizationId,
+    "maxWebNumbers",
+    currentChannels.filter((c) => c.isActive).length
+  );
+  if (limitGuard) return limitGuard;
 
   const channel = await createUnofficialChannel(session.organizationId, {
     name: body.data.name,

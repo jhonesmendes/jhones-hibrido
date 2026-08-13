@@ -40,6 +40,14 @@ const envSchema = z.object({
     .default(30 * 1000),
   WA_MOCK_ENABLED: z.string().optional(),
   NODE_ENV: z.string().default("development"),
+
+  // Licenciamento (painel central do operador) — todos opcionais: sem
+  // LICENSE_CONTROL_SECRET, a API interna de licença fica travada (falha
+  // fechada), e o produto continua funcionando normalmente com a licença
+  // trial semeada no primeiro cadastro.
+  LICENSE_CONTROL_SECRET: z.string().optional(),
+  OPERATOR_WHATSAPP: z.string().optional(),
+  OPERATOR_EMAIL: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

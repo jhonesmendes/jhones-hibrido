@@ -8,6 +8,8 @@ import { scoped } from "@/lib/db/tenant";
 import { sendWelcomeEmail } from "@/server/auth/welcome-email";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { resolveChannelAccess, resolvePermissions } from "@/lib/auth/require-permission";
+import { getLicense } from "@/server/license/service";
+import { requireLicenseLimit } from "@/server/license/guards";
 
 const ALL_PERMISSIONS = Object.keys(PERMISSIONS) as (keyof typeof PERMISSIONS)[];
 
@@ -15,7 +17,7 @@ export const dynamic = "force-dynamic";
 
 export const GET = withAuth(async (session) => {
   const db = getDb();
-  const members = await db
+  let members = await db
     .select({
       id: schema.member.id,
       role: schema.member.role,
@@ -28,6 +30,13 @@ export const GET = withAuth(async (session) => {
     .from(schema.member)
     .innerJoin(schema.user, eq(schema.member.userId, schema.user.id))
     .where(scoped(schema.member.organizationId, session.organizationId));
+
+  // Planos Starter/Business escondem o owner da lista de equipe pra quem
+  // não é o próprio owner (metadado da licença, não permissão de produto).
+  const lic = await getLicense(session.organizationId);
+  if (lic?.hideOwner && session.role !== "owner") {
+    members = members.filter((m) => m.role !== "owner");
+  }
 
   const detailed = await Promise.all(
     members.map(async (m) => {
@@ -68,6 +77,19 @@ export const POST = withAuth(async (session, req: Request) => {
   }
   const body = await parseBody(req, createSchema);
   if (!body.ok) return body.response;
+
+  const currentAgents = await getDb()
+    .select({ id: schema.member.id })
+    .from(schema.member)
+    .where(
+      scoped(schema.member.organizationId, session.organizationId, eq(schema.member.role, "agent"))
+    );
+  const limitGuard = await requireLicenseLimit(
+    session.organizationId,
+    "maxAgents",
+    currentAgents.length
+  );
+  if (limitGuard) return limitGuard;
 
   const auth = getAuth();
   let newUserId: string;

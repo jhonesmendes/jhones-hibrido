@@ -246,6 +246,13 @@
       "when": 1786165785862,
       "tag": "0034_sharp_the_call",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1786651352160,
+      "tag": "0035_chilly_lord_hawal",
+      "breakpoints": true
     }
   ]
 }
