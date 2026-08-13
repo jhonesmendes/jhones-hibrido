@@ -38,6 +38,7 @@ const prefixes = {
   conversationQueue: "cq",
   traceEvent: "tre",
   license: "lic",
+  adminClient: "acl",
 } as const;
 
 export type IdKind = keyof typeof prefixes;

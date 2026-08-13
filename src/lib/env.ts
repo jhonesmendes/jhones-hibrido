@@ -48,6 +48,22 @@ const envSchema = z.object({
   LICENSE_CONTROL_SECRET: z.string().optional(),
   OPERATOR_WHATSAPP: z.string().optional(),
   OPERATOR_EMAIL: z.string().optional(),
+
+  // Painel central (admin.<domínio>) — só usados na instância dedicada ao
+  // painel; numa instância de cliente normal ficam todos vazios e as rotas
+  // /admin ficam bloqueadas pelo middleware.
+  ADMIN_PANEL_HOST: z.string().optional(),
+  ADMIN_OPERATOR_EMAIL: z.string().optional(),
+  ADMIN_OPERATOR_PASSWORD: z.string().optional(),
+  ADMIN_SESSION_SECRET: z.string().optional(),
+  ADMIN_REPORT_EMAIL: z.string().optional(),
+  ADMIN_SMTP_HOST: z.string().optional(),
+  ADMIN_SMTP_PORT: z.coerce.number().int().optional(),
+  ADMIN_SMTP_SECURE: z.string().optional(),
+  ADMIN_SMTP_USER: z.string().optional(),
+  ADMIN_SMTP_PASSWORD: z.string().optional(),
+  ADMIN_SMTP_FROM_EMAIL: z.string().optional(),
+  ADMIN_SMTP_FROM_NAME: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

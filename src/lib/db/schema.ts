@@ -1214,3 +1214,27 @@ export const license = pgTable("license", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
+
+/**
+ * Registro de uma instância de cliente no painel central do operador —
+ * SÓ existe (e só tem linhas) na instância dedicada ao painel
+ * (`ADMIN_PANEL_HOST`), nunca numa instância de cliente de verdade (lá a
+ * tabela existe pelo schema compartilhado, mas fica sempre vazia). O painel
+ * fala com cada cliente pela API interna dele (`/api/internal/license`),
+ * nunca lendo o banco do cliente diretamente — por isso só guarda a URL
+ * base e o segredo compartilhado, cifrado do mesmo jeito que o token da
+ * Meta (`src/lib/crypto.ts`).
+ */
+export const adminClient = pgTable("admin_client", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  baseUrl: text("base_url").notNull(),
+  internalSecretCipher: text("internal_secret_cipher").notNull(),
+  internalSecretIv: text("internal_secret_iv").notNull(),
+  internalSecretTag: text("internal_secret_tag").notNull(),
+  contactWhatsapp: text("contact_whatsapp"),
+  contactEmail: text("contact_email"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
