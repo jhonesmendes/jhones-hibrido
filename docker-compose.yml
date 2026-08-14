@@ -31,6 +31,10 @@ services:
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
       VAPID_SUBJECT: ${VAPID_SUBJECT:-}
 
+      LICENSE_CONTROL_SECRET: ${LICENSE_CONTROL_SECRET:-}
+      OPERATOR_WHATSAPP: ${OPERATOR_WHATSAPP:-}
+      OPERATOR_EMAIL: ${OPERATOR_EMAIL:-}
+
     depends_on:
       postgres:
         condition: service_healthy
