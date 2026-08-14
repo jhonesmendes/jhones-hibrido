@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 type LicenseType = "trial" | "starter" | "business" | "enterprise";
 type LicenseStatus = "active" | "expired" | "suspended";
@@ -58,6 +59,7 @@ function UsageRow({ label, current, limit }: { label: string; current: number; l
 }
 
 export function ClientDetailClient({ clientId }: { clientId: string }) {
+  const router = useRouter();
   const [detail, setDetail] = useState<Detail | null>(null);
   const [plan, setPlan] = useState<LicenseType>("trial");
   const [status, setStatus] = useState<LicenseStatus>("active");
@@ -107,6 +109,15 @@ export function ClientDetailClient({ clientId }: { clientId: string }) {
     }
     setSavedMsg("Salvo — a instância já reflete o novo plano.");
     void refetch();
+  }
+
+  async function removeClient() {
+    if (!detail) return;
+    if (!confirm(`Remover "${detail.client.name}" do painel? Isso não afeta a instância do cliente, só o registro aqui.`)) {
+      return;
+    }
+    const res = await fetch(`/api/admin/clients/${clientId}`, { method: "DELETE" }).catch(() => null);
+    if (res?.ok) router.push("/admin");
   }
 
   if (!detail) return <p className="text-white/60">Carregando…</p>;
@@ -201,6 +212,13 @@ export function ClientDetailClient({ clientId }: { clientId: string }) {
           {saving ? "Salvando…" : "Salvar plano"}
         </button>
       </div>
+
+      <button
+        onClick={() => void removeClient()}
+        className="text-sm text-red-400 hover:underline"
+      >
+        Remover cliente do painel
+      </button>
     </div>
   );
 }

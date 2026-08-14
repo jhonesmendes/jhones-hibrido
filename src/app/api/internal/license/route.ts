@@ -4,7 +4,7 @@ import { getEnv } from "@/lib/env";
 import { getDb, schema } from "@/lib/db";
 import {
   applyLicenseUpdate,
-  getLicense,
+  getOrSeedLicense,
   getLicenseUsage,
 } from "@/server/license/service";
 
@@ -50,7 +50,7 @@ export async function GET(req: Request) {
 
   const [usage, lic] = await Promise.all([
     getLicenseUsage(organizationId),
-    getLicense(organizationId),
+    getOrSeedLicense(organizationId),
   ]);
 
   return Response.json({ license: lic, usage });

@@ -1,7 +1,7 @@
 import { apiError } from "@/lib/api";
 import { getEnv } from "@/lib/env";
 import {
-  getLicense,
+  getOrSeedLicense,
   isLicenseActive,
   limitFor,
   withinLimit,
@@ -26,9 +26,9 @@ export async function requireLicenseLimit(
   key: LimitKey,
   current: number
 ): Promise<Response | null> {
-  const lic = await getLicense(organizationId);
+  const lic = await getOrSeedLicense(organizationId);
 
-  if (!lic || !isLicenseActive(lic)) {
+  if (!isLicenseActive(lic)) {
     return apiError(
       402,
       "license_inactive",

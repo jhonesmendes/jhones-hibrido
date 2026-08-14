@@ -1,21 +1,18 @@
 import { withAuth } from "@/lib/api";
 import { getEnv } from "@/lib/env";
-import { getLicense, getLicenseUsage, isLicenseActive, limitFor } from "@/server/license/service";
+import { getOrSeedLicense, getLicenseUsage, isLicenseActive, limitFor } from "@/server/license/service";
 
 export const dynamic = "force-dynamic";
 
 /** Autoatendimento: qualquer membro autenticado vê o estado da própria
- * licença (owner/admin usam pra decidir se falam com o suporte). */
+ * licença (owner/admin usam pra decidir se falam com o suporte). Org sem
+ * licença ainda (criada antes dessa feature) ganha um trial na hora. */
 export const GET = withAuth(async (session) => {
   const [lic, usage] = await Promise.all([
-    getLicense(session.organizationId),
+    getOrSeedLicense(session.organizationId),
     getLicenseUsage(session.organizationId),
   ]);
   const env = getEnv();
-
-  if (!lic) {
-    return Response.json({ license: null, usage, contact: null });
-  }
 
   return Response.json({
     license: {

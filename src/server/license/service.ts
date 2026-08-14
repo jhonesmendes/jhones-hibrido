@@ -36,6 +36,34 @@ export async function getLicense(organizationId: string): Promise<LicenseRow | n
   return lic;
 }
 
+/** Como `getLicense`, mas semeia um trial de 14 dias na hora se a org ainda
+ * não tem licença — cobre orgs criadas ANTES dessa feature existir (o seed
+ * automático só roda no primeiro cadastro). Sem isso, toda organização
+ * antiga ficaria bloqueada (guards tratam "sem licença" como inativa). */
+export async function getOrSeedLicense(organizationId: string): Promise<LicenseRow> {
+  const existing = await getLicense(organizationId);
+  if (existing) return existing;
+
+  const db = getDb();
+  const trialEnd = new Date();
+  trialEnd.setDate(trialEnd.getDate() + 14);
+  const inserted = await db
+    .insert(schema.license)
+    .values({
+      id: newId("license"),
+      organizationId,
+      trialEndsAt: trialEnd,
+      expiresAt: trialEnd,
+    })
+    .onConflictDoNothing({ target: schema.license.organizationId })
+    .returning();
+
+  invalidateLicenseCache(organizationId);
+  // onConflictDoNothing devolve [] numa corrida genuína (outra request
+  // inseriu entre o getLicense e o insert acima) — busca de novo nesse caso.
+  return inserted[0] ?? (await getLicense(organizationId))!;
+}
+
 export function invalidateLicenseCache(organizationId: string): void {
   cache.delete(organizationId);
 }
