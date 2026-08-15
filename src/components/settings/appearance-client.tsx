@@ -275,10 +275,10 @@ export function AppearanceClient() {
                 className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[13px] font-semibold text-white"
                 style={{ background: previewSet?.accent ?? "var(--accent)" }}
               >
-                {initials("Ana Lima")}
+                {initials("Vocero")}
               </span>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium">Ana Lima</p>
+                <p className="truncate text-sm font-medium">Vocero</p>
                 <p className="text-[11px] text-muted-foreground">Atendimento · Online</p>
               </div>
               <Button

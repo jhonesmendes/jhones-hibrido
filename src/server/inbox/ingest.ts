@@ -20,6 +20,7 @@ import {
 import { handleSelectionReply, sendSelectionGreeting } from "@/server/queue/selection";
 import { LOCAL_MEDIA_MARKER, MEDIA_TYPES, serializeMessage } from "@/server/inbox/message-format";
 import { logTrace } from "@/server/observability/trace";
+import { ensureBrNinthDigit } from "@/lib/utils";
 
 // Re-exportados por compatibilidade — outros módulos importam esses dois
 // símbolos daqui (`@/server/inbox/ingest`); a definição real vive em
@@ -303,10 +304,15 @@ export async function ingestInboundMessage(input: {
   const { organizationId } = input;
   const channel = input.channel ?? "official";
   const fromMe = input.fromMe ?? false;
+  // A Meta é inconsistente sobre incluir o 9º dígito no wa_id de celulares
+  // BR — sem normalizar, a mesma pessoa vira dois contatos/conversas
+  // dependendo de qual formato chegou em cada mensagem (já corrigido no
+  // canal não oficial; idempotente aqui, então não afeta outros países).
+  const from = ensureBrNinthDigit(input.from);
 
   const { contact } = await getOrCreateContact(
     organizationId,
-    input.from,
+    from,
     input.profileName,
     input.contactKind ?? "individual"
   );
