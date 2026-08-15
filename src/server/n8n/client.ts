@@ -63,7 +63,10 @@ async function n8nRequest<T>(
       const text = await res.text().catch(() => "");
       throw new N8nApiError("error", `N8N respondeu ${res.status}: ${text.slice(0, 200)}`);
     }
-    return (await res.json()) as T;
+    // DELETE costuma devolver 200 com o objeto apagado, mas algumas versões
+    // do N8N respondem corpo vazio — não tratar isso como erro.
+    const text = await res.text();
+    return (text ? JSON.parse(text) : {}) as T;
   } catch (err) {
     if (err instanceof N8nApiError) throw err;
     const detail = err instanceof Error ? err.message : String(err);
@@ -95,6 +98,14 @@ export async function executeWorkflow(
     { method: "POST" }
   );
   return { executionId: data.executionId ?? data.id ?? null };
+}
+
+/** Apaga o workflow NO PRÓPRIO N8N do operador — ação irreversível lá,
+ * pensada pra limpar automação inativa/não usada mais. */
+export async function deleteWorkflow(creds: N8nCredentials, workflowId: string): Promise<void> {
+  await n8nRequest(creds, `/api/v1/workflows/${encodeURIComponent(workflowId)}`, {
+    method: "DELETE",
+  });
 }
 
 export async function listExecutions(

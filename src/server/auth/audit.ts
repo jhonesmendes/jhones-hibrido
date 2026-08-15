@@ -15,6 +15,7 @@ export type AuditAction =
   | "settings.ai_changed"
   | "settings.n8n_changed"
   | "n8n.workflow_executed"
+  | "n8n.workflow_deleted"
   | "department.created"
   | "department.updated"
   | "department.deleted"

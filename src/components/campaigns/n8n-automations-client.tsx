@@ -8,6 +8,7 @@ import {
   History,
   Play,
   Plug,
+  Trash2,
   Workflow,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -37,6 +38,7 @@ export function N8nAutomationsClient() {
   const [existingConfig, setExistingConfig] = useState<N8nConfigView | null>(null);
   const [editingConfig, setEditingConfig] = useState(false);
   const [executingId, setExecutingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const refetch = useCallback(async () => {
     const [wfRes, exRes, cfgRes] = await Promise.all([
@@ -75,6 +77,29 @@ export function N8nAutomationsClient() {
     );
     setExecutingId(null);
     void refetch();
+  }
+
+  async function remove(w: N8nWorkflow) {
+    if (
+      !confirm(
+        `Excluir o workflow "${w.name}" no N8N? Isso apaga ele de verdade lá — não dá pra desfazer.`
+      )
+    ) {
+      return;
+    }
+    setDeletingId(w.id);
+    const res = await fetch(`/api/n8n/workflows/${w.id}`, { method: "DELETE" }).catch(
+      () => null
+    );
+    setDeletingId(null);
+    if (res?.ok) {
+      void refetch();
+    } else {
+      const data = (await res?.json().catch(() => null)) as {
+        error?: { message?: string };
+      } | null;
+      alert(data?.error?.message ?? "Não foi possível excluir o workflow");
+    }
   }
 
   if (!loaded) {
@@ -180,6 +205,15 @@ export function N8nAutomationsClient() {
                 <Play className="h-3.5 w-3.5" />
                 {executingId === w.id ? "Executando…" : "Executar agora"}
               </Button>
+              <button
+                onClick={() => void remove(w)}
+                disabled={deletingId === w.id}
+                aria-label="Excluir workflow"
+                title="Excluir workflow no N8N"
+                className="rounded-md border p-1.5 text-muted-foreground hover:border-destructive hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
             </div>
           );
         })}
