@@ -47,6 +47,12 @@ export async function getOrCreateContact(
   kind: "individual" | "group" = "individual"
 ) {
   const db = getDb();
+  // Se o "nome" recebido é só dígitos, é um telefone disfarçado de nome (ex.:
+  // veio de um formato de origem diferente do `phone` já normalizado acima)
+  // — usa o `phone` normalizado em vez de confiar num valor calculado à
+  // parte, senão o nome fica com um 9º dígito que o telefone de verdade não tem.
+  const trimmedName = name?.trim() || "";
+  const resolvedName = /^\d+$/.test(trimmedName) ? phone : trimmedName || phone;
   const inserted = await db
     .insert(schema.contact)
     .values({
@@ -54,7 +60,7 @@ export async function getOrCreateContact(
       organizationId,
       phone,
       kind,
-      name: name?.trim() || phone,
+      name: resolvedName,
     })
     .onConflictDoNothing({
       target: [schema.contact.organizationId, schema.contact.phone],
