@@ -43,4 +43,12 @@ describe("ensureBrNinthDigit", () => {
   it("não-BR (não começa com 55): devolve como está", () => {
     expect(ensureBrNinthDigit("14155552671")).toBe("14155552671");
   });
+
+  it("linha fixa BR de 12 dígitos (local começa com 2-5): NÃO insere o 9", () => {
+    expect(ensureBrNinthDigit("556634261818")).toBe("556634261818");
+  });
+
+  it("celular BR de 12 dígitos (local começa com 6-9): insere o 9", () => {
+    expect(ensureBrNinthDigit("556693426181")).toBe("5566993426181");
+  });
 });

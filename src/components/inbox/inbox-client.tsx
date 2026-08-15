@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { ChevronLeft, PanelRight } from "lucide-react";
+import { ChevronLeft, PanelRight, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ContactAvatar } from "@/components/avatar";
 import type { ConversationDto, MessageDto } from "@/lib/types";
@@ -21,7 +21,11 @@ import { Composer } from "./composer";
 import { ContactPanel } from "./contact-panel";
 import { WallpaperPicker } from "./wallpaper-picker";
 
-export function InboxClient() {
+export function InboxClient({
+  canDeleteConversation = false,
+}: {
+  canDeleteConversation?: boolean;
+}) {
   const [conversations, setConversations] = useState<ConversationDto[] | null>(
     null
   );
@@ -44,6 +48,7 @@ export function InboxClient() {
   // Preferência pessoal (servidor, não localStorage — vale em qualquer
   // dispositivo): grupos misturados na aba "Todas" ou só na aba "Grupos".
   const [groupsInInbox, setGroupsInInbox] = useState(true);
+  const [deletingConversation, setDeletingConversation] = useState(false);
 
   useEffect(() => {
     // A preferência salva é de desktop (painel lateral fixo); no mobile o
@@ -177,6 +182,13 @@ export function InboxClient() {
       // O agente mudou de etapa ou alterou o handoff: atualiza o painel ao vivo.
       setDetailRev((v) => v + 1);
     },
+    onConversationDeleted: ({ conversationId }) => {
+      setConversations((prev) => prev?.filter((c) => c.id !== conversationId) ?? prev);
+      if (selectedIdRef.current === conversationId) {
+        setSelectedId(null);
+        setMessages([]);
+      }
+    },
     onReconnect: () => {
       // Catch-up após reconexão (contrato sse.md): refetch completo.
       void refetchConversations();
@@ -190,6 +202,33 @@ export function InboxClient() {
   const closeThread = useCallback(() => {
     setSelectedId(null);
     setMessages([]);
+  }, []);
+
+  const deleteSelectedConversation = useCallback(async () => {
+    const id = selectedIdRef.current;
+    if (!id) return;
+    if (
+      !confirm(
+        "Excluir esta conversa? Todo o histórico de mensagens some pra sempre — não dá pra desfazer."
+      )
+    ) {
+      return;
+    }
+    setDeletingConversation(true);
+    const res = await fetch(`/api/conversations/${id}`, { method: "DELETE" }).catch(
+      () => null
+    );
+    setDeletingConversation(false);
+    if (res?.ok) {
+      setConversations((prev) => prev?.filter((c) => c.id !== id) ?? prev);
+      setSelectedId(null);
+      setMessages([]);
+    } else {
+      const data = (await res?.json().catch(() => null)) as {
+        error?: { message?: string };
+      } | null;
+      alert(data?.error?.message ?? "Não foi possível excluir a conversa");
+    }
   }, []);
 
   // Esc fecha a conversa aberta — respeita `defaultPrevented`, então não
@@ -375,6 +414,17 @@ export function InboxClient() {
                 </div>
               </div>
               <div className="flex items-center gap-1.5">
+                {canDeleteConversation && (
+                  <button
+                    onClick={() => void deleteSelectedConversation()}
+                    disabled={deletingConversation}
+                    aria-label="Excluir conversa"
+                    title="Excluir conversa"
+                    className="rounded-sm border p-1.5 text-text-3 hover:border-destructive hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
+                  >
+                    <Trash2 className="h-4 w-4" strokeWidth={1.7} />
+                  </button>
+                )}
                 <WallpaperPicker />
                 {!panelOpen && (
                   <button

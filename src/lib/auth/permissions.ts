@@ -9,6 +9,9 @@ export const PERMISSIONS = {
   "conversations:view_all": "Ver todas as conversas",
   "conversations:reply": "Responder mensagens",
   "conversations:assign": "Atribuir conversas a agentes",
+  /** Único caso hoje que NÃO é padrão pra admin (ver DEFAULT_PERMISSIONS) —
+   * só o owner tem por padrão; concedível a admin/agente pelo owner. */
+  "conversations:delete": "Excluir conversas",
 
   "pipeline:view": "Ver pipeline",
   "pipeline:move": "Mover contatos no pipeline",
@@ -40,10 +43,14 @@ const AGENT_DEFAULT_PERMISSIONS: Permission[] = [
   "contacts:view",
 ];
 
+const ADMIN_DEFAULT_PERMISSIONS: Permission[] = ALL_PERMISSIONS.filter(
+  (p) => p !== "conversations:delete"
+);
+
 /** Default de permissões por papel — ponto de partida, ajustável por membro. */
 export const DEFAULT_PERMISSIONS: Record<Role, Permission[]> = {
   owner: ALL_PERMISSIONS,
-  admin: ALL_PERMISSIONS,
+  admin: ADMIN_DEFAULT_PERMISSIONS,
   agent: AGENT_DEFAULT_PERMISSIONS,
 };
 

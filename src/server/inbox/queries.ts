@@ -273,3 +273,28 @@ export async function updateConversation(
     .returning();
   return updated[0] ?? null;
 }
+
+/** Exclui a conversa (mensagens/fila/rastro cascateiam pelo schema). O
+ * histórico de envio de campanha não cascateia de propósito — desvincula em
+ * vez de bloquear, pra excluir uma conversa nunca travar por causa disso. */
+export async function deleteConversation(
+  organizationId: string,
+  conversationId: string
+): Promise<boolean> {
+  const db = getDb();
+  await db
+    .update(schema.campaignRecipient)
+    .set({ conversationId: null })
+    .where(eq(schema.campaignRecipient.conversationId, conversationId));
+
+  const deleted = await db
+    .delete(schema.conversation)
+    .where(
+      and(
+        eq(schema.conversation.organizationId, organizationId),
+        eq(schema.conversation.id, conversationId)
+      )
+    )
+    .returning({ id: schema.conversation.id });
+  return deleted.length > 0;
+}

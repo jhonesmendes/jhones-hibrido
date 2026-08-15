@@ -67,10 +67,18 @@ export async function downloadUrl(url: string, filename?: string): Promise<void>
  * essa normalização em TODA entrada de telefone (digitada ou vinda de uma
  * mensagem real), o mesmo contato vira dois. Outros formatos (já com 9, ou
  * não-BR) voltam sem alteração.
+ *
+ * Linha FIXA brasileira também tem 12 dígitos (8 dígitos locais, sem 9º) e
+ * pode ter WhatsApp Business — sem essa checagem, o número fixo virava
+ * errado (9 inserido onde não existe). A regra real: número local de
+ * celular (sem o 9) sempre começa com 6–9; fixo começa com 2–5.
  */
 export function ensureBrNinthDigit(digits: string): string {
   if (digits.length === 12 && digits.startsWith("55")) {
-    return `55${digits.slice(2, 4)}9${digits.slice(4)}`;
+    const local = digits.slice(4);
+    if (/^[6-9]/.test(local)) {
+      return `55${digits.slice(2, 4)}9${local}`;
+    }
   }
   return digits;
 }
@@ -85,7 +93,10 @@ export function normalizePhoneInput(input: string): string | null {
   if (digits.length < 8 || digits.length > 15) return null;
   // Sem sinal de texto junto (busca por nome não vira telefone)
   if (/[a-zA-Z]{2,}/.test(input)) return null;
-  if (digits.length === 10) return `55${digits.slice(0, 2)}9${digits.slice(2)}`;
+  if (digits.length === 10) {
+    const local = digits.slice(2);
+    return /^[6-9]/.test(local) ? `55${digits.slice(0, 2)}9${local}` : `55${digits}`;
+  }
   if (digits.length === 11) return `55${digits}`;
   return ensureBrNinthDigit(digits);
 }
