@@ -272,7 +272,7 @@ export async function getDashboardExtras(
       windowExpired: sql<number>`count(*) filter (
         where ${schema.conversation.handoffAt} is null
           and ${schema.conversation.lastInboundAt} is not null
-          and ${schema.conversation.lastInboundAt} < ${windowThreshold}
+          and ${schema.conversation.lastInboundAt} < ${windowThreshold.toISOString()}
       )`,
     })
     .from(schema.conversation)
