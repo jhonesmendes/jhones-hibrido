@@ -1,6 +1,12 @@
 import { apiError, withAuth } from "@/lib/api";
-import { getDashboardData } from "@/server/dashboard/queries";
+import {
+  getDashboardData,
+  getDashboardExtras,
+  type DashboardPeriod,
+} from "@/server/dashboard/queries";
 import { listMemberDepartments } from "@/server/settings/departments";
+
+const VALID_PERIODS: DashboardPeriod[] = ["today", "7d", "30d"];
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +47,14 @@ export const GET = withAuth(async (session, req: Request) => {
     visibleDepartmentIds = [departmentIdParam];
   }
 
-  const data = await getDashboardData(session.organizationId, visibleDepartmentIds);
-  return Response.json(data);
+  const periodParam = url.searchParams.get("period");
+  const period: DashboardPeriod = VALID_PERIODS.includes(periodParam as DashboardPeriod)
+    ? (periodParam as DashboardPeriod)
+    : "today";
+
+  const [data, extras] = await Promise.all([
+    getDashboardData(session.organizationId, visibleDepartmentIds),
+    getDashboardExtras(session.organizationId, visibleDepartmentIds, period),
+  ]);
+  return Response.json({ ...data, ...extras, period });
 });

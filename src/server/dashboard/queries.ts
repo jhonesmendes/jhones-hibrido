@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { scoped } from "@/lib/db/tenant";
 
@@ -201,4 +201,303 @@ export async function getDashboardData(
   }
 
   return { departments, alerts };
+}
+
+export type DashboardPeriod = "today" | "7d" | "30d";
+
+function periodStart(period: DashboardPeriod): Date {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  if (period === "7d") d.setDate(d.getDate() - 6);
+  if (period === "30d") d.setDate(d.getDate() - 29);
+  return d;
+}
+
+export type DashboardExtras = {
+  summary: {
+    openConversations: number;
+    agentsOnline: number;
+    agentsTotal: number;
+    queueWaiting: number;
+    queueLongestWaitMin: number | null;
+    windowExpired: number;
+  };
+  volumeByDay: { date: string; count: number }[];
+  agents: {
+    id: string;
+    name: string;
+    status: string;
+    assignedConversations: number;
+  }[];
+  lab: { score: number | null; delta: number | null; handoffsToday: number };
+  pipeline: { stageId: string; name: string; kind: string; count: number }[];
+  channels: {
+    official: { connected: number; total: number; messages: number };
+    unofficial: { connected: number; total: number; messages: number };
+  };
+};
+
+/**
+ * Segunda leva de métricas do dashboard (v0.2) — tudo aqui é computado a
+ * partir de dados que já existem (sem coluna/tabela nova). Deliberadamente
+ * NÃO inclui "tempo médio de resposta" nem "% resolvida pela IA": nada
+ * registra isso hoje, e a definição de "resolvida" ainda depende de uma
+ * decisão de produto (config por departamento/modelo — ver conversa com o
+ * dono). Fica pra uma fase 2.
+ */
+export async function getDashboardExtras(
+  organizationId: string,
+  visibleDepartmentIds: string[] | null,
+  period: DashboardPeriod
+): Promise<DashboardExtras> {
+  const db = getDb();
+  const deptScope =
+    visibleDepartmentIds !== null
+      ? inArray(schema.conversation.departmentId, visibleDepartmentIds)
+      : undefined;
+  const windowThreshold = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const since = periodStart(period);
+  const volumeSince = (() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() - 6);
+    return d;
+  })();
+
+  // Resumo: conversas abertas, janela de 24h expirada — agregado direto,
+  // sem iterar conversa por conversa (isWindowOpen vira um predicado SQL).
+  const [summaryRow] = await db
+    .select({
+      open: sql<number>`count(*) filter (where ${schema.conversation.handoffAt} is null)`,
+      windowExpired: sql<number>`count(*) filter (
+        where ${schema.conversation.handoffAt} is null
+          and ${schema.conversation.lastInboundAt} is not null
+          and ${schema.conversation.lastInboundAt} < ${windowThreshold}
+      )`,
+    })
+    .from(schema.conversation)
+    .where(
+      scoped(
+        schema.conversation.organizationId,
+        organizationId,
+        deptScope
+          ? and(eq(schema.conversation.isTest, false), deptScope)
+          : eq(schema.conversation.isTest, false)
+      )
+    );
+
+  // Fila agora: quantos esperando + espera mais longa (minutos).
+  const queueScope =
+    visibleDepartmentIds !== null
+      ? inArray(schema.conversationQueue.departmentId, visibleDepartmentIds)
+      : undefined;
+  const [queueRow] = await db
+    .select({
+      waiting: sql<number>`count(*)`,
+      oldestMin: sql<number | null>`extract(epoch from (now() - min(${schema.conversationQueue.createdAt}))) / 60`,
+    })
+    .from(schema.conversationQueue)
+    .where(
+      queueScope
+        ? and(eq(schema.conversationQueue.status, "waiting"), queueScope)
+        : eq(schema.conversationQueue.status, "waiting")
+    );
+
+  // Atendentes: status ao vivo (agent_status) + quantas conversas abertas
+  // cada um tem atribuída agora. Escopo por departamento = só membros
+  // daqueles departamentos (admin); sem escopo (owner) = toda a equipe.
+  const memberScopeRows =
+    visibleDepartmentIds !== null
+      ? await db
+          .selectDistinct({ memberId: schema.memberDepartment.memberId })
+          .from(schema.memberDepartment)
+          .where(inArray(schema.memberDepartment.departmentId, visibleDepartmentIds))
+      : null;
+  const memberIdScope = memberScopeRows?.map((r) => r.memberId) ?? null;
+
+  const memberRows = await db
+    .select({
+      id: schema.member.id,
+      name: schema.user.name,
+      status: schema.agentStatus.status,
+    })
+    .from(schema.member)
+    .innerJoin(schema.user, eq(schema.member.userId, schema.user.id))
+    .leftJoin(schema.agentStatus, eq(schema.agentStatus.memberId, schema.member.id))
+    .where(
+      and(
+        scoped(schema.member.organizationId, organizationId),
+        eq(schema.member.isActive, true),
+        memberIdScope ? inArray(schema.member.id, memberIdScope) : undefined
+      )
+    );
+
+  const assignedRows = await db
+    .select({
+      assignedTo: schema.conversation.assignedTo,
+      n: sql<number>`count(*)`,
+    })
+    .from(schema.conversation)
+    .where(
+      scoped(
+        schema.conversation.organizationId,
+        organizationId,
+        and(eq(schema.conversation.isTest, false), isNull(schema.conversation.handoffAt))
+      )
+    )
+    .groupBy(schema.conversation.assignedTo);
+  const assignedCountByMember = new Map<string, number>();
+  for (const r of assignedRows) {
+    if (r.assignedTo) assignedCountByMember.set(r.assignedTo, Number(r.n));
+  }
+
+  const agents = memberRows.map((m) => ({
+    id: m.id,
+    name: m.name,
+    status: m.status ?? "offline",
+    assignedConversations: assignedCountByMember.get(m.id) ?? 0,
+  }));
+
+  // Volume de mensagens por dia — últimos 7 dias corridos, sempre (o
+  // gráfico não muda com o filtro Hoje/7d/30d, só os números de canal abaixo).
+  const volumeRows = await db
+    .select({
+      day: sql<string>`to_char(${schema.message.createdAt}, 'YYYY-MM-DD')`,
+      n: sql<number>`count(*)`,
+    })
+    .from(schema.message)
+    .innerJoin(schema.conversation, eq(schema.message.conversationId, schema.conversation.id))
+    .where(
+      and(
+        eq(schema.message.organizationId, organizationId),
+        eq(schema.conversation.isTest, false),
+        gte(schema.message.createdAt, volumeSince),
+        deptScope
+      )
+    )
+    .groupBy(sql`to_char(${schema.message.createdAt}, 'YYYY-MM-DD')`);
+  const volumeByDayMap = new Map(volumeRows.map((r) => [r.day, Number(r.n)]));
+  const volumeByDay: { date: string; count: number }[] = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const key = d.toISOString().slice(0, 10);
+    volumeByDay.push({ date: key, count: volumeByDayMap.get(key) ?? 0 });
+  }
+
+  // Laboratório: score + delta da última execução concluída, handoffs de hoje.
+  const runs = await db
+    .select({ score: schema.agentTestRun.score, status: schema.agentTestRun.status })
+    .from(schema.agentTestRun)
+    .where(
+      scoped(
+        schema.agentTestRun.organizationId,
+        organizationId,
+        eq(schema.agentTestRun.status, "done")
+      )
+    )
+    .orderBy(desc(schema.agentTestRun.startedAt))
+    .limit(2);
+  const latestScore = runs[0]?.score ?? null;
+  const prevScore = runs[1]?.score ?? null;
+  const todayStart = periodStart("today");
+  const [handoffRow] = await db
+    .select({ n: sql<number>`count(*)` })
+    .from(schema.conversation)
+    .where(
+      scoped(
+        schema.conversation.organizationId,
+        organizationId,
+        and(
+          gte(schema.conversation.handoffAt, todayStart),
+          deptScope
+        )
+      )
+    );
+
+  // Pipeline: contagem de leads por etapa (sempre org inteira — leads não
+  // têm departamento no schema).
+  const stages = await db
+    .select({ id: schema.pipelineStage.id, name: schema.pipelineStage.name, kind: schema.pipelineStage.kind })
+    .from(schema.pipelineStage)
+    .where(scoped(schema.pipelineStage.organizationId, organizationId))
+    .orderBy(asc(schema.pipelineStage.position));
+  const leadCountRows = await db
+    .select({ stageId: schema.lead.stageId, n: sql<number>`count(*)` })
+    .from(schema.lead)
+    .where(scoped(schema.lead.organizationId, organizationId))
+    .groupBy(schema.lead.stageId);
+  const leadCountByStage = new Map(leadCountRows.map((r) => [r.stageId, Number(r.n)]));
+  const pipeline = stages.map((s) => ({
+    stageId: s.id,
+    name: s.name,
+    kind: s.kind,
+    count: leadCountByStage.get(s.id) ?? 0,
+  }));
+
+  // Canais: conectados/total + volume de mensagens no período selecionado.
+  const [officialCounts] = await db
+    .select({
+      total: sql<number>`count(*)`,
+      connected: sql<number>`count(*) filter (where ${schema.metaCredentials.status} = 'connected' and ${schema.metaCredentials.isActive})`,
+    })
+    .from(schema.metaCredentials)
+    .where(scoped(schema.metaCredentials.organizationId, organizationId));
+  const [unofficialCounts] = await db
+    .select({
+      total: sql<number>`count(*)`,
+      connected: sql<number>`count(*) filter (where ${schema.unofficialChannel.status} = 'connected' and ${schema.unofficialChannel.isActive})`,
+    })
+    .from(schema.unofficialChannel)
+    .where(scoped(schema.unofficialChannel.organizationId, organizationId));
+
+  const channelMsgRows = await db
+    .select({
+      channel: schema.conversation.channel,
+      n: sql<number>`count(*)`,
+    })
+    .from(schema.message)
+    .innerJoin(schema.conversation, eq(schema.message.conversationId, schema.conversation.id))
+    .where(
+      and(
+        eq(schema.message.organizationId, organizationId),
+        eq(schema.conversation.isTest, false),
+        gte(schema.message.createdAt, since),
+        deptScope
+      )
+    )
+    .groupBy(schema.conversation.channel);
+  const msgByChannel = new Map(channelMsgRows.map((r) => [r.channel, Number(r.n)]));
+
+  return {
+    summary: {
+      openConversations: Number(summaryRow?.open ?? 0),
+      agentsOnline: agents.filter((a) => a.status === "online").length,
+      agentsTotal: agents.length,
+      queueWaiting: Number(queueRow?.waiting ?? 0),
+      queueLongestWaitMin:
+        queueRow?.oldestMin != null ? Math.round(Number(queueRow.oldestMin)) : null,
+      windowExpired: Number(summaryRow?.windowExpired ?? 0),
+    },
+    volumeByDay,
+    agents,
+    lab: {
+      score: latestScore,
+      delta: latestScore != null && prevScore != null ? latestScore - prevScore : null,
+      handoffsToday: Number(handoffRow?.n ?? 0),
+    },
+    pipeline,
+    channels: {
+      official: {
+        connected: Number(officialCounts?.connected ?? 0),
+        total: Number(officialCounts?.total ?? 0),
+        messages: msgByChannel.get("official") ?? 0,
+      },
+      unofficial: {
+        connected: Number(unofficialCounts?.connected ?? 0),
+        total: Number(unofficialCounts?.total ?? 0),
+        messages: msgByChannel.get("unofficial") ?? 0,
+      },
+    },
+  };
 }
