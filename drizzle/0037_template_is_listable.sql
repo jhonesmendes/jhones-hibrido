@@ -1,0 +1,1 @@
+ALTER TABLE "template" ADD COLUMN "is_listable" boolean DEFAULT true NOT NULL;

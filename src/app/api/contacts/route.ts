@@ -4,6 +4,7 @@ import { apiError, parseBody, withAuth } from "@/lib/api";
 import { getDb, schema } from "@/lib/db";
 import { newId } from "@/lib/db/ids";
 import { scoped } from "@/lib/db/tenant";
+import { phoneSchema } from "@/lib/phone-schema";
 import { serializeContact } from "@/server/contacts";
 
 export const dynamic = "force-dynamic";
@@ -43,10 +44,7 @@ export const GET = withAuth(async (session, req: Request) => {
 
 const createSchema = z.object({
   name: z.string().trim().min(1).max(120),
-  phone: z
-    .string()
-    .trim()
-    .regex(/^\d{7,15}$/, "Telefone em dígitos, com código do país (ex.: 5511912345678)"),
+  phone: phoneSchema,
   reference: z.string().trim().max(200).optional(),
   comment: z.string().trim().max(2000).optional(),
   notes: z.string().max(4000).optional(),

@@ -29,6 +29,14 @@ describe("normalizePhoneInput", () => {
   it("muito curto não vira telefone", () => {
     expect(normalizePhoneInput("12345")).toBeNull();
   });
+
+  it("celular BR de 9 dígitos SEM DDD é rejeitado, não aceito como está (bug real)", () => {
+    expect(normalizePhoneInput("996746147")).toBeNull();
+  });
+
+  it("número BR de 8 dígitos SEM DDD é rejeitado", () => {
+    expect(normalizePhoneInput("99674614")).toBeNull();
+  });
 });
 
 describe("ensureBrNinthDigit", () => {

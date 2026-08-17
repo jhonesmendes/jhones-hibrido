@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { ContactDto } from "@/lib/types";
-import { formatPhone } from "@/lib/utils";
+import { formatPhone, normalizePhoneInput } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -39,7 +39,11 @@ export function ContactFormDialog({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const phoneValid = mode === "edit" || /^\d{7,15}$/.test(phone.trim());
+  // Mesma normalização usada no servidor (`@/lib/phone-schema`) — sem isso,
+  // um número BR sem DDD (ex.: "996746147") passava no formulário e só
+  // falhava (ou pior, era aceito) no fundo, criando contato com o número
+  // errado.
+  const phoneValid = mode === "edit" || normalizePhoneInput(phone.trim()) !== null;
   const canSave = name.trim().length > 0 && phoneValid && !saving;
 
   async function save() {
@@ -86,14 +90,20 @@ export function ContactFormDialog({
           {mode === "create" ? (
             <div className="space-y-1.5">
               <Label htmlFor="contact-phone">
-                Telefone * <span className="font-normal text-muted-foreground">(com código do país)</span>
+                Telefone * <span className="font-normal text-muted-foreground">(com DDD)</span>
               </Label>
               <Input
                 id="contact-phone"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value.replace(/\D/g, ""))}
-                placeholder="5511912345678"
+                placeholder="11912345678 ou 5511912345678"
               />
+              {phone.trim().length > 0 && !phoneValid && (
+                <p className="text-xs text-destructive">
+                  Inclua o DDD (ex.: 11912345678) — sem ele o número fica
+                  incompleto e a conversa é criada com o destino errado.
+                </p>
+              )}
             </div>
           ) : (
             initial?.phone && (

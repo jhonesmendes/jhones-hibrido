@@ -11,12 +11,18 @@ export const dynamic = "force-dynamic";
 
 type Params = { params: Promise<{ id: string }> };
 
-const patchSchema = z.object({
-  departmentId: z.string().trim().min(1).nullable(),
-});
+const patchSchema = z
+  .object({
+    departmentId: z.string().trim().min(1).nullable().optional(),
+    isListable: z.boolean().optional(),
+  })
+  .refine((v) => v.departmentId !== undefined || v.isListable !== undefined, {
+    message: "Informe departmentId e/ou isListable",
+  });
 
-/** Reatribui o departamento do modelo — metadado local, sem chamada à Meta,
- * então pode mudar a qualquer momento (mesmo com o modelo já aprovado). */
+/** Reatribui departamento e/ou visibilidade nos seletores rápidos — metadado
+ * local, sem chamada à Meta, então pode mudar a qualquer momento (mesmo com
+ * o modelo já aprovado). */
 export const PATCH = withAuth(async (session, req: Request, ctx: Params) => {
   if (session.role !== "owner" && session.role !== "admin") {
     return apiError(403, "forbidden", "Só owner/admin reatribuem modelos");
@@ -26,11 +32,7 @@ export const PATCH = withAuth(async (session, req: Request, ctx: Params) => {
   if (!body.ok) return body.response;
 
   try {
-    const template = await updateTemplateAssignment(
-      session.organizationId,
-      id,
-      body.data.departmentId
-    );
+    const template = await updateTemplateAssignment(session.organizationId, id, body.data);
     return Response.json({ template: serializeTemplate(template) });
   } catch (err) {
     if (err instanceof TemplateError) {

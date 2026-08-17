@@ -86,17 +86,34 @@ export function ensureBrNinthDigit(digits: string): string {
 /**
  * Normaliza um telefone digitado livre para dígitos com código do país.
  * Ex.: "66 99674-6147" → "5566996746147". 10–11 dígitos (fixo/celular BR
- * com DDD) ganham prefixo 55. Devolve null se não parecer telefone.
+ * com DDD, sem o 55) ganham prefixo. Devolve null se não parecer telefone
+ * — em especial, 8-9 dígitos (número local SEM DDD, ex.: "996746147") é
+ * rejeitado em vez de aceito como está: sem o DDD o número está incompleto
+ * e criava contato/conversa com o destino errado (bug real em produção —
+ * o WhatsApp nunca resolve esse número, ou pior, resolve para outro
+ * contato do mesmo DDD por coincidência de dígitos).
  */
 export function normalizePhoneInput(input: string): string | null {
   const digits = input.replace(/\D/g, "");
   if (digits.length < 8 || digits.length > 15) return null;
   // Sem sinal de texto junto (busca por nome não vira telefone)
   if (/[a-zA-Z]{2,}/.test(input)) return null;
+
+  // 8-9 dígitos: número local puro, sem DDD nem código do país (ex.:
+  // "996746147"). Rejeitado em vez de aceito como está — é a causa raiz do
+  // bug: sem DDD o WhatsApp nunca resolve o número (ou, por coincidência de
+  // dígitos, pode resolver para OUTRO contato do mesmo DDD).
+  if (digits.length === 8 || digits.length === 9) return null;
+
+  // 10-11 dígitos = DDD + número local, sem código do país — assume Brasil.
   if (digits.length === 10) {
     const local = digits.slice(2);
     return /^[6-9]/.test(local) ? `55${digits.slice(0, 2)}9${local}` : `55${digits}`;
   }
   if (digits.length === 11) return `55${digits}`;
+
+  // 12+ dígitos: já deve vir com código do país (BR ou não, ex.: Argentina
+  // 54). `ensureBrNinthDigit` só mexe quando é BR (prefixo 55) e mobile sem
+  // o 9º dígito; qualquer outro formato passa sem alteração.
   return ensureBrNinthDigit(digits);
 }

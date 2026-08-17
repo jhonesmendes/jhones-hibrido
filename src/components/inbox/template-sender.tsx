@@ -26,7 +26,7 @@ export function TemplateSender({
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/templates")
+    fetch("/api/templates?listable=1")
       .then((r) => (r.ok ? r.json() : { templates: [] }))
       .then((d: { templates?: TemplateDto[] }) => {
         if (!cancelled) {

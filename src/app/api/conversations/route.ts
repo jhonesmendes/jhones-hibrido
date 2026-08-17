@@ -3,6 +3,7 @@ import { z } from "zod";
 import { apiError, parseBody, withAuth } from "@/lib/api";
 import { getDb, schema } from "@/lib/db";
 import { scoped } from "@/lib/db/tenant";
+import { phoneSchema } from "@/lib/phone-schema";
 import { resolvePermissions } from "@/lib/auth/require-permission";
 import {
   getMostRecentConversationForContact,
@@ -46,10 +47,7 @@ export const GET = withAuth(async (session, req: Request) => {
 const createSchema = z.union([
   z.object({ contactId: z.string().min(1) }),
   z.object({
-    phone: z
-      .string()
-      .trim()
-      .regex(/^\d{7,15}$/, "Telefone em dígitos, com código do país (ex.: 5511912345678)"),
+    phone: phoneSchema,
     name: z.string().trim().max(120).optional(),
   }),
 ]);

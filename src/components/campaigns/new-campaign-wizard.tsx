@@ -91,7 +91,7 @@ export function NewCampaignWizard({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/templates")
+    fetch("/api/templates?listable=1")
       .then((r) => (r.ok ? r.json() : { templates: [] }))
       .then((d: { templates?: TemplateDto[] }) =>
         setTemplates((d.templates ?? []).filter((t) => t.status === "approved"))

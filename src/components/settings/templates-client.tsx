@@ -108,14 +108,25 @@ export function TemplatesClient() {
     }
   }
 
-  async function changeDepartment(t: TemplateDto, departmentId: string | null) {
+  const NOT_LISTABLE = "__not_listable__";
+
+  /** Mesmo seletor cobre departamento e visibilidade: escolher um
+   * departamento (ou "Todos") sempre reativa a listagem; escolher "Não
+   * listável" é um estado à parte, que vale por cima de qualquer
+   * departamento (o modelo continua existindo/editável, só some dos
+   * seletores de uso rápido). */
+  async function changeVisibility(t: TemplateDto, value: string) {
+    const patch =
+      value === NOT_LISTABLE
+        ? { isListable: false }
+        : { departmentId: value || null, isListable: true };
     const res = await fetch(`/api/templates/${t.id}/assignment`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ departmentId }),
+      body: JSON.stringify(patch),
     }).catch(() => null);
     if (res?.ok) void refetch();
-    else alert("Não foi possível mudar o departamento do modelo");
+    else alert("Não foi possível mudar a visibilidade do modelo");
   }
 
   return (
@@ -163,6 +174,7 @@ export function TemplatesClient() {
                   <Badge variant={STATUS_BADGE[t.status].variant}>
                     {STATUS_BADGE[t.status].label}
                   </Badge>
+                  {!t.isListable && <Badge variant="outline">Não listável</Badge>}
                   {t.status === "rejected" && (
                     <button
                       onClick={() => setEditingId(t.id)}
@@ -195,12 +207,10 @@ export function TemplatesClient() {
                   Número: {channel ? channelLabel(channel) : "—"}
                 </span>
                 <div className="flex items-center gap-1.5">
-                  <span className="text-muted-foreground">Departamento:</span>
+                  <span className="text-muted-foreground">Visível para:</span>
                   <select
-                    value={t.departmentId ?? ""}
-                    onChange={(e) =>
-                      void changeDepartment(t, e.target.value || null)
-                    }
+                    value={t.isListable ? (t.departmentId ?? "") : NOT_LISTABLE}
+                    onChange={(e) => void changeVisibility(t, e.target.value)}
                     className="h-7 rounded-md border border-input bg-card px-1.5 text-xs"
                   >
                     <option value="">Todos os departamentos</option>
@@ -209,6 +219,7 @@ export function TemplatesClient() {
                         {d.name}
                       </option>
                     ))}
+                    <option value={NOT_LISTABLE}>Não listável</option>
                   </select>
                 </div>
               </div>

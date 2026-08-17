@@ -260,6 +260,13 @@
       "when": 1786652653825,
       "tag": "0036_wide_richard_fisk",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1786978438939,
+      "tag": "0037_template_is_listable",
+      "breakpoints": true
     }
   ]
 }

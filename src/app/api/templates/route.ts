@@ -16,8 +16,16 @@ export const dynamic = "force-dynamic";
 /** Owner/admin veem todos os modelos da org (gestão em Configurações). Um
  * agente só vê modelos sem departamento (uso geral) + os dos departamentos
  * dele — senão o seletor de "enviar modelo" no inbox mostraria modelos de
- * outras equipes que ele nem deveria usar. */
-export const GET = withAuth(async (session) => {
+ * outras equipes que ele nem deveria usar.
+ *
+ * `?listable=1`: filtra também por `isListable` — usado pelos seletores de
+ * escolha rápida (atalho "/" do inbox, "Enviar modelo", Campanhas). Sem o
+ * parâmetro (padrão, usado por Configurações → Modelos), devolve todos,
+ * inclusive os marcados "não listável", pra dar pra gerenciá-los. */
+export const GET = withAuth(async (session, req: Request) => {
+  const url = new URL(req.url);
+  const listableOnly = url.searchParams.get("listable") === "1";
+
   const db = getDb();
   const templates = await db
     .select()
@@ -25,13 +33,15 @@ export const GET = withAuth(async (session) => {
     .where(scoped(schema.template.organizationId, session.organizationId))
     .orderBy(desc(schema.template.createdAt));
 
+  const base = listableOnly ? templates.filter((t) => t.isListable) : templates;
+
   if (session.role === "owner" || session.role === "admin") {
-    return Response.json({ templates: templates.map(serializeTemplate) });
+    return Response.json({ templates: base.map(serializeTemplate) });
   }
 
   const myDepartments = await listMemberDepartments(session.memberId);
   const myDepartmentIds = new Set(myDepartments.map((d) => d.id));
-  const visible = templates.filter(
+  const visible = base.filter(
     (t) => !t.departmentId || myDepartmentIds.has(t.departmentId)
   );
   return Response.json({ templates: visible.map(serializeTemplate) });

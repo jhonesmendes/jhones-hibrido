@@ -98,6 +98,7 @@ export function serializeTemplate(t: TemplateRow) {
     rejectionReason: t.rejectionReason,
     credentialId: t.credentialId,
     departmentId: t.departmentId,
+    isListable: t.isListable,
   };
 }
 
@@ -205,18 +206,19 @@ export async function createTemplate(
   return inserted[0]!;
 }
 
-/** Reatribui só o departamento (metadado local — não existe na Meta, não
- * precisa reenviar nada). O número/WABA (`credentialId`) não é editável
- * depois de criado: o modelo já está registrado numa WABA específica. */
+/** Reatribui departamento e/ou visibilidade nos seletores rápidos — os dois
+ * são metadado local (não existem na Meta, não precisam reenviar nada). O
+ * número/WABA (`credentialId`) não é editável depois de criado: o modelo já
+ * está registrado numa WABA específica. */
 export async function updateTemplateAssignment(
   organizationId: string,
   templateId: string,
-  departmentId: string | null
+  patch: { departmentId?: string | null; isListable?: boolean }
 ): Promise<TemplateRow> {
   const db = getDb();
   const updated = await db
     .update(schema.template)
-    .set({ departmentId, updatedAt: new Date() })
+    .set({ ...patch, updatedAt: new Date() })
     .where(
       scoped(
         schema.template.organizationId,

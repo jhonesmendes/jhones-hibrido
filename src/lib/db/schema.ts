@@ -728,6 +728,14 @@ export const template = pgTable(
       .default("draft"),
     rejectionReason: text("rejection_reason"),
     waTemplateId: text("wa_template_id"),
+    /** Falso = nunca aparece nos seletores de uso rápido (atalho "/" do
+     * inbox, "Enviar modelo" com janela fechada, escolha de modelo em
+     * Campanhas) — continua existindo/editável em Configurações → Modelos.
+     * Serve pra modelos de teste (ex. "hello_world", padrão da própria
+     * Meta) que precisam existir mas nunca deveriam ser escolhidos por um
+     * atendente sem querer. Não afeta envio direto por `templateId`
+     * (campanha já criada, ou reenvio) — só esconde da hora de ESCOLHER. */
+    isListable: boolean("is_listable").notNull().default(true),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },

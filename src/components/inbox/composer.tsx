@@ -71,7 +71,7 @@ export function Composer({
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/templates")
+    fetch("/api/templates?listable=1")
       .then((r) => (r.ok ? r.json() : { templates: [] }))
       .then((d: { templates?: TemplateDto[] }) => {
         if (!cancelled)
@@ -334,20 +334,6 @@ export function Composer({
           >
             <X className="h-3.5 w-3.5" />
           </button>
-        </div>
-      )}
-      {templates.length > 0 && (
-        <div className="mb-2.5 flex flex-wrap gap-1.5">
-          {templates.slice(0, 4).map((t) => (
-            <button
-              key={t.id}
-              className="rounded-full border bg-secondary px-3 py-1 text-xs font-medium text-text-2 transition-colors hover:border-brand-soft hover:bg-brand-tint hover:text-brand-text"
-              onClick={() => applyTemplate(t)}
-              title={t.body}
-            >
-              {t.name.replace(/_/g, " ")}
-            </button>
-          ))}
         </div>
       )}
       <div className="relative">

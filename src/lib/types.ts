@@ -49,6 +49,7 @@ export type TemplateDto = {
   rejectionReason: string | null;
   credentialId: string | null;
   departmentId: string | null;
+  isListable: boolean;
 };
 
 export type StageDto = {
