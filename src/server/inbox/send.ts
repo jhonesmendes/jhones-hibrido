@@ -27,6 +27,7 @@ import { baileysMessageId, rawBaileysId } from "@/server/baileys/inbound";
 import { resolveDefaultUnofficialChannelId } from "@/server/settings/unofficial-channels";
 import { logTrace } from "@/server/observability/trace";
 import { getMemberName } from "@/server/inbox/queries";
+import { claimOnManualReply } from "@/server/queue/manager";
 
 /** Mensagem sendo respondida/citada — resolvida uma vez a partir do
  * `replyToMessageId` recebido do composer, reusada tanto pro contexto do
@@ -170,6 +171,15 @@ export async function sendText(input: {
     );
   }
 
+  // Aceite implícito: responder manualmente uma conversa de fila ainda sem
+  // departamento formaliza o atendimento (ver claimOnManualReply) — nunca
+  // deve bloquear o envio se algo der errado aqui.
+  if (input.actorMemberId && row.conversation.departmentId === null) {
+    await claimOnManualReply(input.conversationId, input.actorMemberId).catch((err) =>
+      console.error(`[queue] falha no aceite implícito (${input.conversationId}):`, err)
+    );
+  }
+
   const replyTarget = await resolveReplyTarget(
     input.organizationId,
     input.conversationId,
@@ -303,6 +313,13 @@ export async function sendMedia(input: {
     throw new SendError(
       "sandbox_violation",
       "Conversa de teste do Laboratório: o envio real é proibido"
+    );
+  }
+
+  // Ver comentário equivalente em sendText().
+  if (input.actorMemberId && row.conversation.departmentId === null) {
+    await claimOnManualReply(input.conversationId, input.actorMemberId).catch((err) =>
+      console.error(`[queue] falha no aceite implícito (${input.conversationId}):`, err)
     );
   }
 

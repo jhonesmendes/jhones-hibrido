@@ -520,6 +520,44 @@ export async function declineQueuedConversation(
   return { ok: true };
 }
 
+/**
+ * Aceite implícito: um agente respondeu manualmente pela Caixa de Entrada
+ * uma conversa que ainda não tem `departmentId` (fila ativa, nunca
+ * distribuída — ex. fora do horário — ou distribuída mas nunca formalmente
+ * aceita). Sem isso, quem tem `conversations:view_all` (owner/admin) podia
+ * atender normalmente sem a conversa nunca "virar dele" no sistema de
+ * fila: `departmentId`/`assignedTo` ficavam `null` pra sempre, e
+ * "Transferir atendimento" nunca aparecia mesmo com atendimento
+ * acontecendo de fato. Chamado de `send.ts` antes de mandar a mensagem;
+ * best-effort e silencioso — nunca deve bloquear o envio.
+ */
+export async function claimOnManualReply(
+  conversationId: string,
+  memberId: string
+): Promise<void> {
+  const db = getDb();
+  const rows = await db
+    .select({
+      id: schema.conversationQueue.id,
+      status: schema.conversationQueue.status,
+      assignedTo: schema.conversationQueue.assignedTo,
+    })
+    .from(schema.conversationQueue)
+    .where(eq(schema.conversationQueue.conversationId, conversationId));
+  const active = rows.find((r) => r.status === "waiting" || r.status === "assigned");
+  if (!active) return;
+
+  if (active.status === "waiting") {
+    await claimQueuedConversation(active.id, memberId);
+    return;
+  }
+  // 'assigned' pra outro membro: não é dele pra aceitar — o dono original
+  // ainda tem a janela de timeout pra aceitar ou ser redistribuído.
+  if (active.status === "assigned" && active.assignedTo === memberId) {
+    await acceptQueuedConversation(active.id, memberId);
+  }
+}
+
 export type QueueEntryDto = {
   id: string;
   conversationId: string;

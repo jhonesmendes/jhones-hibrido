@@ -446,8 +446,12 @@ export const conversation = pgTable(
     channel: text("channel", { enum: ["official", "unofficial"] })
       .notNull()
       .default("official"),
-    /** Departamento dono da conversa (v0.1). Null = organização ainda sem
-     * departamentos, ou conversa anterior à migração — visível a todos. */
+    /** Departamento dono da conversa (v0.1). Null = ainda não roteada a
+     * nenhum departamento (fila pendente, canal sem departamento vinculado,
+     * ou conversa anterior à migração). `listConversations` (ver
+     * `src/server/inbox/queries.ts`) filtra ESTRITO por departamento ativo
+     * — null só continua visível pra grupos (recurso compartilhado) e na
+     * visão consolidada do owner (sem filtro). */
     departmentId: text("department_id").references(() => department.id, {
       onDelete: "set null",
     }),

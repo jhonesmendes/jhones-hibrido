@@ -30,9 +30,15 @@ export async function listConversations(
    * "ver todas as conversas" precisa valer também dentro do depto). */
   assignedToFilter?: string,
   /** Departamento ativo (v0.1); undefined/null = sem filtro (visão
-   * consolidada). Conversas sem department_id ficam de fora quando um
-   * departamento está ativo — só entram quando o canal que as originou
-   * estiver vinculado a um departamento (Configurações → Canais). */
+   * consolidada, só o owner tem essa opção no seletor). Com filtro ativo,
+   * a checagem é ESTRITA por conversa individual — precisa ter
+   * `department_id` igual ao filtro, sem passe-livre pra `null` (esse
+   * passe-livre existiu antes e vazava conversas ainda sem departamento —
+   * ex. fila pendente, canal não vinculado — pra QUALQUER departamento
+   * selecionado; bug real, validado em produção com múltiplos
+   * departamentos). Grupo é a única exceção: sem departamento, continua
+   * visível a todos (é recurso compartilhado do time, ver a mesma regra
+   * já aplicada em `assignedToFilter` acima). */
   departmentFilter?: string
 ): Promise<ConversationDto[]> {
   const db = getDb();
@@ -90,13 +96,19 @@ export async function listConversations(
               )
             )
           : undefined,
-        // Sem departmentId (conversa ainda não roteada a nenhum departamento)
-        // fica visível a todos — mesmo com um filtro ativo (ver comentário
-        // do campo em schema.ts). Só exclui conversas de OUTRO departamento.
+        // Estrito por conversa individual — só grupo sem departamento passa
+        // livre (recurso compartilhado do time, mesma regra de cima). Uma
+        // conversa individual com department_id null (fila pendente, canal
+        // sem departamento vinculado) fica de fora de QUALQUER departamento
+        // filtrado — só aparece na visão consolidada do owner (sem filtro)
+        // ou, se for de fila, na tela Fila.
         departmentFilter
           ? or(
               eq(schema.conversation.departmentId, departmentFilter),
-              isNull(schema.conversation.departmentId)
+              and(
+                eq(schema.contact.kind, "group"),
+                isNull(schema.conversation.departmentId)
+              )
             )
           : undefined
       )
