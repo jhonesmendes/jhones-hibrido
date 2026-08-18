@@ -126,9 +126,12 @@ async function handleAcceptTimeout(
   }
 }
 
-/** Desiste de redistribuir: marca `expired` (sai da fila ativa de vez, não
- * é mais pego por `findActiveQueueEntry`/scheduler) e avisa o cliente, se
- * houver mensagem configurada — melhor que sumir em silêncio. */
+/** Desiste de redistribuir automaticamente: devolve pra `waiting` (fica
+ * visível e "pegável" na tela de Fila por qualquer agente do departamento,
+ * via claimQueuedConversation) mas NÃO deixa `distributeConversation`
+ * reatribuir sozinha de novo (guard por `attempt >= maxAttempts` lá) — o
+ * loop automático para, a conversa não. Avisa o cliente, se houver
+ * mensagem configurada, em vez de deixar ele no limbo sem resposta. */
 async function giveUpOnQueueEntry(
   row: typeof schema.conversationQueue.$inferSelect,
   finalAttempt: number,
@@ -138,7 +141,7 @@ async function giveUpOnQueueEntry(
   const db = getDb();
   const claimed = await db
     .update(schema.conversationQueue)
-    .set({ status: "expired", assignedTo: null, assignedAt: null, timeoutAt: null, attempt: finalAttempt, updatedAt: now })
+    .set({ status: "waiting", assignedTo: null, assignedAt: null, timeoutAt: null, attempt: finalAttempt, updatedAt: now })
     .where(
       and(
         eq(schema.conversationQueue.id, row.id),
@@ -162,7 +165,7 @@ async function giveUpOnQueueEntry(
   await logTrace({
     organizationId: loaded.conversation.organizationId,
     conversationId: row.conversationId,
-    type: "queue.expired",
+    type: "queue.auto_giveup",
     detail: { departmentId: row.departmentId, attempt: finalAttempt },
   });
 

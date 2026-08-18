@@ -10,6 +10,11 @@ import { publish } from "@/server/events/bus";
 const DEFAULT_OFFLINE_MESSAGE =
   "No momento estamos fora do horário de atendimento. Deixe sua mensagem e retornaremos assim que possível.";
 
+/** Ver scheduler.ts — mesmo teto de retentativas automáticas, valor
+ * espelhado aqui pra `distributeConversation` parar de reatribuir sozinho
+ * sem precisar importar de scheduler.ts (evita import circular). */
+const DEFAULT_MAX_ATTEMPTS = 10;
+
 type DepartmentQueueConfig = {
   id: string;
   queueEnabled: boolean;
@@ -357,6 +362,14 @@ export async function distributeConversation(
 
   const config = await getDepartmentQueueConfig(row.queue.departmentId);
   if (!config || !config.queueEnabled) return { assigned: false };
+
+  // Teto de retentativas (ver scheduler.ts): passou do limite, então o
+  // sistema para de tentar distribuir sozinho — mas a entrada CONTINUA
+  // em 'waiting', visível na tela de Fila, "pegável" a qualquer momento
+  // por qualquer agente do departamento via claimQueuedConversation. Não
+  // soma pra "expired"/desaparece — só sai do piloto automático.
+  const maxAttempts = config.maxAttempts ?? DEFAULT_MAX_ATTEMPTS;
+  if (row.queue.attempt >= maxAttempts) return { assigned: false };
 
   // Cenário 6: fora do horário, não distribui — fica em 'waiting' até o
   // próximo ciclo do scheduler cair dentro do expediente de novo.

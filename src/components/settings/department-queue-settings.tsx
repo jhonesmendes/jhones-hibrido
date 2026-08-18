@@ -381,7 +381,7 @@ export function DepartmentQueueSettings({
                     onChange={(e) => setMaxAttempts(Number(e.target.value))}
                   />
                   <span className="text-xs text-muted-foreground">
-                    redistribuições — depois disso a conversa sai da fila (fica &ldquo;expired&rdquo;) em vez de continuar tentando indefinidamente
+                    redistribuições — depois disso o sistema para de tentar sozinho, mas a conversa continua na fila aguardando algum agente pegar manualmente
                   </span>
                 </div>
               </div>
