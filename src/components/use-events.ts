@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 
 export type EventHandlers = {
   onMessageNew?: (data: { conversationId: string; message: unknown }) => void;
+  onMessageUpdated?: (data: { conversationId: string; message: unknown }) => void;
   onMessageStatus?: (data: {
     conversationId: string;
     messageId: string;
@@ -68,6 +69,9 @@ export function useEvents(handlers: EventHandlers): void {
     };
 
     listen("message.new", (d) => handlersRef.current.onMessageNew?.(d as never));
+    listen("message.updated", (d) =>
+      handlersRef.current.onMessageUpdated?.(d as never)
+    );
     listen("message.status", (d) =>
       handlersRef.current.onMessageStatus?.(d as never)
     );

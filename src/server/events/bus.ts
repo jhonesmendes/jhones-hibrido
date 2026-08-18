@@ -8,6 +8,7 @@ import { EventEmitter } from "node:events";
 
 export type SseEvent =
   | { type: "message.new"; data: { conversationId: string; message: unknown } }
+  | { type: "message.updated"; data: { conversationId: string; message: unknown } }
   | {
       type: "message.status";
       data: { conversationId: string; messageId: string; status: string };

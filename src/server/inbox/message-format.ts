@@ -43,5 +43,18 @@ export function serializeMessage(
     replyToMessageId: m.replyToMessageId,
     senderName: senderName ?? null,
     createdAt: (m.waTimestamp ?? m.createdAt).toISOString(),
+    editedAt: m.editedAt ? m.editedAt.toISOString() : null,
+    // Só texto de saída pelo canal não oficial, dentro da janela de 15min
+    // do WhatsApp — mesma regra de `editMessage` em edit-message.ts. Client
+    // não reimplementa a regra: só usa esta flag pra decidir se mostra o
+    // botão "Editar" (o servidor sempre reforça a checagem de novo).
+    // Prefixo literal (não importa `rawBaileysId` de baileys/inbound.ts pra
+    // não criar ciclo ingest→message-format→inbound→ingest) — precisa
+    // continuar igual ao de `baileysMessageId()` em baileys/inbound.ts.
+    editable:
+      m.direction === "out" &&
+      m.type === "text" &&
+      Boolean(m.waMessageId?.startsWith("unof:baileys:")) &&
+      Date.now() - (m.waTimestamp ?? m.createdAt).getTime() < 15 * 60 * 1000,
   };
 }

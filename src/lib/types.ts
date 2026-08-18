@@ -37,6 +37,13 @@ export type MessageDto = {
    * mensagens do cliente, automação, ou mensagens antigas sem essa info. */
   senderName: string | null;
   createdAt: string;
+  /** Não nula = mensagem editada depois de enviada (só canal não oficial). */
+  editedAt: string | null;
+  /** true = o servidor permite editar esta mensagem agora (texto de saída
+   * pelo canal não oficial, dentro da janela de 15min). Recalculada a cada
+   * fetch — pode virar `false` sem refetch se o tempo esgotar com a tela
+   * aberta; o servidor sempre reforça a checagem de qualquer forma. */
+  editable: boolean;
 };
 
 export type TemplateDto = {

@@ -547,6 +547,11 @@ export const message = pgTable(
     sentByMemberId: text("sent_by_member_id").references(() => member.id, {
       onDelete: "set null",
     }),
+    /** Não nulo = esta mensagem foi editada depois de enviada (só o canal
+     * não oficial suporta — a Cloud API da Meta não expõe edição de
+     * mensagem enviada, limitação documentada da própria Meta). `text`
+     * sempre reflete a versão atual; não guardamos histórico de versões. */
+    editedAt: timestamp("edited_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (t) => [

@@ -144,6 +144,42 @@ export async function sendMedia(
   }
 }
 
+/**
+ * Edita o texto de uma mensagem JÁ ENVIADA por este canal (só o motor não
+ * oficial suporta — a Cloud API da Meta não expõe edição de mensagem
+ * enviada). O WhatsApp mesmo limita a janela de edição a ~15 minutos do
+ * envio original; o Baileys não valida isso do lado do cliente, então quem
+ * chama (`editMessage` em `src/server/inbox/edit-message.ts`) já checa
+ * antes de chegar aqui. `rawMessageId` é o ID cru do Baileys, sem o
+ * prefixo `unof:baileys:` usado no nosso banco (ver `rawBaileysId`).
+ */
+export async function editText(
+  channelId: string,
+  target: string,
+  rawMessageId: string,
+  newText: string
+): Promise<void> {
+  const sock = getSocket(channelId);
+  const live = await getLiveStatus(channelId);
+  if (!sock || live.status !== "connected") {
+    throw new BaileysSendError("not_connected", "Não há WhatsApp Web conectado");
+  }
+
+  try {
+    const jid = await resolveJid(sock, target);
+    await sock.sendMessage(jid, {
+      text: newText,
+      edit: { remoteJid: jid, id: rawMessageId, fromMe: true },
+    });
+  } catch (err) {
+    if (err instanceof BaileysSendError) throw err;
+    throw new BaileysSendError(
+      "send_failed",
+      err instanceof Error ? err.message : "Falha ao editar a mensagem"
+    );
+  }
+}
+
 type BaileysMediaContent =
   | { image: Buffer; caption?: string }
   | { video: Buffer; caption?: string }

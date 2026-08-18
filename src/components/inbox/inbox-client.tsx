@@ -177,6 +177,11 @@ export function InboxClient({
         )
       );
     },
+    onMessageUpdated: ({ conversationId, message }) => {
+      if (selectedIdRef.current !== conversationId) return;
+      const m = message as MessageDto;
+      setMessages((prev) => prev.map((x) => (x.id === m.id ? m : x)));
+    },
     onConversationUpdated: () => {
       void refetchConversations();
       // O agente mudou de etapa ou alterou o handoff: atualiza o painel ao vivo.

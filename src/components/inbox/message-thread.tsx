@@ -10,6 +10,7 @@ import {
   FileText,
   Forward,
   Paperclip,
+  Pencil,
   Reply,
   Sparkles,
   ZoomIn,
@@ -249,6 +250,44 @@ export function MessageThread({
   const scrollRef = useRef<HTMLDivElement>(null);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [forwardMessageId, setForwardMessageId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+
+  function startEdit(m: MessageDto) {
+    setEditingId(m.id);
+    setEditValue(m.text ?? "");
+    setEditError(null);
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setEditError(null);
+  }
+
+  async function saveEdit(messageId: string) {
+    const text = editValue.trim();
+    if (!text) return;
+    setEditSaving(true);
+    setEditError(null);
+    const res = await fetch(`/api/messages/${messageId}/edit`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text }),
+    }).catch(() => null);
+    setEditSaving(false);
+    if (!res?.ok) {
+      const data = (await res?.json().catch(() => null)) as {
+        error?: { message?: string };
+      } | null;
+      setEditError(data?.error?.message ?? "Não foi possível editar a mensagem");
+      return;
+    }
+    // O balão atualiza pelo evento SSE message.updated (inbox-client.tsx);
+    // aqui só fecha o modo de edição.
+    setEditingId(null);
+  }
   // Só acompanha mensagem nova se o usuário já estava perto do fim — senão
   // puxaria a conversa pra baixo enquanto alguém rola pra cima lendo o
   // histórico. Começa true: ao abrir uma conversa, sempre vai pro fim.
@@ -346,7 +385,41 @@ export function MessageThread({
                 {m.replyToMessageId && (
                   <QuotedPreview target={messageById.get(m.replyToMessageId) ?? null} />
                 )}
-                {m.type === "text" || m.type === "template" ? (
+                {editingId === m.id ? (
+                  <div className="min-w-[240px] space-y-1.5">
+                    <textarea
+                      autoFocus
+                      rows={2}
+                      value={editValue}
+                      onChange={(e) => setEditValue(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          void saveEdit(m.id);
+                        }
+                        if (e.key === "Escape") cancelEdit();
+                      }}
+                      className="w-full resize-none rounded-md border bg-background px-2 py-1.5 text-sm text-foreground outline-none focus:border-brand"
+                    />
+                    {editError && <p className="text-xs text-destructive">{editError}</p>}
+                    <div className="flex justify-end gap-1.5">
+                      <button
+                        onClick={cancelEdit}
+                        disabled={editSaving}
+                        className="rounded-md border px-2 py-1 text-xs text-text-2 hover:bg-accent"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        onClick={() => void saveEdit(m.id)}
+                        disabled={editSaving || !editValue.trim()}
+                        className="rounded-md bg-brand px-2 py-1 text-xs font-medium text-white hover:bg-brand-hover disabled:opacity-50"
+                      >
+                        {editSaving ? "Salvando…" : "Salvar"}
+                      </button>
+                    </div>
+                  </div>
+                ) : m.type === "text" || m.type === "template" ? (
                   <span className="whitespace-pre-wrap break-words">
                     {m.text}
                   </span>
@@ -360,6 +433,7 @@ export function MessageThread({
                     onMediaLoad={scrollToBottomIfNear}
                   />
                 )}
+                {editingId !== m.id && (
                 <span className="float-right ml-2 mt-1 flex items-center gap-1">
                   <button
                     onClick={() => onReply(m)}
@@ -369,6 +443,21 @@ export function MessageThread({
                   >
                     <Reply className="h-3 w-3" strokeWidth={1.7} />
                   </button>
+                  {out && m.editable && (
+                    <button
+                      onClick={() => startEdit(m)}
+                      aria-label="Editar mensagem"
+                      title="Editar mensagem (só até 15 min do envio)"
+                      className="rounded p-0.5 text-text-4 hover:bg-black/10 hover:text-foreground"
+                    >
+                      <Pencil className="h-3 w-3" strokeWidth={1.7} />
+                    </button>
+                  )}
+                  {m.editedAt && (
+                    <span className="text-[10.5px] italic text-text-4" title={`Editada às ${bubbleTime(m.editedAt)}`}>
+                      editada
+                    </span>
+                  )}
                   {m.aiGenerated && (
                     <span
                       className="inline-flex items-center gap-0.5 text-[10px] font-medium text-brand"
@@ -382,6 +471,7 @@ export function MessageThread({
                   </span>
                   {out && <StatusTicks status={m.status} error={m.error} />}
                 </span>
+                )}
               </div>
             </div>
           </div>
