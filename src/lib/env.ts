@@ -46,6 +46,9 @@ const envSchema = z.object({
   // fechada), e o produto continua funcionando normalmente com a licença
   // trial semeada no primeiro cadastro.
   LICENSE_CONTROL_SECRET: z.string().optional(),
+  // API interna de envio (ex.: automações N8N) — opcional: sem ela, a rota
+  // fica travada (falha fechada), o resto do produto continua normal.
+  INTERNAL_API_KEY: z.string().optional(),
   OPERATOR_WHATSAPP: z.string().optional(),
   OPERATOR_EMAIL: z.string().optional(),
 
