@@ -35,7 +35,13 @@ function chain(getRows: () => Row[]) {
     where: () =>
       Object.assign(Promise.resolve(getRows()), {
         limit: () => Promise.resolve(getRows()),
+        orderBy: () => ({
+          limit: () => Promise.resolve(getRows()),
+        }),
       }),
+    orderBy: () => ({
+      limit: () => Promise.resolve(getRows()),
+    }),
     limit: () => Promise.resolve(getRows()),
   };
 }

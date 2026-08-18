@@ -9,6 +9,12 @@ export const dynamic = "force-dynamic";
  * Fila de atendimento — owner e quem tem `conversations:view_all` veem todo
  * departamento com fila ativa; qualquer membro do departamento (admin ou
  * agente comum, em qualquer modo de distribuição) vê a fila do(s) seu(s).
+ * Com departamento ativo selecionado (`activeDepartmentId`), restringe à
+ * fila desse departamento — mesma regra de isolamento já aplicada em
+ * `listConversations` (src/server/inbox/queries.ts): trocar de
+ * departamento no seletor não pode continuar mostrando a fila de outro.
+ * Só quem está sem departamento ativo (owner em visão consolidada, ou org
+ * sem departamentos) vê tudo junto.
  *
  * Antes disso só liberava agente comum em modo `manual` — em modo
  * automático ele dependia 100% do toast em tempo real
@@ -39,6 +45,10 @@ export const GET = withAuth(async (session) => {
         .filter(({ d, role }) => d.queueEnabled && role !== null)
         .map(({ d }) => d.id);
     }
+  }
+
+  if (session.activeDepartmentId) {
+    departmentIds = departmentIds.filter((id) => id === session.activeDepartmentId);
   }
 
   const entries = await listDepartmentQueue(departmentIds);

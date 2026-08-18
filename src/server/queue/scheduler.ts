@@ -1,8 +1,12 @@
 import { and, eq, lt, sql } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
-import { distributeConversation, getDepartmentQueueConfig } from "@/server/queue/manager";
+import { distributeConversation, getDepartmentQueueConfig, loadQueueRow } from "@/server/queue/manager";
 import { handleSelectionAcceptTimeout, handleSelectionTimeout } from "@/server/queue/selection";
 import { checkCriticalQueues } from "@/server/queue/critical-alert";
+import { sendText } from "@/server/inbox/send";
+import { logTrace } from "@/server/observability/trace";
+
+const DEFAULT_MAX_ATTEMPTS = 10;
 
 /**
  * Ciclo de revisão da fila — mesmo padrão de
@@ -79,11 +83,22 @@ async function handleAcceptTimeout(
     return;
   }
 
+  // Teto de retentativas: sem isso, um agente que nunca aceita (ou fica
+  // ocupado noutra conversa) gera um loop 100% automático — a cada
+  // `accept_timeout_seconds` o scheduler devolve pra fila e redistribui de
+  // novo, sem nenhuma ação humana, inflando `attempt` indefinidamente.
+  const maxAttempts = config.maxAttempts ?? DEFAULT_MAX_ATTEMPTS;
+  const nextAttempt = row.attempt + 1;
+  if (nextAttempt >= maxAttempts) {
+    await giveUpOnQueueEntry(row, nextAttempt, config, now);
+    return;
+  }
+
   // Claim atômico: só processa se ainda estiver 'assigned' com o mesmo
   // agente (evita corrida com um aceite que chegou entre a leitura e aqui).
   const claimed = await db
     .update(schema.conversationQueue)
-    .set({ status: "waiting", assignedTo: null, assignedAt: null, timeoutAt: null, attempt: row.attempt + 1, updatedAt: now })
+    .set({ status: "waiting", assignedTo: null, assignedAt: null, timeoutAt: null, attempt: nextAttempt, updatedAt: now })
     .where(
       and(
         eq(schema.conversationQueue.id, row.id),
@@ -108,6 +123,55 @@ async function handleAcceptTimeout(
     await distributeConversation(row.id).catch((err) =>
       console.error(`[queue] falha ao tentar o próximo agente para ${row.id}:`, err)
     );
+  }
+}
+
+/** Desiste de redistribuir: marca `expired` (sai da fila ativa de vez, não
+ * é mais pego por `findActiveQueueEntry`/scheduler) e avisa o cliente, se
+ * houver mensagem configurada — melhor que sumir em silêncio. */
+async function giveUpOnQueueEntry(
+  row: typeof schema.conversationQueue.$inferSelect,
+  finalAttempt: number,
+  config: { noAgentsMessage: string | null },
+  now: Date
+): Promise<void> {
+  const db = getDb();
+  const claimed = await db
+    .update(schema.conversationQueue)
+    .set({ status: "expired", assignedTo: null, assignedAt: null, timeoutAt: null, attempt: finalAttempt, updatedAt: now })
+    .where(
+      and(
+        eq(schema.conversationQueue.id, row.id),
+        eq(schema.conversationQueue.status, "assigned"),
+        eq(schema.conversationQueue.assignedTo, row.assignedTo ?? "")
+      )
+    )
+    .returning();
+  if (claimed.length === 0) return;
+
+  if (row.assignedTo) {
+    await db
+      .update(schema.agentStatus)
+      .set({ currentConversations: sql`GREATEST(${schema.agentStatus.currentConversations} - 1, 0)`, updatedAt: now })
+      .where(eq(schema.agentStatus.memberId, row.assignedTo));
+  }
+
+  const loaded = await loadQueueRow(row.id);
+  if (!loaded) return;
+
+  await logTrace({
+    organizationId: loaded.conversation.organizationId,
+    conversationId: row.conversationId,
+    type: "queue.expired",
+    detail: { departmentId: row.departmentId, attempt: finalAttempt },
+  });
+
+  if (config.noAgentsMessage) {
+    await sendText({
+      conversationId: loaded.conversation.id,
+      organizationId: loaded.conversation.organizationId,
+      text: config.noAgentsMessage,
+    }).catch((err) => console.error(`[queue] falha ao avisar desistência (${row.id}):`, err));
   }
 }
 

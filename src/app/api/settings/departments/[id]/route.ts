@@ -56,6 +56,7 @@ const patchSchema = z.object({
   selectionUnavailableMessage: messageField,
   acceptTimeoutSeconds: z.number().int().min(10).max(3600).optional(),
   acceptTimeoutAction: z.enum(["next-agent", "queue", "ai-assumes"]).optional(),
+  maxAttempts: z.number().int().min(1).max(999).optional(),
   maxConversationsPerAgent: z.number().int().min(1).max(999).optional(),
   maxQueueSize: z.number().int().min(1).max(9999).optional(),
   queueMessage: messageField,

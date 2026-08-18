@@ -25,6 +25,7 @@ export type QueueDepartment = {
   selectionUnavailableMessage: string | null;
   acceptTimeoutSeconds: number | null;
   acceptTimeoutAction: "next-agent" | "queue" | "ai-assumes" | null;
+  maxAttempts: number | null;
   maxConversationsPerAgent: number | null;
   maxQueueSize: number | null;
   queueMessage: string | null;
@@ -104,6 +105,7 @@ export function DepartmentQueueSettings({
   const [acceptTimeoutAction, setAcceptTimeoutAction] = useState(
     d.acceptTimeoutAction ?? "next-agent"
   );
+  const [maxAttempts, setMaxAttempts] = useState(d.maxAttempts ?? 10);
   const [maxConversationsPerAgent, setMaxConversationsPerAgent] = useState(
     d.maxConversationsPerAgent ?? 5
   );
@@ -148,6 +150,7 @@ export function DepartmentQueueSettings({
         selectionUnavailableMessage: selectionUnavailableMessage.trim() || null,
         acceptTimeoutSeconds,
         acceptTimeoutAction,
+        maxAttempts,
         maxConversationsPerAgent,
         maxQueueSize,
         queueMessage: queueMessage.trim() || null,
@@ -366,6 +369,20 @@ export function DepartmentQueueSettings({
                     <option value="queue">Fila de espera</option>
                     <option value="ai-assumes">IA assume temporariamente</option>
                   </select>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Máx. tentativas antes de desistir</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    className="w-24"
+                    value={maxAttempts}
+                    onChange={(e) => setMaxAttempts(Number(e.target.value))}
+                  />
+                  <span className="text-xs text-muted-foreground">
+                    redistribuições — depois disso a conversa sai da fila (fica &ldquo;expired&rdquo;) em vez de continuar tentando indefinidamente
+                  </span>
                 </div>
               </div>
               <div className="grid gap-3 sm:grid-cols-2">

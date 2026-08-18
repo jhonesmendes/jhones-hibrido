@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { newId } from "@/lib/db/ids";
 import { notifyAgentAssigned } from "@/server/queue/notifier";
@@ -17,6 +17,7 @@ type DepartmentQueueConfig = {
   distributionMode: string | null;
   acceptTimeoutSeconds: number | null;
   acceptTimeoutAction: string | null;
+  maxAttempts: number | null;
   maxConversationsPerAgent: number | null;
   noAgentsMessage: string | null;
   selectionGreeting: string | null;
@@ -44,6 +45,7 @@ export async function getDepartmentQueueConfig(
       distributionMode: schema.department.distributionMode,
       acceptTimeoutSeconds: schema.department.acceptTimeoutSeconds,
       acceptTimeoutAction: schema.department.acceptTimeoutAction,
+      maxAttempts: schema.department.maxAttempts,
       maxConversationsPerAgent: schema.department.maxConversationsPerAgent,
       noAgentsMessage: schema.department.noAgentsMessage,
       selectionGreeting: schema.department.selectionGreeting,
@@ -170,10 +172,23 @@ function pickAgent(agents: EligibleAgent[], distributionMode: string | null): El
  */
 const ACTIVE_QUEUE_STATUSES = ["waiting", "selecting", "assigned", "accepted"];
 
-/** Linha de fila em andamento pra esta conversa (qualquer status ativo),
- * ou `null`. Usado pelo ingest.ts pra saber se uma mensagem nova do
- * cliente é resposta a uma seleção em aberto (Modo B) em vez de "conversa
- * nova entrando na fila". */
+/**
+ * Linha de fila em andamento pra esta conversa (qualquer status ativo), ou
+ * `null`. Usado pelo ingest.ts pra saber se uma mensagem nova do cliente é
+ * resposta a uma seleção em aberto (Modo B), ou se a conversa já tem dono
+ * (`accepted`) — nesses casos NÃO deve criar uma entrada nova na fila.
+ *
+ * BUG CORRIGIDO (validado em produção): o filtro de status rodava em JS
+ * DEPOIS do `.limit(1)` do SQL — sem `ORDER BY`, o Postgres podia devolver
+ * QUALQUER linha do par (conversa, departamento), inclusive uma antiga já
+ * resolvida, enquanto a linha `accepted` de verdade (a que importa) ficava
+ * de fora. Resultado: uma conversa já aceita e sendo atendida normalmente
+ * "perdia" o dono aos olhos desta função, e a próxima mensagem do cliente
+ * criava uma entrada NOVA em `waiting` — reabrindo na tela Fila uma
+ * conversa que já tinha agente. Agora o filtro de status vai pra dentro do
+ * WHERE (antes do limit) e ordena pela mais recente, então sempre acha a
+ * entrada ativa de verdade quando ela existe.
+ */
 export async function findActiveQueueEntry(
   conversationId: string,
   departmentId: string
@@ -185,12 +200,13 @@ export async function findActiveQueueEntry(
     .where(
       and(
         eq(schema.conversationQueue.conversationId, conversationId),
-        eq(schema.conversationQueue.departmentId, departmentId)
+        eq(schema.conversationQueue.departmentId, departmentId),
+        inArray(schema.conversationQueue.status, ACTIVE_QUEUE_STATUSES)
       )
     )
+    .orderBy(desc(schema.conversationQueue.createdAt))
     .limit(1);
-  const active = rows.find((r) => ACTIVE_QUEUE_STATUSES.includes(r.status));
-  return active ?? null;
+  return rows[0] ?? null;
 }
 
 export async function routeConversationToQueue(

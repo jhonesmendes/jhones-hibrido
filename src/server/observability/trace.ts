@@ -17,6 +17,7 @@ export type TraceEventType =
   | "queue.declined"
   | "queue.selection_timeout"
   | "queue.accept_timeout"
+  | "queue.expired"
   | "message.sent"
   | "message.send_failed"
   | "conversation.transferred";

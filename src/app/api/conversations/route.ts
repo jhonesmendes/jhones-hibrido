@@ -121,20 +121,19 @@ export const POST = withAuth(async (session, req: Request) => {
     });
   }
 
-  // Sem isso, uma conversa criada manualmente por quem não tem
-  // conversations:view_all nasce com assignedTo=null e desaparece pro
-  // próprio criador (o filtro de "minhas conversas" em GET não bate com
-  // NULL) — a UI mostra "criei, mas não abre". Quem já tem view_all
-  // (inclusive owner, por padrão) não precisa: já enxerga qualquer
-  // conversa sem dono.
+  // Sempre atribui a quem iniciou — "iniciar conversa" é uma reivindicação
+  // explícita de dono. Sem isso, quem tem conversations:view_all cria a
+  // conversa com assignedTo=null e, num departamento com fila ativa, a
+  // resposta do cliente é tratada como "sem dono" e vai pra fila em vez de
+  // cair como mensagem não lida na conversa que o agente já tinha aberto
+  // (ver o mesmo guard em src/server/inbox/ingest.ts). Também resolve o
+  // caso original: sem view_all, assignedTo=null some da lista de "minhas
+  // conversas" pro próprio criador.
   if (conversation.assignedTo === null) {
-    const effective = await resolvePermissions(session.memberId, session.role);
-    if (!effective.has("conversations:view_all")) {
-      const updated = await updateConversation(session.organizationId, conversation.id, {
-        assignedTo: session.memberId,
-      });
-      if (updated) conversation = updated;
-    }
+    const updated = await updateConversation(session.organizationId, conversation.id, {
+      assignedTo: session.memberId,
+    });
+    if (updated) conversation = updated;
   }
 
   return Response.json(

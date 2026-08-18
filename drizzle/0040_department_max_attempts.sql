@@ -1,0 +1,1 @@
+ALTER TABLE "department" ADD COLUMN "max_attempts" integer DEFAULT 10;

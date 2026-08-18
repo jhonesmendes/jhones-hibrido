@@ -460,8 +460,12 @@ export async function ingestInboundMessage(input: {
   // Fila de atendimento (Sprint Q2/Q3): só mensagem real do cliente,
   // conversa individual (grupo não tem "um" agente dono — fora de escopo
   // por ora), e NUNCA para conversas do Laboratório (guardrail de sandbox).
+  // Conversa já com dono (ex.: agente disparou o template pra iniciar o
+  // papo) NUNCA entra na fila — senão a resposta do cliente vira uma
+  // entrada nova em 'waiting' e "some" pro agente que já estava com ela,
+  // em vez de cair como mensagem não lida na conversa que ele já tem.
   if (!fromMe && !conversation.isTest && contact.kind !== "group") {
-    if (channelDepartmentId && queueEnabled) {
+    if (channelDepartmentId && queueEnabled && !conversation.assignedTo) {
       await logTrace({
         organizationId,
         conversationId: conversation.id,

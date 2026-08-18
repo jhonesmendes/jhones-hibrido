@@ -201,6 +201,12 @@ export const department = pgTable(
     acceptTimeoutSeconds: integer("accept_timeout_seconds").default(120),
     /** next-agent | queue | ai-assumes */
     acceptTimeoutAction: text("accept_timeout_action").default("next-agent"),
+    /** Teto de retentativas automáticas (accept-timeout) antes de desistir
+     * de redistribuir e marcar a entrada como `expired` — sem isso, um
+     * agente que nunca aceita gera um loop silencioso de reatribuição a
+     * cada `accept_timeout_seconds`, inflando `conversation_queue.attempt`
+     * indefinidamente sem nenhuma ação humana. */
+    maxAttempts: integer("max_attempts").default(10),
     maxConversationsPerAgent: integer("max_conversations_per_agent").default(5),
     maxQueueSize: integer("max_queue_size").default(50),
     queueMessage: text("queue_message"),
