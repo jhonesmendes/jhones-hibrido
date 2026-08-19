@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { scoped } from "@/lib/db/tenant";
 
@@ -227,7 +227,7 @@ export type DashboardExtras = {
     id: string;
     name: string;
     status: string;
-    assignedConversations: number;
+    messagesSentToday: number;
   }[];
   lab: { score: number | null; delta: number | null; handoffsToday: number };
   pipeline: { stageId: string; name: string; kind: string; count: number }[];
@@ -332,30 +332,35 @@ export async function getDashboardExtras(
       )
     );
 
-  const assignedRows = await db
+  // Mensagens enviadas HOJE por cada atendente (não "total de conversas
+  // atribuídas" — esse número só crescia e não dizia nada sobre o dia).
+  const sentTodayStart = periodStart("today");
+  const sentTodayRows = await db
     .select({
-      assignedTo: schema.conversation.assignedTo,
+      sentByMemberId: schema.message.sentByMemberId,
       n: sql<number>`count(*)`,
     })
-    .from(schema.conversation)
+    .from(schema.message)
+    .innerJoin(schema.conversation, eq(schema.message.conversationId, schema.conversation.id))
     .where(
-      scoped(
-        schema.conversation.organizationId,
-        organizationId,
-        and(eq(schema.conversation.isTest, false), isNull(schema.conversation.handoffAt))
+      and(
+        eq(schema.message.organizationId, organizationId),
+        eq(schema.conversation.isTest, false),
+        eq(schema.message.direction, "out"),
+        gte(schema.message.createdAt, sentTodayStart)
       )
     )
-    .groupBy(schema.conversation.assignedTo);
-  const assignedCountByMember = new Map<string, number>();
-  for (const r of assignedRows) {
-    if (r.assignedTo) assignedCountByMember.set(r.assignedTo, Number(r.n));
+    .groupBy(schema.message.sentByMemberId);
+  const sentTodayByMember = new Map<string, number>();
+  for (const r of sentTodayRows) {
+    if (r.sentByMemberId) sentTodayByMember.set(r.sentByMemberId, Number(r.n));
   }
 
   const agents = memberRows.map((m) => ({
     id: m.id,
     name: m.name,
     status: m.status ?? "offline",
-    assignedConversations: assignedCountByMember.get(m.id) ?? 0,
+    messagesSentToday: sentTodayByMember.get(m.id) ?? 0,
   }));
 
   // Volume de mensagens por dia — últimos 7 dias corridos, sempre (o
@@ -376,6 +381,13 @@ export async function getDashboardExtras(
       )
     )
     .groupBy(sql`to_char(${schema.message.createdAt}, 'YYYY-MM-DD')`);
+  console.log("[dashboard] volume debug", {
+    organizationId,
+    visibleDepartmentIds,
+    volumeSince: volumeSince.toISOString(),
+    rowCount: volumeRows.length,
+    rows: volumeRows,
+  });
   const volumeByDayMap = new Map(volumeRows.map((r) => [r.day, Number(r.n)]));
   const volumeByDay: { date: string; count: number }[] = [];
   for (let i = 6; i >= 0; i--) {

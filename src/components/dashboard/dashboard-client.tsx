@@ -49,7 +49,7 @@ type DashboardData = {
     windowExpired: number;
   };
   volumeByDay: { date: string; count: number }[];
-  agents: { id: string; name: string; status: string; assignedConversations: number }[];
+  agents: { id: string; name: string; status: string; messagesSentToday: number }[];
   lab: { score: number | null; delta: number | null; handoffsToday: number };
   pipeline: { stageId: string; name: string; kind: string; count: number }[];
   channels: {
@@ -269,7 +269,7 @@ export function DashboardClient() {
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Atendentes</CardTitle>
-              <CardDescription>Status ao vivo e conversas atribuídas agora.</CardDescription>
+              <CardDescription>Status ao vivo e mensagens enviadas hoje.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               {data.agents.length === 0 && (
@@ -285,7 +285,9 @@ export function DashboardClient() {
                   <span className="text-xs text-muted-foreground">
                     {STATUS_LABEL[a.status] ?? a.status}
                   </span>
-                  <span className="text-sm font-medium">{a.assignedConversations}</span>
+                  <span className="text-sm font-medium" title="Mensagens enviadas hoje">
+                    {a.messagesSentToday}
+                  </span>
                 </div>
               ))}
             </CardContent>
