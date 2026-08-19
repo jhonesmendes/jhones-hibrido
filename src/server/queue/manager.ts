@@ -574,17 +574,32 @@ export async function claimOnManualReply(
     .from(schema.conversationQueue)
     .where(eq(schema.conversationQueue.conversationId, conversationId));
   const active = rows.find((r) => r.status === "waiting" || r.status === "assigned");
-  if (!active) return;
 
-  if (active.status === "waiting") {
-    await claimQueuedConversation(active.id, memberId);
+  if (active) {
+    if (active.status === "waiting") {
+      await claimQueuedConversation(active.id, memberId);
+      return;
+    }
+    // 'assigned' pra outro membro: não é dele pra aceitar — o dono original
+    // ainda tem a janela de timeout pra aceitar ou ser redistribuído.
+    if (active.status === "assigned" && active.assignedTo === memberId) {
+      await acceptQueuedConversation(active.id, memberId);
+    }
     return;
   }
-  // 'assigned' pra outro membro: não é dele pra aceitar — o dono original
-  // ainda tem a janela de timeout pra aceitar ou ser redistribuído.
-  if (active.status === "assigned" && active.assignedTo === memberId) {
-    await acceptQueuedConversation(active.id, memberId);
-  }
+
+  // Sem entrada de fila (ex.: agente iniciou a conversa mandando modelo/
+  // texto pra um contato novo, nunca passou pela fila): sem isso, a
+  // conversa ficava com assigned_to nulo pra sempre, e a PRÓXIMA resposta
+  // do cliente caía na fila como entrada nova em vez de voltar pra quem já
+  // estava conversando (bug real em produção). Só reivindica se ninguém
+  // for dono ainda — nunca rouba a conversa de outro agente.
+  await db
+    .update(schema.conversation)
+    .set({ assignedTo: memberId, updatedAt: new Date() })
+    .where(
+      and(eq(schema.conversation.id, conversationId), sql`${schema.conversation.assignedTo} is null`)
+    );
 }
 
 export type QueueEntryDto = {

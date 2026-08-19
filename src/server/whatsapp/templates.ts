@@ -15,6 +15,7 @@ import {
 import { callGraphSend, SendError } from "@/server/inbox/send";
 import { serializeMessage } from "@/server/inbox/ingest";
 import { getMemberName } from "@/server/inbox/queries";
+import { claimOnManualReply } from "@/server/queue/manager";
 import type { WebhookValue } from "@/server/inbox/webhook";
 
 /** Erros tipados do serviço de modelos → HTTP na camada de API. */
@@ -626,6 +627,17 @@ export async function sendTemplate(input: {
     throw new SendError(
       "sandbox_violation",
       "Conversa de teste do Laboratório: o envio real é proibido"
+    );
+  }
+
+  // Reivindicação implícita: agente que dispara o modelo pra iniciar/
+  // retomar o papo passa a ser o dono — senão a resposta do cliente cai na
+  // fila como "sem dono" em vez de voltar direto pra essa conversa (mesmo
+  // guard usado em sendText/sendMedia, ver claimOnManualReply). Nunca deve
+  // bloquear o envio se algo der errado aqui.
+  if (input.actorMemberId) {
+    await claimOnManualReply(input.conversationId, input.actorMemberId).catch((err) =>
+      console.error(`[queue] falha no aceite implícito (${input.conversationId}):`, err)
     );
   }
 
