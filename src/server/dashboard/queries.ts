@@ -381,13 +381,6 @@ export async function getDashboardExtras(
       )
     )
     .groupBy(sql`to_char(${schema.message.createdAt}, 'YYYY-MM-DD')`);
-  console.log("[dashboard] volume debug", {
-    organizationId,
-    visibleDepartmentIds,
-    volumeSince: volumeSince.toISOString(),
-    rowCount: volumeRows.length,
-    rows: volumeRows,
-  });
   const volumeByDayMap = new Map(volumeRows.map((r) => [r.day, Number(r.n)]));
   const volumeByDay: { date: string; count: number }[] = [];
   for (let i = 6; i >= 0; i--) {

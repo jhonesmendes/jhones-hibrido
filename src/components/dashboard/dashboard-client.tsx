@@ -249,15 +249,21 @@ export function DashboardClient() {
                 {data.volumeByDay.map((v) => {
                   const d = new Date(`${v.date}T00:00:00`);
                   const label = d.toLocaleDateString("pt-BR", { weekday: "narrow" });
+                  // Altura em px (não %): dentro de um flex container com
+                  // items-end, um filho não tem altura resolvida pro pai —
+                  // % de altura vira 0 silenciosamente (por isso o gráfico
+                  // parecia vazio mesmo com dado real vindo da API).
+                  const barHeight = Math.max(4, Math.round((v.count / maxVolume) * 80));
                   return (
-                    <div key={v.date} className="flex flex-1 flex-col items-center gap-1.5">
-                      <div className="flex w-full flex-1 items-end">
-                        <div
-                          className="w-full rounded-t bg-brand/70"
-                          style={{ height: `${Math.max(4, (v.count / maxVolume) * 100)}%` }}
-                          title={`${v.count} mensagens`}
-                        />
-                      </div>
+                    <div
+                      key={v.date}
+                      className="flex flex-1 flex-col items-center justify-end gap-1.5"
+                    >
+                      <div
+                        className="w-full rounded-t bg-brand/70"
+                        style={{ height: `${barHeight}px` }}
+                        title={`${v.count} mensagens`}
+                      />
                       <span className="text-[10px] uppercase text-muted-foreground">{label}</span>
                     </div>
                   );
