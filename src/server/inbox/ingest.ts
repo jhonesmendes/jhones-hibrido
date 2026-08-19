@@ -1,6 +1,7 @@
 import { and, eq, sql } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { newId } from "@/lib/db/ids";
+import { altBrNinthDigitCandidate } from "@/lib/utils";
 import { publish } from "@/server/events/bus";
 import { sendPushToOrganization } from "@/server/push/send";
 import { getCredentialsByOrg, getCredentialsByPhoneNumberId } from "@/server/whatsapp/credentials";
@@ -46,6 +47,27 @@ export async function getOrCreateContact(
   kind: "individual" | "group" = "individual"
 ) {
   const db = getDb();
+
+  // Antes de criar sob `phone`, tenta a OUTRA forma ambígua do mesmo número
+  // BR (com/sem o 9º dígito) — se já existe contato lá, é a mesma pessoa
+  // que chegou por uma via diferente (webhook manda cru, "iniciar
+  // conversa"/CSV normaliza com 9). Prefere sempre o contato existente a
+  // criar um novo — evita o bug real de conversa duplicada por esse motivo.
+  const altPhone = altBrNinthDigitCandidate(phone);
+  if (altPhone) {
+    const altRows = await db
+      .select()
+      .from(schema.contact)
+      .where(
+        and(
+          eq(schema.contact.organizationId, organizationId),
+          eq(schema.contact.phone, altPhone)
+        )
+      )
+      .limit(1);
+    if (altRows[0]) return { contact: altRows[0], isNew: false };
+  }
+
   // Se o "nome" recebido é só dígitos, é um telefone disfarçado de nome (ex.:
   // veio de um formato de origem diferente do `phone` já normalizado acima)
   // — usa o `phone` normalizado em vez de confiar num valor calculado à

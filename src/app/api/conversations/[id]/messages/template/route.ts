@@ -42,6 +42,7 @@ export const POST = withAuth(async (session, req: Request, ctx: Params) => {
       conversationId: id,
       templateId: body.data.templateId,
       variables: body.data.variables,
+      actorMemberId: session.memberId,
     });
     return Response.json({ messageId: result.messageId });
   } catch (err) {

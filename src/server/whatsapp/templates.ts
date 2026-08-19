@@ -14,6 +14,7 @@ import {
 } from "@/server/whatsapp/credentials";
 import { callGraphSend, SendError } from "@/server/inbox/send";
 import { serializeMessage } from "@/server/inbox/ingest";
+import { getMemberName } from "@/server/inbox/queries";
 import type { WebhookValue } from "@/server/inbox/webhook";
 
 /** Erros tipados do serviço de modelos → HTTP na camada de API. */
@@ -567,6 +568,9 @@ export async function sendTemplate(input: {
   templateId: string;
   /** Ordenadas: índice 0 = {{1}}, índice 1 = {{2}}, etc. */
   variables?: string[];
+  /** Quem mandou enviar (agente pelo painel) — grava a assinatura interna
+   * (`message.sent_by_member_id`), nunca vai pro WhatsApp. */
+  actorMemberId?: string | null;
 }): Promise<{ messageId: string }> {
   const db = getDb();
 
@@ -668,6 +672,7 @@ export async function sendTemplate(input: {
         variables.map((v) => v.trim())
       ),
       status: "pending",
+      sentByMemberId: input.actorMemberId ?? null,
     })
     .returning();
   const message = inserted[0]!;
@@ -681,7 +686,11 @@ export async function sendTemplate(input: {
     type: "message.new",
     data: {
       conversationId: input.conversationId,
-      message: serializeMessage(message),
+      message: serializeMessage(
+        message,
+        null,
+        input.actorMemberId ? await getMemberName(input.actorMemberId) : null
+      ),
     },
   });
 

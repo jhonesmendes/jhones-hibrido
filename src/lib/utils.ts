@@ -84,6 +84,30 @@ export function ensureBrNinthDigit(digits: string): string {
 }
 
 /**
+ * A outra forma possível do mesmo número BR, quando `ensureBrNinthDigit`
+ * teria sido ambíguo — usado só pra CASAR com um contato já existente sob
+ * a outra forma (nunca pra decidir qual gravar). Sem isso, o mesmo contato
+ * ganha uma linha nova sempre que uma via manda o número com o 9 e outra
+ * sem (ex.: webhook manda cru, busca "iniciar conversa" normaliza com 9) —
+ * bug real visto em produção com um número cujo local de 8 dígitos já
+ * começava com 9 (ensureBrNinthDigit assume que "começa com 9" = "falta o
+ * 9", mas às vezes já é o número completo).
+ */
+export function altBrNinthDigitCandidate(digits: string): string | null {
+  if (digits.length === 12 && digits.startsWith("55")) {
+    const withNinth = ensureBrNinthDigit(digits);
+    return withNinth !== digits ? withNinth : null;
+  }
+  if (digits.length === 13 && digits.startsWith("55")) {
+    const local = digits.slice(5); // 8 dígitos após "55" + DDD(2) + "9"
+    if (digits[4] === "9" && /^[6-9]/.test(local)) {
+      return `55${digits.slice(2, 4)}${local}`;
+    }
+  }
+  return null;
+}
+
+/**
  * Normaliza um telefone digitado livre para dígitos com código do país.
  * Ex.: "66 99674-6147" → "5566996746147". 10–11 dígitos (fixo/celular BR
  * com DDD, sem o 55) ganham prefixo. Devolve null se não parecer telefone
