@@ -261,7 +261,7 @@ export function DashboardClient() {
                     >
                       <div
                         className="w-full rounded-t bg-brand/70"
-                        style={{ height: `${barHeight}px` }}
+                        style={{ height: `${barHeight}px`, transform: "translateZ(0)" }}
                         title={`${v.count} mensagens`}
                       />
                       <span className="text-[10px] uppercase text-muted-foreground">{label}</span>
