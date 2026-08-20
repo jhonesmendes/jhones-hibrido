@@ -44,6 +44,8 @@ export function TemplatesClient() {
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [channelFilter, setChannelFilter] = useState("");
+  const [search, setSearch] = useState("");
 
   const refetch = useCallback(async () => {
     const [tRes, cRes, dRes] = await Promise.all([
@@ -129,6 +131,14 @@ export function TemplatesClient() {
     else alert("Não foi possível mudar a visibilidade do modelo");
   }
 
+  const filteredTemplates = templates
+    .filter((t) => !channelFilter || t.credentialId === channelFilter)
+    .filter((t) => {
+      const q = search.trim().toLowerCase();
+      if (!q) return true;
+      return t.name.toLowerCase().includes(q) || t.body.toLowerCase().includes(q);
+    });
+
   return (
     <div className="max-w-3xl space-y-6">
       <div className="flex items-start justify-between gap-4">
@@ -150,8 +160,29 @@ export function TemplatesClient() {
 
       <CreateForm channels={channels} departments={departments} onCreated={() => void refetch()} />
 
+      <div className="flex flex-wrap items-center gap-2">
+        <Input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Buscar por nome ou texto…"
+          className="h-9 max-w-xs"
+        />
+        <select
+          value={channelFilter}
+          onChange={(e) => setChannelFilter(e.target.value)}
+          className="h-9 rounded-md border border-input bg-card px-3 text-sm"
+        >
+          <option value="">Todos os números</option>
+          {channels.map((c) => (
+            <option key={c.id} value={c.id}>
+              {channelLabel(c)}
+            </option>
+          ))}
+        </select>
+      </div>
+
       <div className="space-y-2">
-        {templates.map((t) => {
+        {filteredTemplates.map((t) => {
           const channel = channels.find((c) => c.id === t.credentialId) ?? null;
           return editingId === t.id ? (
             <EditForm
@@ -231,6 +262,11 @@ export function TemplatesClient() {
             Nenhum modelo ainda. Crie o primeiro acima — por exemplo um
             «seguimos à disposição, retomamos seu orçamento?» para conversas
             frias.
+          </p>
+        )}
+        {templates.length > 0 && filteredTemplates.length === 0 && (
+          <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+            Nenhum modelo encontrado com esse filtro.
           </p>
         )}
       </div>
