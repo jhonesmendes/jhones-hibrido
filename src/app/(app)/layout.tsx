@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { getAuth } from "@/lib/auth";
 import { getSessionOrNull } from "@/lib/auth/session";
 import { getBranding } from "@/server/branding";
+import { resolvePermissions } from "@/lib/auth/require-permission";
 import { AppNav } from "@/components/app-nav";
 
 export default async function AppLayout({
@@ -14,6 +15,7 @@ export default async function AppLayout({
   const authSession = await getAuth().api.getSession({
     headers: await headers(),
   });
+  const permissions = await resolvePermissions(session.memberId, session.role);
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background md:flex-row">
@@ -21,6 +23,7 @@ export default async function AppLayout({
         branding={branding}
         userName={authSession?.user.name ?? "Usuario"}
         role={session.role}
+        permissions={[...permissions]}
       />
       <main className="min-h-0 min-w-0 flex-1 overflow-hidden">{children}</main>
     </div>

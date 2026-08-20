@@ -28,6 +28,8 @@ export const PERMISSIONS = {
 
   "agent:view": "Ver configurações da IA",
   "agent:manage": "Gerenciar agente IA",
+
+  "n8n:view": "Ver automações N8N",
 } as const;
 
 export type Permission = keyof typeof PERMISSIONS;

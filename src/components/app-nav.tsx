@@ -43,11 +43,14 @@ const NAV = [
   { href: "/pipeline", label: "Pipeline", icon: Kanban },
   { href: "/contacts", label: "Contatos", icon: Users },
   { href: "/campanhas", label: "Campanhas", icon: Megaphone },
-  { href: "/agent", label: "Agente", icon: Sparkles },
+  // Agente comum só vê isto com a permissão "Ver configurações da IA"
+  // concedida explicitamente (ver Configurações → Equipe → editar membro).
+  { href: "/agent", label: "Agente", icon: Sparkles, requiresPermission: "agent:view" },
   // Configuração/análise de operação, não atendimento do dia a dia — fora
   // da tela do agente comum (ver mesma checagem no server, /lab/page.tsx).
   { href: "/lab", label: "Laboratório", icon: FlaskConical, hideFromAgent: true },
-  { href: "/n8n-panel", label: "Painel N8N", icon: Workflow },
+  // Idem: agente comum só vê com "Ver automações N8N" concedida.
+  { href: "/n8n-panel", label: "Painel N8N", icon: Workflow, requiresPermission: "n8n:view" },
 ] as const;
 
 const NAV_COLLAPSED_KEY = "vocero-nav-collapsed";
@@ -56,11 +59,14 @@ export function AppNav({
   branding,
   userName,
   role,
+  permissions,
 }: {
   branding: Branding;
   userName: string;
   role: string;
+  permissions: string[];
 }) {
+  const permissionSet = new Set(permissions);
   const pathname = usePathname();
   const router = useRouter();
   const [unread, setUnread] = useState(0);
@@ -246,7 +252,17 @@ export function AppNav({
       )}
 
       <nav className="flex flex-col gap-0.5">
-        {NAV.filter((item) => !("hideFromAgent" in item && item.hideFromAgent && role === "agent")).map((item) => {
+        {NAV.filter((item) => {
+          if ("hideFromAgent" in item && item.hideFromAgent && role === "agent") return false;
+          if (
+            role === "agent" &&
+            "requiresPermission" in item &&
+            !permissionSet.has(item.requiresPermission)
+          ) {
+            return false;
+          }
+          return true;
+        }).map((item) => {
           const active =
             pathname === item.href || pathname.startsWith(`${item.href}/`);
           return (
