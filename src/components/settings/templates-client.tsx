@@ -175,7 +175,7 @@ export function TemplatesClient() {
                     {STATUS_BADGE[t.status].label}
                   </Badge>
                   {!t.isListable && <Badge variant="outline">Não listável</Badge>}
-                  {t.status === "rejected" && (
+                  {(t.status === "rejected" || t.status === "approved") && (
                     <button
                       onClick={() => setEditingId(t.id)}
                       aria-label="Editar modelo"
@@ -400,8 +400,9 @@ function CreateForm({
   );
 }
 
-/** Edição de modelo rejeitado — nome/idioma são fixos na Meta (só dá pra
- * mudar categoria e corpo), reenvia pra revisão ao salvar. */
+/** Edição de modelo rejeitado OU já aprovado (ex.: corrigir um texto errado
+ * sem apagar e recriar) — nome/idioma são fixos na Meta (só dá pra mudar
+ * categoria e corpo), reenvia pra revisão ao salvar. */
 function EditForm({
   template,
   onSaved,
@@ -446,7 +447,13 @@ function EditForm({
         </CardTitle>
         <CardDescription>
           Nome e idioma não podem mudar — só categoria e corpo. Salvar reenvia
-          pra revisão da Meta.
+          pra revisão da Meta{" "}
+          {template.status === "approved" && (
+            <span className="text-destructive">
+              — o modelo fica &quot;Pendente na Meta&quot; até ser reaprovado, e não
+              pode ser enviado nesse meio-tempo.
+            </span>
+          )}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">

@@ -512,7 +512,26 @@ export async function syncTemplates(organizationId: string): Promise<number> {
         continue;
       }
 
-      if (match.status === status && match.credentialId === creds.id) continue;
+      // Meta é sempre a fonte da verdade pro texto/categoria realmente em
+      // vigor — nada que a gente grava localmente muda o que é de fato
+      // entregue (mensagem de modelo só leva o NOME + valores das
+      // variáveis; o corpo é resolvido por inteiro do lado da Meta). Se o
+      // local ficou desalinhado (edição que não foi reaprovada, ajuste
+      // manual, etc.), Sincronizar sobrescreve com o que está aprovado lá —
+      // nunca o contrário.
+      const remoteBody = remote.components?.find(
+        (c) => (c.type ?? "").toUpperCase() === "BODY"
+      )?.text;
+      const bodyChanged = remoteBody !== undefined && remoteBody !== match.body;
+      const categoryChanged = !!remote.category && remote.category !== match.category;
+      if (
+        match.status === status &&
+        match.credentialId === creds.id &&
+        !bodyChanged &&
+        !categoryChanged
+      ) {
+        continue;
+      }
       await db
         .update(schema.template)
         .set({
@@ -520,6 +539,8 @@ export async function syncTemplates(organizationId: string): Promise<number> {
           rejectionReason: remote.rejected_reason ?? null,
           waTemplateId: match.waTemplateId ?? remote.id ?? null,
           credentialId: creds.id,
+          ...(bodyChanged ? { body: remoteBody } : {}),
+          ...(categoryChanged ? { category: remote.category } : {}),
           updatedAt: new Date(),
         })
         .where(eq(schema.template.id, match.id));
