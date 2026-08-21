@@ -28,6 +28,9 @@ FROM node:22-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+# ffmpeg: reconverte áudio gravado no navegador (audio/webm) pra ogg/opus
+# antes do upload — a Cloud API da Meta rejeita webm (erro #100).
+RUN apk add --no-cache ffmpeg
 RUN addgroup -S vocero && adduser -S vocero -G vocero
 
 COPY --from=builder --chown=vocero:vocero /app/.next/standalone ./

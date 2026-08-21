@@ -8,6 +8,7 @@ import {
   uploadMetaMedia,
 } from "@/lib/meta/client";
 import { mediaKindFromMime, type MediaKind } from "@/lib/media";
+import { ensureMetaCompatibleAudio } from "@/lib/media/audio-transcode";
 import { publish } from "@/server/events/bus";
 import {
   getCredentialsById,
@@ -328,6 +329,13 @@ export async function sendMedia(input: {
     input.conversationId,
     input.replyToMessageId
   );
+
+  // Áudio gravado no navegador (MediaRecorder) vem como audio/webm — a Meta
+  // rejeita esse tipo (erro #100); reconverte pra ogg/opus antes de tudo, os
+  // dois canais (oficial e não oficial) e o encaminhamento (que também passa
+  // por aqui) saem beneficiados de uma vez só.
+  const { buffer, mimeType } = await ensureMetaCompatibleAudio(input.buffer, input.mimeType);
+  input = { ...input, buffer, mimeType };
 
   const effectiveChannel = input.channelOverride ?? row.conversation.channel;
   const kind = mediaKindFromMime(input.mimeType);
