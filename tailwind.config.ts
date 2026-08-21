@@ -20,8 +20,16 @@ import animate from "tailwindcss-animate";
  */
 function withOpacity(variableName: string) {
   return ({ opacityValue }: { opacityValue?: string }) => {
-    if (opacityValue !== undefined) {
-      return `color-mix(in srgb, var(${variableName}) ${Number(opacityValue) * 100}%, transparent)`;
+    // Os corePlugins de backgroundColor/textColor/borderColor do Tailwind
+    // sempre passam um opacityValue (pra suportar o utilitário legado
+    // `bg-opacity-*`), mesmo sem modificador `/NN` — nesse caso ele vem como
+    // a string `var(--tw-bg-opacity)`, não `undefined`. `Number(...)` disso
+    // dá NaN, e `color-mix(... NaN% ...)` é CSS inválido — a regra inteira
+    // é descartada no browser (foi a causa do "tudo branco" no dark mode).
+    // Só usamos color-mix quando o valor é de fato numérico (caso `/NN`).
+    const numeric = opacityValue !== undefined ? Number(opacityValue) : NaN;
+    if (!Number.isNaN(numeric)) {
+      return `color-mix(in srgb, var(${variableName}) ${numeric * 100}%, transparent)`;
     }
     return `var(${variableName})`;
   };
