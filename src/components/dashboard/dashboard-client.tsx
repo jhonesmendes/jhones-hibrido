@@ -275,14 +275,14 @@ export function DashboardClient() {
         </div>
 
         {/* Volume + Atendentes */}
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid items-start gap-4 lg:grid-cols-2">
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Volume — últimos 7 dias</CardTitle>
               <CardDescription>Mensagens (entrada e saída) por departamento, por dia.</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="flex h-24 items-end gap-2">
+              <div className="flex h-32 items-end gap-2">
                 {data.volumeByDay.map((v) => {
                   const d = new Date(`${v.date}T00:00:00`);
                   const label = d.toLocaleDateString("pt-BR", { weekday: "narrow" });
@@ -290,7 +290,7 @@ export function DashboardClient() {
                   // items-end, um filho não tem altura resolvida pro pai —
                   // % de altura vira 0 silenciosamente (por isso o gráfico
                   // parecia vazio mesmo com dado real vindo da API).
-                  const barHeight = Math.max(4, Math.round((v.count / maxVolume) * 64));
+                  const barHeight = Math.max(4, Math.round((v.count / maxVolume) * 96));
                   const title = v.byDepartment
                     .map((d2) => `${d2.departmentName}: ${d2.count}`)
                     .join("\n");
