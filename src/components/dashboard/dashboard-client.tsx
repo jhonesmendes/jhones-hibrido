@@ -48,7 +48,11 @@ type DashboardData = {
     queueLongestWaitMin: number | null;
     windowExpired: number;
   };
-  volumeByDay: { date: string; count: number }[];
+  volumeByDay: {
+    date: string;
+    count: number;
+    byDepartment: { departmentId: string | null; departmentName: string; count: number }[];
+  }[];
   agents: { id: string; name: string; status: string; messagesSentToday: number }[];
   lab: { score: number | null; delta: number | null; handoffsToday: number };
   pipeline: { stageId: string; name: string; kind: string; count: number }[];
@@ -82,6 +86,17 @@ const STAGE_COLOR: Record<string, string> = {
   lost: "text-destructive",
   open: "text-foreground",
 };
+
+// Paleta cíclica pra segmentar o gráfico de Volume por departamento — não
+// depende de quantos departamentos existem, só repete se passar de 6.
+const DEPT_BAR_COLORS = [
+  "bg-brand",
+  "bg-fill-warning",
+  "bg-fill-success",
+  "bg-destructive",
+  "bg-text-3",
+  "bg-accent-foreground",
+];
 
 /**
  * Dashboard (v0.2) — owner vê todos os departamentos + o que ainda não tem
@@ -142,6 +157,28 @@ export function DashboardClient() {
 
   const maxVolume = Math.max(1, ...data.volumeByDay.map((v) => v.count));
   const totalChannelMsgs = data.channels.official.messages + data.channels.unofficial.messages;
+
+  // Legenda do gráfico de Volume: total da semana por departamento, na
+  // mesma ordem de cor usada nas fatias de cada barra (maior primeiro).
+  const weeklyByDepartment = new Map<string, { departmentName: string; count: number }>();
+  for (const day of data.volumeByDay) {
+    for (const d of day.byDepartment) {
+      const key = d.departmentId ?? "__none__";
+      const existing = weeklyByDepartment.get(key);
+      weeklyByDepartment.set(key, {
+        departmentName: d.departmentName,
+        count: (existing?.count ?? 0) + d.count,
+      });
+    }
+  }
+  const weeklyDeptList = [...weeklyByDepartment.entries()]
+    .map(([key, v]) => ({ key, ...v }))
+    .sort((a, b) => b.count - a.count);
+  // Cor fixa por departamento (não por posição no dia) — senão o mesmo
+  // departamento mudaria de cor de um dia pro outro conforme o ranking local.
+  const deptColorByKey = new Map(
+    weeklyDeptList.map((d, i) => [d.key, DEPT_BAR_COLORS[i % DEPT_BAR_COLORS.length]])
+  );
 
   return (
     <div className="h-full overflow-y-auto">
@@ -242,7 +279,7 @@ export function DashboardClient() {
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Volume — últimos 7 dias</CardTitle>
-              <CardDescription>Mensagens (entrada e saída), conversas reais.</CardDescription>
+              <CardDescription>Mensagens (entrada e saída) por departamento, por dia.</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="flex h-24 items-end gap-2">
@@ -253,22 +290,59 @@ export function DashboardClient() {
                   // items-end, um filho não tem altura resolvida pro pai —
                   // % de altura vira 0 silenciosamente (por isso o gráfico
                   // parecia vazio mesmo com dado real vindo da API).
-                  const barHeight = Math.max(4, Math.round((v.count / maxVolume) * 80));
+                  const barHeight = Math.max(4, Math.round((v.count / maxVolume) * 64));
+                  const title = v.byDepartment
+                    .map((d2) => `${d2.departmentName}: ${d2.count}`)
+                    .join("\n");
                   return (
                     <div
                       key={v.date}
-                      className="flex flex-1 flex-col items-center justify-end gap-1.5"
+                      className="flex flex-1 flex-col items-center justify-end gap-1"
                     >
+                      <span className="text-[11px] font-medium text-muted-foreground">
+                        {v.count}
+                      </span>
                       <div
-                        className="w-full rounded-t bg-brand/70"
+                        className="flex w-full flex-col-reverse overflow-hidden rounded-t"
                         style={{ height: `${barHeight}px` }}
-                        title={`${v.count} mensagens`}
-                      />
+                        title={title || "0 mensagens"}
+                      >
+                        {v.count === 0 ? (
+                          <div className="h-full w-full bg-brand/20" />
+                        ) : (
+                          v.byDepartment.map((d2) => (
+                            <div
+                              key={d2.departmentId ?? "none"}
+                              className={cn(
+                                "w-full",
+                                deptColorByKey.get(d2.departmentId ?? "__none__") ?? DEPT_BAR_COLORS[0]
+                              )}
+                              style={{ height: `${(d2.count / v.count) * 100}%` }}
+                            />
+                          ))
+                        )}
+                      </div>
                       <span className="text-[10px] uppercase text-muted-foreground">{label}</span>
                     </div>
                   );
                 })}
               </div>
+              {weeklyDeptList.length > 0 && (
+                <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1.5 border-t pt-3">
+                  {weeklyDeptList.map((d) => (
+                    <div
+                      key={d.key}
+                      className="flex items-center gap-1.5 text-xs text-muted-foreground"
+                    >
+                      <span
+                        className={cn("h-2 w-2 shrink-0 rounded-full", deptColorByKey.get(d.key))}
+                      />
+                      <span className="truncate">{d.departmentName}</span>
+                      <span className="font-medium text-foreground">{d.count}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
 

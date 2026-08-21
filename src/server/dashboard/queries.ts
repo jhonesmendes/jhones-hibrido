@@ -222,7 +222,11 @@ export type DashboardExtras = {
     queueLongestWaitMin: number | null;
     windowExpired: number;
   };
-  volumeByDay: { date: string; count: number }[];
+  volumeByDay: {
+    date: string;
+    count: number;
+    byDepartment: { departmentId: string | null; departmentName: string; count: number }[];
+  }[];
   agents: {
     id: string;
     name: string;
@@ -365,9 +369,11 @@ export async function getDashboardExtras(
 
   // Volume de mensagens por dia — últimos 7 dias corridos, sempre (o
   // gráfico não muda com o filtro Hoje/7d/30d, só os números de canal abaixo).
+  // Quebrado por departamento pra mostrar de onde vem o volume no dia.
   const volumeRows = await db
     .select({
       day: sql<string>`to_char(${schema.message.createdAt}, 'YYYY-MM-DD')`,
+      departmentId: schema.conversation.departmentId,
       n: sql<number>`count(*)`,
     })
     .from(schema.message)
@@ -380,14 +386,41 @@ export async function getDashboardExtras(
         deptScope
       )
     )
-    .groupBy(sql`to_char(${schema.message.createdAt}, 'YYYY-MM-DD')`);
-  const volumeByDayMap = new Map(volumeRows.map((r) => [r.day, Number(r.n)]));
-  const volumeByDay: { date: string; count: number }[] = [];
+    .groupBy(sql`to_char(${schema.message.createdAt}, 'YYYY-MM-DD')`, schema.conversation.departmentId);
+
+  const volumeDeptRows = await db
+    .select({ id: schema.department.id, name: schema.department.name })
+    .from(schema.department)
+    .where(
+      visibleDepartmentIds !== null
+        ? and(scoped(schema.department.organizationId, organizationId), inArray(schema.department.id, visibleDepartmentIds))
+        : scoped(schema.department.organizationId, organizationId)
+    );
+  const volumeDeptNameById = new Map<string | null, string>(volumeDeptRows.map((d) => [d.id, d.name]));
+  volumeDeptNameById.set(null, "Sem departamento");
+
+  const volumeByDay: {
+    date: string;
+    count: number;
+    byDepartment: { departmentId: string | null; departmentName: string; count: number }[];
+  }[] = [];
   for (let i = 6; i >= 0; i--) {
     const d = new Date();
     d.setDate(d.getDate() - i);
     const key = d.toISOString().slice(0, 10);
-    volumeByDay.push({ date: key, count: volumeByDayMap.get(key) ?? 0 });
+    const dayRows = volumeRows.filter((r) => r.day === key);
+    const byDepartment = dayRows
+      .map((r) => ({
+        departmentId: r.departmentId,
+        departmentName: volumeDeptNameById.get(r.departmentId) ?? "Sem departamento",
+        count: Number(r.n),
+      }))
+      .sort((a, b) => b.count - a.count);
+    volumeByDay.push({
+      date: key,
+      count: byDepartment.reduce((sum, r) => sum + r.count, 0),
+      byDepartment,
+    });
   }
 
   // Laboratório: score + delta da última execução concluída, handoffs de hoje.
