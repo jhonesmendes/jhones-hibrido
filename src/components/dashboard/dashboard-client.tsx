@@ -53,7 +53,13 @@ type DashboardData = {
     count: number;
     byDepartment: { departmentId: string | null; departmentName: string; count: number }[];
   }[];
-  agents: { id: string; name: string; status: string; messagesSentToday: number }[];
+  agents: {
+    id: string;
+    name: string;
+    status: string;
+    messagesSentToday: number;
+    contactsToday: number;
+  }[];
   lab: { score: number | null; delta: number | null; handoffsToday: number };
   pipeline: { stageId: string; name: string; kind: string; count: number }[];
   channels: {
@@ -349,11 +355,27 @@ export function DashboardClient() {
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Atendentes</CardTitle>
-              <CardDescription>Status ao vivo e mensagens enviadas hoje.</CardDescription>
+              <CardDescription>Status ao vivo, mensagens enviadas e contatos atendidos hoje.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               {data.agents.length === 0 && (
                 <p className="text-sm text-muted-foreground">Nenhum atendente ainda.</p>
+              )}
+              {data.agents.length > 0 && (
+                <div className="flex items-center gap-2.5 text-[10px] uppercase text-muted-foreground">
+                  <span className="h-2 w-2 shrink-0" />
+                  <span className="min-w-0 flex-1" />
+                  <span className="w-[52px] shrink-0" />
+                  <span className="flex w-8 shrink-0 justify-end" title="Mensagens enviadas hoje">
+                    <MessageCircle className="h-3 w-3" />
+                  </span>
+                  <span
+                    className="flex w-8 shrink-0 justify-end"
+                    title="Contatos atendidos hoje (contagem por contato, não por mensagem)"
+                  >
+                    <Users className="h-3 w-3" />
+                  </span>
+                </div>
               )}
               {data.agents.map((a) => (
                 <div key={a.id} className="flex items-center gap-2.5">
@@ -362,11 +384,20 @@ export function DashboardClient() {
                     title={STATUS_LABEL[a.status]}
                   />
                   <span className="min-w-0 flex-1 truncate text-sm">{a.name}</span>
-                  <span className="text-xs text-muted-foreground">
+                  <span className="w-[52px] shrink-0 text-xs text-muted-foreground">
                     {STATUS_LABEL[a.status] ?? a.status}
                   </span>
-                  <span className="text-sm font-medium" title="Mensagens enviadas hoje">
+                  <span
+                    className="w-8 shrink-0 text-right text-sm font-medium"
+                    title="Mensagens enviadas hoje"
+                  >
                     {a.messagesSentToday}
+                  </span>
+                  <span
+                    className="w-8 shrink-0 text-right text-sm font-medium text-muted-foreground"
+                    title="Contatos atendidos hoje (contagem por contato, não por mensagem)"
+                  >
+                    {a.contactsToday}
                   </span>
                 </div>
               ))}

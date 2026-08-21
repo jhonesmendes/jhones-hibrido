@@ -232,6 +232,7 @@ export type DashboardExtras = {
     name: string;
     status: string;
     messagesSentToday: number;
+    contactsToday: number;
   }[];
   lab: { score: number | null; delta: number | null; handoffsToday: number };
   pipeline: { stageId: string; name: string; kind: string; count: number }[];
@@ -337,12 +338,15 @@ export async function getDashboardExtras(
     );
 
   // Mensagens enviadas HOJE por cada atendente (não "total de conversas
-  // atribuídas" — esse número só crescia e não dizia nada sobre o dia).
+  // atribuídas" — esse número só crescia e não dizia nada sobre o dia) +
+  // quantos CONTATOS distintos cada um atendeu hoje (contagem por contato,
+  // não por mensagem — um contato que recebeu 10 mensagens conta 1, não 10).
   const sentTodayStart = periodStart("today");
   const sentTodayRows = await db
     .select({
       sentByMemberId: schema.message.sentByMemberId,
       n: sql<number>`count(*)`,
+      contacts: sql<number>`count(distinct ${schema.conversation.contactId})`,
     })
     .from(schema.message)
     .innerJoin(schema.conversation, eq(schema.message.conversationId, schema.conversation.id))
@@ -356,8 +360,12 @@ export async function getDashboardExtras(
     )
     .groupBy(schema.message.sentByMemberId);
   const sentTodayByMember = new Map<string, number>();
+  const contactsTodayByMember = new Map<string, number>();
   for (const r of sentTodayRows) {
-    if (r.sentByMemberId) sentTodayByMember.set(r.sentByMemberId, Number(r.n));
+    if (r.sentByMemberId) {
+      sentTodayByMember.set(r.sentByMemberId, Number(r.n));
+      contactsTodayByMember.set(r.sentByMemberId, Number(r.contacts));
+    }
   }
 
   const agents = memberRows.map((m) => ({
@@ -365,6 +373,7 @@ export async function getDashboardExtras(
     name: m.name,
     status: m.status ?? "offline",
     messagesSentToday: sentTodayByMember.get(m.id) ?? 0,
+    contactsToday: contactsTodayByMember.get(m.id) ?? 0,
   }));
 
   // Volume de mensagens por dia — últimos 7 dias corridos, sempre (o
