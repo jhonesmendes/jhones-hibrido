@@ -10,22 +10,23 @@
 @layer base {
   :root {
     /* Neutros — branco puro cansa a vista em tela com brilho alto; usamos um
-       "papel" levemente morno (off-white) em vez de #ffffff, mantendo a
-       mesma hierarquia relativa de claridade entre as 4 camadas. */
-    --bg: #faf9f7;
-    --bg-subtle: #f6f5f3;
-    --bg-panel: #f1f0ee;
-    --bg-hover: #eae9e6;
+       cinza-azulado bem sutil em vez de #ffffff (neutro frio, não morno/
+       amarelado), mantendo a mesma hierarquia relativa entre as 4 camadas. */
+    --bg: #f8f9fa;
+    --bg-subtle: #f4f5f7;
+    --bg-panel: #eff0f2;
+    --bg-hover: #e8e9ec;
     --text: #1a1a1e;
     --text-2: #56565e;
     --text-3: #8c8c95;
     --text-4: #aeaeb6;
-    --border: #e7e6e2;
-    --border-strong: #dad9d4;
+    --border: #e4e5e9;
+    --border-strong: #d7d8dd;
 
-    /* Chat */
-    --chat-bg: #f0efec;
-    --bubble-out: #ecebe7;
+    /* Chat — mesmo tom do bg-subtle, pra não criar uma "costura" de cor
+       diferente entre a lista de conversas e o painel do chat. */
+    --chat-bg: #f4f5f7;
+    --bubble-out: #eef1f4;
     --bubble-out-text: #33414f;
 
     /* Acento (padrão: azul aço apagado; white-label o sobrescreve) */
