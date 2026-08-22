@@ -3,6 +3,11 @@ import { getDb, schema } from "@/lib/db";
 import { scoped } from "@/lib/db/tenant";
 import { periodStart, type DashboardPeriod } from "@/server/dashboard/queries";
 import { seedDefaultPricingIfMissing } from "@/server/billing/pricing";
+import { listCredentialsByOrg } from "@/server/whatsapp/credentials";
+import {
+  fetchWabaPricingAnalytics,
+  type MetaPricingCategory,
+} from "@/lib/meta/pricing-analytics";
 
 export type MetaCostCategory = "marketing" | "utility" | "authentication";
 
@@ -11,6 +16,11 @@ type CategoryBreakdown = Partial<Record<MetaCostCategory, { count: number; costB
 export type MetaCostReport = {
   totalCostBrl: number;
   totalMessages: number;
+  /** "meta" = totalCostBrl veio direto da Meta (pricing_analytics, valor
+   * real já cobrado); "estimate" = calculado localmente (contagem × preço
+   * configurado em Configurações → nenhum número oficial acessível agora,
+   * ou a chamada à Meta falhou). */
+  source: "meta" | "estimate";
   byDepartment: {
     departmentId: string | null;
     departmentName: string;
@@ -28,6 +38,18 @@ export type MetaCostReport = {
     messages: number;
     byCategory: CategoryBreakdown;
   }[];
+};
+
+/** Mapa da categoria que a Meta reporta em `pricing_analytics` pras 3
+ * categorias que rastreamos localmente (`message.meta_category`) — as
+ * demais (SERVICE, REFERRAL_CONVERSION...) entram no total real mas não têm
+ * como ser rateadas por departamento/agente (não geram `meta_category`). */
+const META_CATEGORY_MAP: Partial<Record<MetaPricingCategory, MetaCostCategory>> = {
+  MARKETING: "marketing",
+  MARKETING_LITE: "marketing",
+  UTILITY: "utility",
+  AUTHENTICATION: "authentication",
+  AUTHENTICATION_INTERNATIONAL: "authentication",
 };
 
 /**
@@ -128,6 +150,12 @@ export async function getMetaCostReport(
   let totalCostBrl = 0;
   let totalMessages = 0;
 
+  const localCountByCategory: Record<MetaCostCategory, number> = {
+    marketing: 0,
+    utility: 0,
+    authentication: 0,
+  };
+
   for (const r of rows) {
     const category = r.category as MetaCostCategory | null;
     if (!category) continue;
@@ -135,6 +163,7 @@ export async function getMetaCostReport(
     const cost = count * priceFor(category, r.day);
     totalCostBrl += cost;
     totalMessages += count;
+    localCountByCategory[category] += count;
 
     const deptKey = r.departmentId ?? "__none__";
     const deptEntry = byDepartment.get(deptKey) ?? {
@@ -171,10 +200,95 @@ export async function getMetaCostReport(
     byAgent.set(agentKey, agentEntry);
   }
 
+  // Tenta substituir o total/custo por categoria pelo valor REAL já cobrado
+  // pela Meta (pricing_analytics) — o preço configurado manualmente vira só
+  // um fallback (org sem número oficial acessível, ou a chamada falhou).
+  const synced = await trySyncWithMeta(organizationId, since, localCountByCategory);
+  if (synced) {
+    for (const category of Object.keys(synced.costPerMessage) as MetaCostCategory[]) {
+      const costPerMessage = synced.costPerMessage[category];
+      if (costPerMessage === undefined) continue;
+      for (const entry of byDepartment.values()) {
+        const cat = entry.byCategory[category];
+        if (!cat) continue;
+        entry.costBrl += cat.count * costPerMessage - cat.costBrl;
+        cat.costBrl = cat.count * costPerMessage;
+      }
+      for (const entry of byAgent.values()) {
+        const cat = entry.byCategory[category];
+        if (!cat) continue;
+        entry.costBrl += cat.count * costPerMessage - cat.costBrl;
+        cat.costBrl = cat.count * costPerMessage;
+      }
+    }
+    totalCostBrl = synced.totalCostBrl;
+  }
+
   return {
     totalCostBrl,
     totalMessages,
+    source: synced ? "meta" : "estimate",
     byDepartment: [...byDepartment.values()].sort((a, b) => b.costBrl - a.costBrl),
     byAgent: [...byAgent.values()].sort((a, b) => b.costBrl - a.costBrl),
   };
+}
+
+/**
+ * Busca o custo REAL já cobrado pela Meta no período (todas as WABAs
+ * oficiais conectadas da organização) e devolve o custo-por-mensagem
+ * implícito em cada categoria (custo real ÷ contagem local) — usado só pra
+ * substituir o custo estimado nas entradas por departamento/agente, sem
+ * mudar a contagem. `null` se nenhuma WABA respondeu (sem número conectado,
+ * token inválido, ou API indisponível) — quem chama cai no preço manual.
+ */
+async function trySyncWithMeta(
+  organizationId: string,
+  since: Date,
+  localCountByCategory: Record<MetaCostCategory, number>
+): Promise<{ totalCostBrl: number; costPerMessage: Partial<Record<MetaCostCategory, number>> } | null> {
+  const credentials = (await listCredentialsByOrg(organizationId)).filter(
+    (c) => c.isActive && c.status === "connected"
+  );
+  if (credentials.length === 0) return null;
+
+  const byWaba = new Map<string, string>();
+  for (const c of credentials) {
+    if (!byWaba.has(c.wabaId)) byWaba.set(c.wabaId, c.token);
+  }
+
+  const sinceUnix = Math.floor(since.getTime() / 1000);
+  const untilUnix = Math.floor(Date.now() / 1000);
+
+  const results = await Promise.allSettled(
+    [...byWaba.entries()].map(([wabaId, token]) =>
+      fetchWabaPricingAnalytics(wabaId, token, sinceUnix, untilUnix)
+    )
+  );
+
+  let totalCostBrl = 0;
+  const realCostByCategory: Partial<Record<MetaCostCategory, number>> = {};
+  let anySucceeded = false;
+
+  for (const result of results) {
+    if (result.status !== "fulfilled") continue;
+    anySucceeded = true;
+    for (const point of result.value) {
+      const cost = point.cost ?? 0;
+      totalCostBrl += cost;
+      const localCategory = point.pricing_category ? META_CATEGORY_MAP[point.pricing_category] : undefined;
+      if (!localCategory) continue;
+      realCostByCategory[localCategory] = (realCostByCategory[localCategory] ?? 0) + cost;
+    }
+  }
+
+  if (!anySucceeded) return null;
+
+  const costPerMessage: Partial<Record<MetaCostCategory, number>> = {};
+  for (const category of Object.keys(realCostByCategory) as MetaCostCategory[]) {
+    const localCount = localCountByCategory[category];
+    const realCost = realCostByCategory[category] ?? 0;
+    if (localCount > 0) costPerMessage[category] = realCost / localCount;
+  }
+
+  return { totalCostBrl, costPerMessage };
 }

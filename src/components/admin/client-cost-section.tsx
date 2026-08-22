@@ -15,6 +15,7 @@ type CategoryBreakdown = Partial<Record<Category, { count: number; costBrl: numb
 type CostReport = {
   totalCostBrl: number;
   totalMessages: number;
+  source: "meta" | "estimate";
   byDepartment: {
     departmentId: string | null;
     departmentName: string;
@@ -109,12 +110,19 @@ export function ClientCostSection({ clientId }: { clientId: string }) {
 
   return (
     <div className="space-y-4 rounded-lg border border-white/10 p-4">
-      <p className="text-sm font-medium text-white/70">Custos Meta (cobrança por mensagem)</p>
+      <div>
+        <p className="text-sm font-medium text-white/70">Custos Meta (cobrança por mensagem)</p>
+        <p className="text-xs text-white/40">
+          {data.report.source === "meta"
+            ? "Valor real, buscado direto da Meta (pricing_analytics) — o preço abaixo só vale como fallback se a instância ficar sem número oficial acessível."
+            : "Estimativa: instância sem número oficial acessível agora — usando o preço configurado abaixo."}
+        </p>
+      </div>
 
       <div className="grid grid-cols-3 gap-2">
         {(Object.keys(CATEGORY_LABEL) as Category[]).map((cat) => (
           <div key={cat} className="space-y-1">
-            <label className="text-xs text-white/50">{CATEGORY_LABEL[cat]} (R$/msg)</label>
+            <label className="text-xs text-white/50">{CATEGORY_LABEL[cat]} (R$/msg, fallback)</label>
             <div className="flex gap-1">
               <input
                 type="text"

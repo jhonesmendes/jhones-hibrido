@@ -7,6 +7,7 @@ type CategoryBreakdown = Partial<Record<RemoteCostCategory, { count: number; cos
 export type RemoteCostReport = {
   totalCostBrl: number;
   totalMessages: number;
+  source: "meta" | "estimate";
   byDepartment: {
     departmentId: string | null;
     departmentName: string;
