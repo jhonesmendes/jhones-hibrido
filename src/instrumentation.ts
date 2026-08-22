@@ -17,6 +17,10 @@ export async function register(): Promise<void> {
     startCampaignScheduler();
     const { startQueueScheduler } = await import("@/server/queue/scheduler");
     startQueueScheduler();
+    const { startPresenceAwaySweeper } = await import(
+      "@/server/presence/sweeper"
+    );
+    startPresenceAwaySweeper();
     const { startLicenseExpiryScheduler } = await import(
       "@/server/license/expiry-scheduler"
     );

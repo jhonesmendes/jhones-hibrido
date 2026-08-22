@@ -5,6 +5,7 @@ import { getSessionOrNull } from "@/lib/auth/session";
 import { getBranding } from "@/server/branding";
 import { resolvePermissions } from "@/lib/auth/require-permission";
 import { AppNav } from "@/components/app-nav";
+import { PresenceHeartbeat } from "@/components/presence-heartbeat";
 
 export default async function AppLayout({
   children,
@@ -19,6 +20,7 @@ export default async function AppLayout({
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background md:flex-row">
+      <PresenceHeartbeat />
       <AppNav
         branding={branding}
         userName={authSession?.user.name ?? "Usuario"}
