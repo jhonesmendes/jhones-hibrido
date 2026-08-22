@@ -15,7 +15,7 @@ type CategoryBreakdown = Partial<Record<Category, { count: number; costBrl: numb
 type CostReport = {
   totalCostBrl: number;
   totalMessages: number;
-  source: "meta" | "estimate";
+  source: "meta" | "mixed" | "estimate";
   byDepartment: {
     departmentId: string | null;
     departmentName: string;
@@ -113,9 +113,12 @@ export function ClientCostSection({ clientId }: { clientId: string }) {
       <div>
         <p className="text-sm font-medium text-white/70">Custos Meta (cobrança por mensagem)</p>
         <p className="text-xs text-white/40">
-          {data.report.source === "meta"
-            ? "Valor real, buscado direto da Meta (pricing_analytics) — o preço abaixo só vale como fallback se a instância ficar sem número oficial acessível."
-            : "Estimativa: instância sem número oficial acessível agora — usando o preço configurado abaixo."}
+          {data.report.source === "meta" &&
+            "Valor real, buscado direto da Meta (pricing_analytics) — o preço abaixo só vale como fallback se a instância ficar sem número oficial acessível."}
+          {data.report.source === "mixed" &&
+            "Parcialmente real — a Meta ainda não fechou o custo do período mais recente pra alguma categoria; essa parte usa o preço configurado abaixo."}
+          {data.report.source === "estimate" &&
+            "Estimativa: instância sem número oficial acessível agora — usando o preço configurado abaixo."}
         </p>
       </div>
 

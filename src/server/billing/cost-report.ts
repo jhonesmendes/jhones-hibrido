@@ -16,11 +16,13 @@ type CategoryBreakdown = Partial<Record<MetaCostCategory, { count: number; costB
 export type MetaCostReport = {
   totalCostBrl: number;
   totalMessages: number;
-  /** "meta" = totalCostBrl veio direto da Meta (pricing_analytics, valor
-   * real já cobrado); "estimate" = calculado localmente (contagem × preço
-   * configurado em Configurações → nenhum número oficial acessível agora,
-   * ou a chamada à Meta falhou). */
-  source: "meta" | "estimate";
+  /** "meta" = toda categoria com atividade usou o custo real da Meta;
+   * "mixed" = algumas categorias vieram da Meta e outras caíram no preço
+   * configurado (ex.: Meta ainda não processou o período mais recente —
+   * ela tem alguns dias de atraso pra fechar o custo); "estimate" =
+   * nenhuma categoria conseguiu confirmar com a Meta (sem número
+   * acessível, token sem permissão, ou API fora do ar). */
+  source: "meta" | "mixed" | "estimate";
   byDepartment: {
     departmentId: string | null;
     departmentName: string;
@@ -200,52 +202,121 @@ export async function getMetaCostReport(
     byAgent.set(agentKey, agentEntry);
   }
 
-  // Tenta substituir o total/custo por categoria pelo valor REAL já cobrado
-  // pela Meta (pricing_analytics) — o preço configurado manualmente vira só
-  // um fallback (org sem número oficial acessível, ou a chamada falhou).
-  const synced = await trySyncWithMeta(organizationId, since, localCountByCategory);
+  // Tenta substituir o custo estimado pelo valor REAL já cobrado pela Meta
+  // (pricing_analytics), categoria por categoria. Duas armadilhas evitadas
+  // aqui (ver histórico do bug real em produção):
+  // 1) a Meta tem atraso pra fechar o custo de um período recente ("hoje"
+  //    frequentemente chega com volume=0 ainda) — uma categoria sem volume
+  //    reportado É TRATADA COMO NÃO SINCRONIZADA, não como "custou zero".
+  // 2) mensagens de ANTES desta feature (ou de qualquer lacuna de rastreio
+  //    local) não têm `meta_category` — o volume real da Meta pode ser
+  //    maior que a nossa contagem local. Em vez de perder essa diferença
+  //    (que é dinheiro de verdade gasto), ela vira uma linha própria
+  //    "Não rastreado localmente" — assim o total sempre bate com a Meta.
+  const synced = await trySyncWithMeta(organizationId, since);
+  let anyMetaCategory = false;
+  let anyEstimateCategory = false;
+
   if (synced) {
-    for (const category of Object.keys(synced.costPerMessage) as MetaCostCategory[]) {
-      const costPerMessage = synced.costPerMessage[category];
-      if (costPerMessage === undefined) continue;
+    for (const category of Object.keys(synced.byCategory) as MetaCostCategory[]) {
+      const meta = synced.byCategory[category];
+      if (!meta || meta.volume <= 0) {
+        if (localCountByCategory[category] > 0) anyEstimateCategory = true;
+        continue;
+      }
+      anyMetaCategory = true;
+      const pricePerMessage = meta.cost / meta.volume;
+      const localCount = localCountByCategory[category];
+
+      // Substitui o custo estimado das linhas que JÁ conhecemos localmente.
       for (const entry of byDepartment.values()) {
         const cat = entry.byCategory[category];
         if (!cat) continue;
-        entry.costBrl += cat.count * costPerMessage - cat.costBrl;
-        cat.costBrl = cat.count * costPerMessage;
+        entry.costBrl += cat.count * pricePerMessage - cat.costBrl;
+        cat.costBrl = cat.count * pricePerMessage;
       }
       for (const entry of byAgent.values()) {
         const cat = entry.byCategory[category];
         if (!cat) continue;
-        entry.costBrl += cat.count * costPerMessage - cat.costBrl;
-        cat.costBrl = cat.count * costPerMessage;
+        entry.costBrl += cat.count * pricePerMessage - cat.costBrl;
+        cat.costBrl = cat.count * pricePerMessage;
+      }
+
+      // A diferença entre o volume real da Meta e o que rastreamos
+      // localmente vai pra um bucket próprio (nunca é silenciosamente
+      // descartada) — típico de mensagens enviadas antes desta feature.
+      const untrackedVolume = meta.volume - localCount;
+      if (untrackedVolume > 0) {
+        const untrackedCost = untrackedVolume * pricePerMessage;
+        addUntracked(byDepartment, untrackedCost, untrackedVolume, () => ({
+          departmentId: "__untracked__",
+          departmentName: "Não rastreado localmente (fora desta feature)",
+          costBrl: 0,
+          messages: 0,
+          byCategory: {},
+        }));
+        addUntracked(byAgent, untrackedCost, untrackedVolume, () => ({
+          memberId: "__untracked__",
+          name: "Não rastreado localmente (fora desta feature)",
+          costBrl: 0,
+          messages: 0,
+          byCategory: {},
+        }));
+        totalMessages += untrackedVolume;
       }
     }
-    totalCostBrl = synced.totalCostBrl;
+    // Soma de baixo pra cima (linhas realmente exibidas), não um número
+    // separado da Meta — assim o total sempre bate com o que aparece na
+    // tela mesmo quando parte das categorias ainda está em estimativa
+    // (Meta não processou) e parte já veio confirmada.
+    totalCostBrl =
+      [...byDepartment.values()].reduce((sum, e) => sum + e.costBrl, 0) +
+      synced.otherCategoriesCost;
   }
+
+  const source: MetaCostReport["source"] = anyMetaCategory
+    ? anyEstimateCategory
+      ? "mixed"
+      : "meta"
+    : "estimate";
 
   return {
     totalCostBrl,
     totalMessages,
-    source: synced ? "meta" : "estimate",
+    source,
     byDepartment: [...byDepartment.values()].sort((a, b) => b.costBrl - a.costBrl),
     byAgent: [...byAgent.values()].sort((a, b) => b.costBrl - a.costBrl),
   };
 }
 
+function addUntracked<T extends { costBrl: number; messages: number }>(
+  map: Map<string, T>,
+  cost: number,
+  messages: number,
+  makeDefault: () => T
+): void {
+  const entry = map.get("__untracked__") ?? makeDefault();
+  entry.costBrl += cost;
+  entry.messages += messages;
+  map.set("__untracked__", entry);
+}
+
 /**
- * Busca o custo REAL já cobrado pela Meta no período (todas as WABAs
- * oficiais conectadas da organização) e devolve o custo-por-mensagem
- * implícito em cada categoria (custo real ÷ contagem local) — usado só pra
- * substituir o custo estimado nas entradas por departamento/agente, sem
- * mudar a contagem. `null` se nenhuma WABA respondeu (sem número conectado,
- * token inválido, ou API indisponível) — quem chama cai no preço manual.
+ * Busca custo + volume REAIS já reportados pela Meta no período (todas as
+ * WABAs oficiais conectadas da organização), por categoria. `null` se
+ * nenhuma WABA respondeu (sem número conectado, token sem permissão, ou API
+ * fora do ar) — quem chama cai inteiramente no preço manual configurado.
+ * Uma categoria com `volume: 0` significa "a Meta ainda não processou este
+ * período pra essa categoria" (atraso normal, sobretudo pra "hoje"), NÃO
+ * "custou zero" — quem chama trata isso como não sincronizado.
  */
 async function trySyncWithMeta(
   organizationId: string,
-  since: Date,
-  localCountByCategory: Record<MetaCostCategory, number>
-): Promise<{ totalCostBrl: number; costPerMessage: Partial<Record<MetaCostCategory, number>> } | null> {
+  since: Date
+): Promise<{
+  byCategory: Partial<Record<MetaCostCategory, { cost: number; volume: number }>>;
+  otherCategoriesCost: number;
+} | null> {
   const credentials = (await listCredentialsByOrg(organizationId)).filter(
     (c) => c.isActive && c.status === "connected"
   );
@@ -265,8 +336,8 @@ async function trySyncWithMeta(
     )
   );
 
-  let totalCostBrl = 0;
-  const realCostByCategory: Partial<Record<MetaCostCategory, number>> = {};
+  const byCategory: Partial<Record<MetaCostCategory, { cost: number; volume: number }>> = {};
+  let otherCategoriesCost = 0;
   let anySucceeded = false;
 
   for (const result of results) {
@@ -274,21 +345,17 @@ async function trySyncWithMeta(
     anySucceeded = true;
     for (const point of result.value) {
       const cost = point.cost ?? 0;
-      totalCostBrl += cost;
+      const volume = point.volume ?? 0;
       const localCategory = point.pricing_category ? META_CATEGORY_MAP[point.pricing_category] : undefined;
-      if (!localCategory) continue;
-      realCostByCategory[localCategory] = (realCostByCategory[localCategory] ?? 0) + cost;
+      if (!localCategory) {
+        otherCategoriesCost += cost;
+        continue;
+      }
+      const existing = byCategory[localCategory] ?? { cost: 0, volume: 0 };
+      byCategory[localCategory] = { cost: existing.cost + cost, volume: existing.volume + volume };
     }
   }
 
   if (!anySucceeded) return null;
-
-  const costPerMessage: Partial<Record<MetaCostCategory, number>> = {};
-  for (const category of Object.keys(realCostByCategory) as MetaCostCategory[]) {
-    const localCount = localCountByCategory[category];
-    const realCost = realCostByCategory[category] ?? 0;
-    if (localCount > 0) costPerMessage[category] = realCost / localCount;
-  }
-
-  return { totalCostBrl, costPerMessage };
+  return { byCategory, otherCategoriesCost };
 }

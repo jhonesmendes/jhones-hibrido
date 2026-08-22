@@ -76,7 +76,7 @@ type CategoryBreakdown = Partial<
 type MetaCostReport = {
   totalCostBrl: number;
   totalMessages: number;
-  source: "meta" | "estimate";
+  source: "meta" | "mixed" | "estimate";
   byDepartment: {
     departmentId: string | null;
     departmentName: string;
@@ -531,9 +531,16 @@ export function DashboardClient() {
             <CardTitle className="text-base">Custos Meta</CardTitle>
             <CardDescription>
               Mensagens de modelo (marketing/utilidade/autenticação) — resposta livre é grátis.{" "}
-              {data.metaCost.source === "meta" ? (
+              {data.metaCost.source === "meta" && (
                 <span className="text-success">Valor real, direto da Meta.</span>
-              ) : (
+              )}
+              {data.metaCost.source === "mixed" && (
+                <span className="text-warning">
+                  Parcialmente real — a Meta ainda não fechou o custo do período mais recente pra
+                  alguma categoria, essa parte está estimada.
+                </span>
+              )}
+              {data.metaCost.source === "estimate" && (
                 <span className="text-warning">
                   Estimativa (preço configurado) — sem número oficial acessível agora.
                 </span>
