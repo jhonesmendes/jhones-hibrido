@@ -9,6 +9,7 @@ import { ContactAvatar } from "@/components/avatar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ContactFormDialog } from "@/components/contacts/contact-form-dialog";
+import { TRACE_LABELS } from "@/lib/trace-labels";
 
 const HANDOFF_LABELS: Record<string, string> = {
   cliente: "O cliente pediu um humano",
@@ -26,21 +27,6 @@ type TraceEvent = {
   memberName: string | null;
   detail: Record<string, unknown> | null;
   createdAt: string;
-};
-
-const TRACE_LABELS: Record<string, string> = {
-  "message.received": "Mensagem recebida",
-  "conversation.started_by_agent": "Conversa iniciada pelo agente",
-  "conversation.routed_inbox": "Roteada direto pra caixa de entrada",
-  "conversation.routed_queue": "Roteada pra fila do departamento",
-  "queue.entered": "Entrou na fila",
-  "queue.assigned": "Designada a um agente",
-  "queue.accepted": "Aceita pelo agente",
-  "queue.declined": "Recusada / repassada",
-  "queue.selection_timeout": "Cliente não respondeu à seleção",
-  "queue.accept_timeout": "Agente não aceitou a tempo",
-  "message.sent": "Resposta enviada",
-  "message.send_failed": "Falha ao enviar",
 };
 
 function traceDetailSummary(ev: TraceEvent): string | null {

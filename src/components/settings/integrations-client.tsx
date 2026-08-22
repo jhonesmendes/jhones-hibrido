@@ -59,6 +59,14 @@ export function IntegrationsClient() {
     void refetch();
   }
 
+  async function remove(id: string) {
+    if (!confirm("Excluir esta chave da lista? Ela já está revogada — isso só tira o registro, não muda nada em funcionamento.")) {
+      return;
+    }
+    await fetch(`/api/settings/integrations/${id}`, { method: "DELETE" }).catch(() => null);
+    void refetch();
+  }
+
   return (
     <div className="max-w-2xl space-y-4">
       <Card>
@@ -125,9 +133,13 @@ export function IntegrationsClient() {
                 {k.revokedAt && ` · revogada em ${new Date(k.revokedAt).toLocaleDateString("pt-BR")}`}
               </p>
             </div>
-            {!k.revokedAt && (
+            {!k.revokedAt ? (
               <Button size="sm" variant="destructive" onClick={() => void revoke(k.id)}>
                 Revogar
+              </Button>
+            ) : (
+              <Button size="sm" variant="outline" onClick={() => void remove(k.id)}>
+                Excluir
               </Button>
             )}
           </div>

@@ -10,7 +10,7 @@
 @layer base {
   :root {
     /* Neutros (valores exactos del handoff) */
-    --bg: #ffffff;
+    --bg: #eee9e9;
     --bg-subtle: #fbfbfc;
     --bg-panel: #f8f8f9;
     --bg-hover: #f4f4f5;
@@ -57,10 +57,10 @@
     white-label (accentCssVariables) dentro de `.dark`.
   */
   .dark {
-    --bg: #131417;
-    --bg-subtle: #17181c;
-    --bg-panel: #1b1c21;
-    --bg-hover: #212228;
+    --bg: #17181bd8;
+    --bg-subtle: #18191ddc;
+    --bg-panel: #1b1c21d2;
+    --bg-hover: #212228d2;
     --text: #e8e8ec;
     --text-2: #b0b1b8;
     --text-3: #7e7f88;
@@ -68,7 +68,7 @@
     --border: #26272e;
     --border-strong: #33343c;
 
-    --chat-bg: #0f1013;
+    --chat-bg: #16171b;
     --bubble-out: #22303d;
     --bubble-out-text: #cdd9e4;
 

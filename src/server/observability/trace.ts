@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, gte, lt, lte } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { newId } from "@/lib/db/ids";
 
@@ -99,4 +99,77 @@ export async function getConversationTrace(
       createdAt: r.event.createdAt.toISOString(),
     }))
     .reverse();
+}
+
+export type TraceQuery = {
+  type?: string;
+  since?: Date;
+  until?: Date;
+  /** `createdAt` (ISO) do último item já visto — paginação por keyset. */
+  cursor?: string;
+  limit?: number;
+};
+
+export type TraceLogEntry = TraceEventDto & {
+  conversationId: string | null;
+  contactName: string | null;
+};
+
+const DEFAULT_LIMIT = 50;
+const MAX_LIMIT = 200;
+
+/**
+ * Visão organização-inteira do rastro técnico (todas as conversas, não só
+ * uma) — usada pelo "Diagnóstico técnico" centralizado no painel admin
+ * (`/api/internal/trace-log`), mais recente primeiro, com paginação.
+ */
+export async function queryTraceEvents(
+  organizationId: string,
+  q: TraceQuery
+): Promise<{ entries: TraceLogEntry[]; nextCursor: string | null }> {
+  const db = getDb();
+  const limit = Math.min(q.limit ?? DEFAULT_LIMIT, MAX_LIMIT);
+
+  const rows = await db
+    .select({
+      event: schema.traceEvent,
+      memberName: schema.user.name,
+      contactName: schema.contact.name,
+    })
+    .from(schema.traceEvent)
+    .leftJoin(schema.member, eq(schema.member.id, schema.traceEvent.memberId))
+    .leftJoin(schema.user, eq(schema.user.id, schema.member.userId))
+    .leftJoin(schema.conversation, eq(schema.conversation.id, schema.traceEvent.conversationId))
+    .leftJoin(schema.contact, eq(schema.contact.id, schema.conversation.contactId))
+    .where(
+      and(
+        eq(schema.traceEvent.organizationId, organizationId),
+        q.type ? eq(schema.traceEvent.type, q.type) : undefined,
+        q.since ? gte(schema.traceEvent.createdAt, q.since) : undefined,
+        q.until ? lte(schema.traceEvent.createdAt, q.until) : undefined,
+        q.cursor ? lt(schema.traceEvent.createdAt, new Date(q.cursor)) : undefined
+      )
+    )
+    .orderBy(desc(schema.traceEvent.createdAt))
+    .limit(limit + 1);
+
+  const hasMore = rows.length > limit;
+  const page = hasMore ? rows.slice(0, limit) : rows;
+  const nextCursor = hasMore ? page[page.length - 1]!.event.createdAt.toISOString() : null;
+
+  return {
+    entries: page.map((r) => ({
+      id: r.event.id,
+      type: r.event.type,
+      channel: r.event.channel,
+      channelId: r.event.channelId,
+      memberId: r.event.memberId,
+      memberName: r.memberName ?? null,
+      detail: r.event.detail as Record<string, unknown> | null,
+      createdAt: r.event.createdAt.toISOString(),
+      conversationId: r.event.conversationId,
+      contactName: r.contactName ?? null,
+    })),
+    nextCursor,
+  };
 }

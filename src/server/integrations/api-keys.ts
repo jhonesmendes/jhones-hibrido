@@ -19,6 +19,23 @@ export type ApiKeyRow = {
   revokedAt: Date | null;
 };
 
+export async function getApiKey(organizationId: string, id: string): Promise<ApiKeyRow | null> {
+  const db = getDb();
+  const rows = await db
+    .select({
+      id: schema.apiKey.id,
+      name: schema.apiKey.name,
+      tokenLast4: schema.apiKey.tokenLast4,
+      createdAt: schema.apiKey.createdAt,
+      lastUsedAt: schema.apiKey.lastUsedAt,
+      revokedAt: schema.apiKey.revokedAt,
+    })
+    .from(schema.apiKey)
+    .where(and(eq(schema.apiKey.organizationId, organizationId), eq(schema.apiKey.id, id)))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
 export async function listApiKeys(organizationId: string): Promise<ApiKeyRow[]> {
   const db = getDb();
   return db
@@ -62,6 +79,16 @@ export async function revokeApiKey(organizationId: string, id: string): Promise<
   await db
     .update(schema.apiKey)
     .set({ revokedAt: new Date() })
+    .where(and(eq(schema.apiKey.organizationId, organizationId), eq(schema.apiKey.id, id)));
+}
+
+/** Remove a linha de verdade — só faz sentido pra uma chave já revogada
+ * (uma chave ativa é revogada primeiro, nunca apagada direto, pra sempre
+ * sobrar rastro de que ela existiu enquanto esteve em uso). */
+export async function deleteApiKey(organizationId: string, id: string): Promise<void> {
+  const db = getDb();
+  await db
+    .delete(schema.apiKey)
     .where(and(eq(schema.apiKey.organizationId, organizationId), eq(schema.apiKey.id, id)));
 }
 
