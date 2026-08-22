@@ -1306,3 +1306,36 @@ export const metaPricingRule = pgTable(
     ),
   ]
 );
+
+/**
+ * Chave de API pra integrações externas (N8N, ERP, qualquer sistema que
+ * precise chamar `/api/internal/send-message` ou futuras rotas internas)
+ * autenticadas por token — substitui a antiga `INTERNAL_API_KEY` estática
+ * única por uma chave nomeada e revogável por integração (ex.: "Sankhya -
+ * Fibra Forte"). Só o hash é guardado; o token de verdade só existe no
+ * momento da criação, devolvido uma vez (mesmo padrão do segredo do painel
+ * central em `admin_client`).
+ */
+export const apiKey = pgTable(
+  "api_key",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    tokenHash: text("token_hash").notNull(),
+    /** Últimos 4 caracteres do token — só pra exibição, nunca o suficiente
+     * pra reconstituir a chave. */
+    tokenLast4: text("token_last4").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    lastUsedAt: timestamp("last_used_at"),
+    /** null = ativa. Nunca é deletada — revogação preserva o histórico de
+     * qual integração existiu. */
+    revokedAt: timestamp("revoked_at"),
+  },
+  (t) => [
+    uniqueIndex("api_key_token_hash_uq").on(t.tokenHash),
+    index("api_key_org_idx").on(t.organizationId),
+  ]
+);

@@ -40,6 +40,7 @@ const prefixes = {
   license: "lic",
   adminClient: "acl",
   metaPricingRule: "mpr",
+  apiKey: "apk",
 } as const;
 
 export type IdKind = keyof typeof prefixes;

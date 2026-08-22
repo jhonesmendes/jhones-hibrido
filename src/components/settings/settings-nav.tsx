@@ -13,6 +13,7 @@ const TABS = [
   { href: "/settings/team", label: "Equipe" },
   { href: "/settings/email", label: "Email", hideFromAgent: true },
   { href: "/settings/license", label: "Licença", hideFromAgent: true },
+  { href: "/settings/integrations", label: "Integrações", hideFromAgent: true },
   { href: "/settings/preferences", label: "Preferências" },
 ] as const;
 
