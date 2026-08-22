@@ -3,7 +3,7 @@ import { getDb, schema } from "@/lib/db";
 import { newId } from "@/lib/db/ids";
 import { altBrNinthDigitCandidate } from "@/lib/utils";
 import { publish } from "@/server/events/bus";
-import { sendPushToOrganization } from "@/server/push/send";
+import { sendPushToMember } from "@/server/push/send";
 import { getCredentialsByOrg, getCredentialsByPhoneNumberId } from "@/server/whatsapp/credentials";
 import { resolveDefaultUnofficialChannelId } from "@/server/settings/unofficial-channels";
 import { downloadMetaMedia, getMetaMediaMeta } from "@/lib/meta/client";
@@ -540,13 +540,19 @@ export async function ingestInboundMessage(input: {
   });
 
   if (!fromMe) {
-    sendPushToOrganization(organizationId, {
-      title: contact.name || input.from,
-      body: input.text?.trim() || MEDIA_PUSH_LABELS[input.type] || "Nova mensagem",
-      icon: `/api/contacts/${contact.id}/avatar`,
-      url: `/inbox?contact=${contact.id}`,
-      conversationId: conversation.id,
-    }).catch((err) => console.error("[push] falha ao notificar organização:", err));
+    // Só o dono da conversa recebe push — antes ia pra organização inteira
+    // (todo mundo com push ativado era avisado de toda mensagem de todo
+    // departamento). Conversa ainda não atribuída (na fila) não dispara
+    // aqui: quem avisa "nova conversa pra você" é o queue/notifier.ts.
+    if (conversation.assignedTo) {
+      sendPushToMember(conversation.assignedTo, {
+        title: contact.name || input.from,
+        body: input.text?.trim() || MEDIA_PUSH_LABELS[input.type] || "Nova mensagem",
+        icon: `/api/contacts/${contact.id}/avatar`,
+        url: `/inbox?contact=${contact.id}`,
+        conversationId: conversation.id,
+      }).catch((err) => console.error("[push] falha ao notificar o agente responsável:", err));
+    }
 
     // O agente de IA responde conversas individuais, não grupos: uma
     // resposta automática numa thread coletiva sem pedido é intrusiva e

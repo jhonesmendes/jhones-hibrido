@@ -161,7 +161,16 @@ export function InboxClient({
       // da conversa em foco — a notificação do SO em si é responsabilidade
       // do Service Worker (Web Push), que evita duplicar quando a conversa
       // já está aberta em foco.
-      if (m.direction === "in" && !isFocusedOnThisConversation) {
+      //
+      // O SSE de `message.new` é por ORGANIZAÇÃO (todo mundo logado recebe
+      // o evento), não por agente — sem essa checagem o som tocava pra
+      // QUALQUER mensagem de QUALQUER departamento, pra todo mundo. A lista
+      // `conversations` já é filtrada certo pelo servidor (só o que é meu,
+      // ou o departamento inteiro se eu tiver `conversations:view_all`) —
+      // reusa exatamente esse filtro: só toca som se a conversa já está
+      // (ou passa a estar) na minha lista.
+      const isRelevantToMe = conversations?.some((c) => c.id === conversationId) ?? false;
+      if (m.direction === "in" && !isFocusedOnThisConversation && isRelevantToMe) {
         playNotificationSound();
       }
 
