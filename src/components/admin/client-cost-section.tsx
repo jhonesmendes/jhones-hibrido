@@ -59,7 +59,15 @@ function currentPrices(rules: PricingRule[]): Record<Category, string> {
   return out;
 }
 
-export function ClientCostSection({ clientId }: { clientId: string }) {
+export function ClientCostSection({
+  clientId,
+  compact = false,
+}: {
+  clientId: string;
+  /** true = sem a moldura própria (uso dentro de um card que já tem borda,
+   * ex. o accordion da lista de Instâncias). */
+  compact?: boolean;
+}) {
   const [data, setData] = useState<CostResponse | null>(null);
   const [prices, setPrices] = useState<Record<Category, string>>({
     marketing: "0",
@@ -106,76 +114,101 @@ export function ClientCostSection({ clientId }: { clientId: string }) {
     void refetch();
   }
 
-  if (!data) return <p className="text-white/50">Carregando custos…</p>;
+  if (!data) return <p className="text-[#4a5070]">Carregando custos…</p>;
 
   return (
-    <div className="space-y-4 rounded-lg border border-white/10 p-4">
-      <div>
-        <p className="text-sm font-medium text-white/70">Custos Meta (cobrança por mensagem)</p>
-        <p className="text-xs text-white/40">
-          {data.report.source === "meta" &&
-            "Valor real, buscado direto da Meta (pricing_analytics) — o preço abaixo só vale como fallback se a instância ficar sem número oficial acessível."}
-          {data.report.source === "mixed" &&
-            "Parcialmente real — a Meta ainda não fechou o custo do período mais recente pra alguma categoria; essa parte usa o preço configurado abaixo."}
-          {data.report.source === "estimate" &&
-            "Estimativa: instância sem número oficial acessível agora — usando o preço configurado abaixo."}
-        </p>
-      </div>
-
-      <div className="grid grid-cols-3 gap-2">
-        {(Object.keys(CATEGORY_LABEL) as Category[]).map((cat) => (
-          <div key={cat} className="space-y-1">
-            <label className="text-xs text-white/50">{CATEGORY_LABEL[cat]} (R$/msg, fallback)</label>
-            <div className="flex gap-1">
-              <input
-                type="text"
-                inputMode="decimal"
-                value={prices[cat]}
-                onChange={(e) => setPrices((p) => ({ ...p, [cat]: e.target.value }))}
-                className="w-full rounded-md border border-white/15 bg-white/5 px-2 py-1.5 text-sm"
-              />
-              <button
-                disabled={saving === cat}
-                onClick={() => void savePrice(cat)}
-                className="shrink-0 rounded-md bg-brand px-2 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
-              >
-                {saving === cat ? "…" : "Salvar"}
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {error && <p className="text-sm text-red-400">{error}</p>}
-      {savedMsg && <p className="text-sm text-emerald-400">{savedMsg}</p>}
-
-      <div className="grid grid-cols-2 gap-2 border-t border-white/10 pt-3">
+    <div className={compact ? "space-y-3" : "space-y-4 rounded-lg border border-[#1e2130] p-4"}>
+      {!compact && (
         <div>
-          <p className="text-xs text-white/50">Custo total (30 dias)</p>
-          <p className="text-lg font-medium">{fmtBRL(data.report.totalCostBrl)}</p>
-        </div>
-        <div>
-          <p className="text-xs text-white/50">Mensagens cobradas</p>
-          <p className="text-lg font-medium">{data.report.totalMessages}</p>
-        </div>
-      </div>
-
-      {data.report.byDepartment.length > 0 && (
-        <div>
-          <p className="mb-1.5 text-xs uppercase text-white/50">Por departamento</p>
-          <div className="space-y-1">
-            {data.report.byDepartment.map((d) => (
-              <div
-                key={d.departmentId ?? "none"}
-                className="flex items-center justify-between rounded-md border border-white/10 px-3 py-1.5 text-sm"
-              >
-                <span className="min-w-0 flex-1 truncate">{d.departmentName}</span>
-                <span className="font-medium">{fmtBRL(d.costBrl)}</span>
-              </div>
-            ))}
-          </div>
+          <p className="text-sm font-medium text-[#c0c8e8]">Custos Meta (cobrança por mensagem)</p>
+          <p className="text-xs text-[#4a5070]">
+            {data.report.source === "meta" &&
+              "Valor real, buscado direto da Meta (pricing_analytics) — o preço abaixo só vale como fallback se a instância ficar sem número oficial acessível."}
+            {data.report.source === "mixed" &&
+              "Parcialmente real — a Meta ainda não fechou o custo do período mais recente pra alguma categoria; essa parte usa o preço configurado abaixo."}
+            {data.report.source === "estimate" &&
+              "Estimativa: instância sem número oficial acessível agora — usando o preço configurado abaixo."}
+          </p>
         </div>
       )}
+
+      <div className={compact ? "flex items-center justify-between" : "grid grid-cols-2 gap-2"}>
+        <div>
+          <p className="text-[10px] text-[#4a5070]">Total cobrado (30d)</p>
+          <p className={compact ? "text-base font-medium text-[#7c9ff5]" : "text-lg font-medium text-[#e8eaf2]"}>
+            {fmtBRL(data.report.totalCostBrl)}
+          </p>
+        </div>
+        {!compact && (
+          <div>
+            <p className="text-xs text-[#4a5070]">Mensagens cobradas</p>
+            <p className="text-lg font-medium text-[#e8eaf2]">{data.report.totalMessages}</p>
+          </div>
+        )}
+      </div>
+
+      {data.report.byDepartment.length > 0 ? (
+        <div>
+          {!compact && <p className="mb-1.5 text-xs uppercase text-[#4a5070]">Por departamento</p>}
+          <div className={compact ? "" : "space-y-1"}>
+            {data.report.byDepartment.map((d) =>
+              compact ? (
+                <div
+                  key={d.departmentId ?? "none"}
+                  className="flex items-center justify-between border-b border-[#141826] py-1 text-xs last:border-0"
+                >
+                  <span className="min-w-0 flex-1 truncate text-[#6070a0]">{d.departmentName}</span>
+                  <span className="font-medium text-[#c0c8e8]">{fmtBRL(d.costBrl)}</span>
+                </div>
+              ) : (
+                <div
+                  key={d.departmentId ?? "none"}
+                  className="flex items-center justify-between rounded-md border border-[#1e2130] px-3 py-1.5 text-sm"
+                >
+                  <span className="min-w-0 flex-1 truncate">{d.departmentName}</span>
+                  <span className="font-medium">{fmtBRL(d.costBrl)}</span>
+                </div>
+              )
+            )}
+          </div>
+        </div>
+      ) : (
+        compact && <p className="text-xs text-[#3a4060]">Sem dados de departamento</p>
+      )}
+
+      <div>
+        {!compact && (
+          <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-[#3a4060]">
+            Preços por categoria
+          </p>
+        )}
+        <div className="flex flex-wrap gap-2">
+          {(Object.keys(CATEGORY_LABEL) as Category[]).map((cat) => (
+            <div key={cat} className="min-w-[80px] flex-1 space-y-1">
+              <label className="text-[10px] text-[#4a5070]">{CATEGORY_LABEL[cat]} (R$/msg)</label>
+              <div className="flex gap-1">
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={prices[cat]}
+                  onChange={(e) => setPrices((p) => ({ ...p, [cat]: e.target.value }))}
+                  className="w-full rounded-md border border-[#1e2130] bg-[#0f1117] px-2 py-1 text-xs text-[#c0c8e8] outline-none focus:border-[#2a4090]"
+                />
+                <button
+                  disabled={saving === cat}
+                  onClick={() => void savePrice(cat)}
+                  className="shrink-0 rounded-md border border-[#1e2540] px-2 py-1 text-[11px] text-[#7c9ff5] transition-colors hover:bg-[#1e2540] disabled:opacity-50"
+                >
+                  {saving === cat ? "…" : "Salvar"}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {error && <p className="text-sm text-[#f07070]">{error}</p>}
+      {savedMsg && <p className="text-sm text-[#4ecb8d]">{savedMsg}</p>}
     </div>
   );
 }

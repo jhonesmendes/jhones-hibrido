@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ClientCostSection } from "@/components/admin/client-cost-section";
+import { AdminTopbar } from "@/components/admin/admin-topbar";
 
 type LicenseType = "trial" | "starter" | "business" | "enterprise";
 type LicenseStatus = "active" | "expired" | "suspended";
@@ -50,9 +51,9 @@ const PLAN_LABEL: Record<LicenseType, string> = {
 function UsageRow({ label, current, limit }: { label: string; current: number; limit: number }) {
   const unlimited = limit >= 9999;
   return (
-    <div className="flex items-center justify-between border-b border-white/5 py-2 text-sm">
-      <span className="text-white/70">{label}</span>
-      <span>
+    <div className="flex items-center justify-between border-b border-[#141826] py-2 text-sm last:border-0">
+      <span className="text-[#6070a0]">{label}</span>
+      <span className="text-[#c0c8e8]">
         {current} / {unlimited ? "∞" : limit}
       </span>
     </div>
@@ -121,107 +122,114 @@ export function ClientDetailClient({ clientId }: { clientId: string }) {
     if (res?.ok) router.push("/admin");
   }
 
-  if (!detail) return <p className="text-white/60">Carregando…</p>;
+  if (!detail) return <p className="p-5 text-[#4a5070]">Carregando…</p>;
 
   return (
-    <div className="max-w-2xl space-y-6">
-      <Link href="/admin" className="text-sm text-white/50 hover:underline">
-        ← Voltar
-      </Link>
+    <>
+      <AdminTopbar
+        title={detail.client.name}
+        subtitle={`Instâncias → ${detail.client.name}`}
+      />
+      <div className="max-w-2xl space-y-5 p-5">
+        <Link href="/admin" className="text-sm text-[#7c9ff5] hover:underline">
+          ← Voltar
+        </Link>
 
-      <div>
-        <h1 className="text-xl font-bold">{detail.client.name}</h1>
-        <p className="text-sm text-white/50">{detail.client.baseUrl}</p>
-      </div>
+        <p className="text-sm text-[#4a5070]">{detail.client.baseUrl}</p>
 
-      {!detail.reachable && (
-        <p className="rounded-md bg-red-500/10 p-3 text-sm text-red-300">
-          Instância inacessível{detail.fetchError ? `: ${detail.fetchError}` : ""} — as mudanças
-          abaixo não vão aplicar até ela responder.
-        </p>
-      )}
+        {!detail.reachable && (
+          <p className="rounded-md border border-[#3a2020] bg-[#2a1818] p-3 text-sm text-[#f0a0a0]">
+            Instância inacessível{detail.fetchError ? `: ${detail.fetchError}` : ""} — as mudanças
+            abaixo não vão aplicar até ela responder.
+          </p>
+        )}
 
-      {detail.usage && detail.license && (
-        <div className="rounded-lg border border-white/10 p-4">
-          <p className="mb-2 text-sm font-medium text-white/70">Uso atual</p>
-          <UsageRow label="Agentes" current={detail.usage.maxAgents} limit={detail.license.maxAgents + detail.license.addonAgents} />
-          <UsageRow label="Administradores" current={detail.usage.maxAdmins} limit={detail.license.maxAdmins} />
-          <UsageRow label="Números oficiais" current={detail.usage.maxOfficialNumbers} limit={detail.license.maxOfficialNumbers} />
-          <UsageRow label="Números WhatsApp Web" current={detail.usage.maxWebNumbers} limit={detail.license.maxWebNumbers} />
-          <UsageRow label="Departamentos" current={detail.usage.maxDepartments} limit={detail.license.maxDepartments} />
-        </div>
-      )}
+        {detail.usage && detail.license && (
+          <div className="rounded-[10px] border border-[#1e2130] bg-[#13161f] p-4">
+            <p className="mb-2 text-sm font-medium text-[#c0c8e8]">Uso atual</p>
+            <UsageRow label="Agentes" current={detail.usage.maxAgents} limit={detail.license.maxAgents + detail.license.addonAgents} />
+            <UsageRow label="Administradores" current={detail.usage.maxAdmins} limit={detail.license.maxAdmins} />
+            <UsageRow label="Números oficiais" current={detail.usage.maxOfficialNumbers} limit={detail.license.maxOfficialNumbers} />
+            <UsageRow label="Números WhatsApp Web" current={detail.usage.maxWebNumbers} limit={detail.license.maxWebNumbers} />
+            <UsageRow label="Departamentos" current={detail.usage.maxDepartments} limit={detail.license.maxDepartments} />
+          </div>
+        )}
 
-      <div className="space-y-4 rounded-lg border border-white/10 p-4">
-        <p className="text-sm font-medium text-white/70">Plano</p>
-        <div className="flex flex-wrap gap-2">
-          {(Object.keys(PLAN_LABEL) as LicenseType[]).map((p) => (
+        <div className="space-y-4 rounded-[10px] border border-[#1e2130] bg-[#13161f] p-4">
+          <p className="text-sm font-medium text-[#c0c8e8]">Plano</p>
+          <div className="flex flex-wrap gap-2">
+            {(Object.keys(PLAN_LABEL) as LicenseType[]).map((p) => (
+              <button
+                key={p}
+                onClick={() => setPlan(p)}
+                className={`rounded-md border px-3 py-1.5 text-sm transition-colors ${
+                  plan === p
+                    ? "border-[#2a3560] bg-[#1e2540] text-[#7c9ff5]"
+                    : "border-[#1e2130] text-[#8890b0] hover:bg-[#1a1e2e]"
+                }`}
+              >
+                {PLAN_LABEL[p]}
+              </button>
+            ))}
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-sm text-[#8890b0]">Add-on de agentes (além do plano base)</label>
+            <input
+              type="number"
+              min={0}
+              max={500}
+              value={addonAgents}
+              onChange={(e) => setAddonAgents(Number(e.target.value) || 0)}
+              className="w-32 rounded-md border border-[#1e2130] bg-[#0f1117] px-3 py-2 text-sm text-[#c0c8e8] outline-none focus:border-[#2a4090]"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-sm text-[#8890b0]">
+              {plan === "trial" ? "Trial expira em" : "Vencimento (vazio = sem vencimento)"}
+            </label>
+            <input
+              type="date"
+              value={expiresAt}
+              onChange={(e) => setExpiresAt(e.target.value)}
+              className="w-full rounded-md border border-[#1e2130] bg-[#0f1117] px-3 py-2 text-sm text-[#c0c8e8] outline-none focus:border-[#2a4090]"
+            />
+          </div>
+
+          <div className="flex gap-2">
             <button
-              key={p}
-              onClick={() => setPlan(p)}
-              className={`rounded-md border px-3 py-1.5 text-sm ${
-                plan === p ? "border-brand bg-brand/20 text-brand" : "border-white/15 text-white/70"
+              onClick={() => setStatus(status === "suspended" ? "active" : "suspended")}
+              className={`rounded-md border px-3 py-1.5 text-sm transition-colors ${
+                status === "suspended"
+                  ? "border-[#3a2020] text-[#f07070] hover:bg-[#2a1818]"
+                  : "border-[#1e2130] text-[#8890b0] hover:bg-[#1a1e2e]"
               }`}
             >
-              {PLAN_LABEL[p]}
+              {status === "suspended" ? "Suspenso — clique para reativar" : "Suspender instância"}
             </button>
-          ))}
-        </div>
+          </div>
 
-        <div className="space-y-1">
-          <label className="text-sm text-white/70">Add-on de agentes (além do plano base)</label>
-          <input
-            type="number"
-            min={0}
-            max={500}
-            value={addonAgents}
-            onChange={(e) => setAddonAgents(Number(e.target.value) || 0)}
-            className="w-32 rounded-md border border-white/15 bg-white/5 px-3 py-2 text-sm"
-          />
-        </div>
-
-        <div className="space-y-1">
-          <label className="text-sm text-white/70">
-            {plan === "trial" ? "Trial expira em" : "Vencimento (vazio = sem vencimento)"}
-          </label>
-          <input
-            type="date"
-            value={expiresAt}
-            onChange={(e) => setExpiresAt(e.target.value)}
-            className="w-full rounded-md border border-white/15 bg-white/5 px-3 py-2 text-sm"
-          />
-        </div>
-
-        <div className="flex gap-2">
+          {error && <p className="text-sm text-[#f07070]">{error}</p>}
+          {savedMsg && <p className="text-sm text-[#4ecb8d]">{savedMsg}</p>}
           <button
-            onClick={() => setStatus(status === "suspended" ? "active" : "suspended")}
-            className={`rounded-md border px-3 py-1.5 text-sm ${
-              status === "suspended" ? "border-red-400 text-red-300" : "border-white/15 text-white/70"
-            }`}
+            disabled={saving}
+            onClick={() => void saveLicense()}
+            className="rounded-md border border-[#2a4090] bg-[#1e3080] px-4 py-2 text-sm font-medium text-[#7c9ff5] transition-colors hover:bg-[#243898] disabled:opacity-50"
           >
-            {status === "suspended" ? "Suspenso — clique para reativar" : "Suspender instância"}
+            {saving ? "Salvando…" : "Salvar plano"}
           </button>
         </div>
 
-        {error && <p className="text-sm text-red-400">{error}</p>}
-        {savedMsg && <p className="text-sm text-emerald-400">{savedMsg}</p>}
+        <ClientCostSection clientId={clientId} />
+
         <button
-          disabled={saving}
-          onClick={() => void saveLicense()}
-          className="rounded-md bg-brand px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+          onClick={() => void removeClient()}
+          className="text-sm text-[#f07070] hover:underline"
         >
-          {saving ? "Salvando…" : "Salvar plano"}
+          Remover cliente do painel
         </button>
       </div>
-
-      <ClientCostSection clientId={clientId} />
-
-      <button
-        onClick={() => void removeClient()}
-        className="text-sm text-red-400 hover:underline"
-      >
-        Remover cliente do painel
-      </button>
-    </div>
+    </>
   );
 }

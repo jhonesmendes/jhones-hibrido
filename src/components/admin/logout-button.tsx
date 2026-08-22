@@ -14,7 +14,7 @@ export function AdminLogoutButton() {
   return (
     <button
       onClick={() => void logout()}
-      className="rounded-md border border-white/15 px-3 py-1.5 text-sm text-white/80 hover:bg-white/5"
+      className="rounded-lg border border-[#1e2540] px-3 py-1.5 text-xs text-[#8890b0] transition-colors hover:bg-[#1a1e2e] hover:text-[#c0c8e8]"
     >
       Sair
     </button>
