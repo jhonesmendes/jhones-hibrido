@@ -17,36 +17,73 @@ type AuditEntry = {
   createdAt: string;
 };
 
-const ACTION_LABEL: Record<string, string> = {
+export const ACTION_LABEL: Record<string, string> = {
   "user.login": "Login",
   "invite.created": "Convite gerado",
   "invite.used": "Convite utilizado",
+  "invite.revoked": "Convite revogado",
   "channel.connected": "Canal conectado",
   "channel.disconnected": "Canal desconectado",
   "campaign.sent": "Campanha disparada",
   "settings.permissions_changed": "Permissões alteradas",
   "settings.role_changed": "Membro alterado",
   "settings.smtp_changed": "SMTP alterado",
+  "settings.ai_changed": "Configuração de IA alterada",
+  "settings.n8n_changed": "Configuração N8N alterada",
+  "n8n.workflow_executed": "Workflow N8N executado",
+  "n8n.workflow_deleted": "Workflow N8N removido",
+  "conversation.deleted": "Conversa removida",
+  "department.created": "Departamento criado",
+  "department.updated": "Departamento atualizado",
+  "department.deleted": "Departamento removido",
+  "department.member_added": "Membro adicionado ao departamento",
+  "department.member_removed": "Membro removido do departamento",
 };
 
 export function AuditClient() {
   const [entries, setEntries] = useState<AuditEntry[]>([]);
   const [memberFilter, setMemberFilter] = useState("");
   const [actionFilter, setActionFilter] = useState("");
+  const [since, setSince] = useState("");
+  const [until, setUntil] = useState("");
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  const buildParams = useCallback(
+    (cursor?: string) => {
+      const params = new URLSearchParams();
+      if (memberFilter.trim()) params.set("memberId", memberFilter.trim());
+      if (actionFilter.trim()) params.set("action", actionFilter.trim());
+      if (since) params.set("since", new Date(since).toISOString());
+      if (until) params.set("until", new Date(`${until}T23:59:59`).toISOString());
+      if (cursor) params.set("cursor", cursor);
+      return params;
+    },
+    [memberFilter, actionFilter, since, until]
+  );
 
   const refetch = useCallback(async () => {
-    const params = new URLSearchParams();
-    if (memberFilter.trim()) params.set("memberId", memberFilter.trim());
-    if (actionFilter.trim()) params.set("action", actionFilter.trim());
-    const res = await fetch(`/api/settings/audit?${params.toString()}`).catch(() => null);
+    const res = await fetch(`/api/settings/audit?${buildParams().toString()}`).catch(() => null);
     if (!res?.ok) return;
-    const data = (await res.json()) as { entries: AuditEntry[] };
+    const data = (await res.json()) as { entries: AuditEntry[]; nextCursor: string | null };
     setEntries(data.entries);
-  }, [memberFilter, actionFilter]);
+    setNextCursor(data.nextCursor);
+  }, [buildParams]);
 
   useEffect(() => {
     void refetch();
   }, [refetch]);
+
+  async function loadMore() {
+    if (!nextCursor) return;
+    setLoadingMore(true);
+    const res = await fetch(`/api/settings/audit?${buildParams(nextCursor).toString()}`).catch(() => null);
+    setLoadingMore(false);
+    if (!res?.ok) return;
+    const data = (await res.json()) as { entries: AuditEntry[]; nextCursor: string | null };
+    setEntries((prev) => [...prev, ...data.entries]);
+    setNextCursor(data.nextCursor);
+  }
 
   return (
     <div className="flex h-full flex-col overflow-hidden p-6">
@@ -85,6 +122,14 @@ export function AuditClient() {
                 ))}
               </select>
             </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="audit-since">De</Label>
+              <Input id="audit-since" type="date" value={since} onChange={(e) => setSince(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="audit-until">Até</Label>
+              <Input id="audit-until" type="date" value={until} onChange={(e) => setUntil(e.target.value)} />
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -108,6 +153,15 @@ export function AuditClient() {
             </p>
           </div>
         ))}
+        {nextCursor && (
+          <button
+            disabled={loadingMore}
+            onClick={() => void loadMore()}
+            className="w-full rounded-lg border py-2 text-sm text-muted-foreground hover:bg-secondary/30 disabled:opacity-50"
+          >
+            {loadingMore ? "Carregando…" : "Carregar mais"}
+          </button>
+        )}
       </div>
     </div>
   );

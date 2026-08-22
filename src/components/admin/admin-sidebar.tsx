@@ -8,7 +8,9 @@ import {
   BarChart3,
   Building2,
   Coins,
+  Plug,
   Receipt,
+  ScrollText,
   Settings,
 } from "lucide-react";
 
@@ -34,6 +36,13 @@ const NAV: { section: string; items: NavItem[] }[] = [
       { href: "/admin/pricing", label: "Tabela de preços", icon: Coins },
       { href: "/admin/alerts", label: "Alertas", icon: AlertTriangle, badge: "alerts" },
       { href: "/admin/settings", label: "Configurações", icon: Settings },
+    ],
+  },
+  {
+    section: "Avançado",
+    items: [
+      { href: "/admin/logs", label: "Logs", icon: ScrollText },
+      { href: "/admin/apis", label: "APIs", icon: Plug },
     ],
   },
 ];
