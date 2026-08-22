@@ -4,6 +4,7 @@ import {
   getDashboardExtras,
   type DashboardPeriod,
 } from "@/server/dashboard/queries";
+import { getMetaCostReport } from "@/server/billing/cost-report";
 import { listMemberDepartments } from "@/server/settings/departments";
 
 const VALID_PERIODS: DashboardPeriod[] = ["today", "7d", "30d"];
@@ -52,9 +53,10 @@ export const GET = withAuth(async (session, req: Request) => {
     ? (periodParam as DashboardPeriod)
     : "today";
 
-  const [data, extras] = await Promise.all([
+  const [data, extras, metaCost] = await Promise.all([
     getDashboardData(session.organizationId, visibleDepartmentIds),
     getDashboardExtras(session.organizationId, visibleDepartmentIds, period),
+    getMetaCostReport(session.organizationId, visibleDepartmentIds, period),
   ]);
-  return Response.json({ ...data, ...extras, period });
+  return Response.json({ ...data, ...extras, metaCost, period });
 });

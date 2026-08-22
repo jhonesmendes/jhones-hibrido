@@ -66,6 +66,30 @@ type DashboardData = {
     official: { connected: number; total: number; messages: number };
     unofficial: { connected: number; total: number; messages: number };
   };
+  metaCost: MetaCostReport;
+};
+
+type CategoryBreakdown = Partial<
+  Record<"marketing" | "utility" | "authentication", { count: number; costBrl: number }>
+>;
+
+type MetaCostReport = {
+  totalCostBrl: number;
+  totalMessages: number;
+  byDepartment: {
+    departmentId: string | null;
+    departmentName: string;
+    costBrl: number;
+    messages: number;
+    byCategory: CategoryBreakdown;
+  }[];
+  byAgent: {
+    memberId: string | null;
+    name: string;
+    costBrl: number;
+    messages: number;
+    byCategory: CategoryBreakdown;
+  }[];
 };
 
 const PERIODS = [
@@ -92,6 +116,16 @@ const STAGE_COLOR: Record<string, string> = {
   lost: "text-destructive",
   open: "text-foreground",
 };
+
+const CATEGORY_LABEL: Record<string, string> = {
+  marketing: "Marketing",
+  utility: "Utilidade",
+  authentication: "Autenticação",
+};
+
+function fmtBRL(v: number): string {
+  return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
 
 // Paleta cíclica pra segmentar o gráfico de Volume por departamento — não
 // depende de quantos departamentos existem, só repete se passar de 6.
@@ -489,6 +523,78 @@ export function DashboardClient() {
             </CardContent>
           </Card>
         )}
+
+        {/* Custos Meta (cobrança por mensagem de template, desde jul/2025) */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Custos Meta</CardTitle>
+            <CardDescription>
+              Mensagens de modelo (marketing/utilidade/autenticação) — resposta livre é grátis.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <div className="rounded-md border bg-secondary/30 p-3">
+                <p className="text-xs text-muted-foreground">Custo total</p>
+                <p className="text-lg font-medium">{fmtBRL(data.metaCost.totalCostBrl)}</p>
+              </div>
+              <div className="rounded-md border bg-secondary/30 p-3">
+                <p className="text-xs text-muted-foreground">Mensagens cobradas</p>
+                <p className="text-lg font-medium">{data.metaCost.totalMessages}</p>
+              </div>
+            </div>
+
+            <div>
+              <p className="mb-2 text-xs font-medium uppercase text-muted-foreground">
+                Por departamento
+              </p>
+              {data.metaCost.byDepartment.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Nenhuma mensagem cobrada no período.</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {data.metaCost.byDepartment.map((d) => (
+                    <div
+                      key={d.departmentId ?? "none"}
+                      className="flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm"
+                    >
+                      <span className="min-w-0 flex-1 truncate">{d.departmentName}</span>
+                      <span className="shrink-0 text-xs text-muted-foreground">
+                        {Object.entries(d.byCategory)
+                          .map(([cat, v]) => `${CATEGORY_LABEL[cat] ?? cat}: ${v?.count}`)
+                          .join(" · ")}
+                      </span>
+                      <span className="w-24 shrink-0 text-right font-medium">{fmtBRL(d.costBrl)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div>
+              <p className="mb-2 text-xs font-medium uppercase text-muted-foreground">
+                Por agente
+              </p>
+              {data.metaCost.byAgent.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Nenhuma mensagem cobrada no período.</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {data.metaCost.byAgent.map((a) => (
+                    <div
+                      key={a.memberId ?? "none"}
+                      className="flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm"
+                    >
+                      <span className="min-w-0 flex-1 truncate">{a.name}</span>
+                      <span className="shrink-0 text-xs text-muted-foreground">
+                        {a.messages} msgs
+                      </span>
+                      <span className="w-24 shrink-0 text-right font-medium">{fmtBRL(a.costBrl)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Departamentos (detalhe) */}
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">

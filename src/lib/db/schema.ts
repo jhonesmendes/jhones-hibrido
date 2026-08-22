@@ -1,9 +1,11 @@
 import {
   type AnyPgColumn,
   boolean,
+  date,
   index,
   integer,
   jsonb,
+  numeric,
   pgTable,
   real,
   text,
@@ -561,6 +563,13 @@ export const message = pgTable(
      * mensagem enviada, limitação documentada da própria Meta). `text`
      * sempre reflete a versão atual; não guardamos histórico de versões. */
     editedAt: timestamp("edited_at"),
+    /** Categoria de cobrança da Meta NO MOMENTO DO ENVIO (marketing | utility
+     * | authentication) — snapshot de `template.category`, tirado na hora de
+     * `sendTemplate()` (a Meta cobra por mensagem desde jul/2025, não mais
+     * por conversa). Null = mensagem de sessão/resposta livre, gratuita
+     * nesse modelo — snapshot porque o modelo pode ser reeditado depois
+     * (recategorizado pela Meta) e isso não pode mudar o custo histórico. */
+    metaCategory: text("meta_category"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (t) => [
@@ -1264,3 +1273,36 @@ export const adminClient = pgTable("admin_client", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
+
+/**
+ * Preço por categoria de cobrança da Meta (marketing | utility |
+ * authentication), com vigência — histórico nunca é UPDATE, sempre INSERT de
+ * uma nova linha com `validFrom` a partir de hoje (a mensagem antiga continua
+ * custando o preço que valia quando foi enviada). Editado a partir do painel
+ * central do operador (`admin.vocero.com.br`), via `/api/internal/meta-pricing`
+ * — o operador acompanha a tabela de preços da Meta, não cada cliente.
+ */
+export const metaPricingRule = pgTable(
+  "meta_pricing_rule",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    /** marketing | utility | authentication — categorias cobradas; mensagem
+     * de sessão (meta_category null) nunca aparece aqui, é sempre grátis. */
+    category: text("category").notNull(),
+    priceBrl: numeric("price_brl", { precision: 10, scale: 6 }).notNull(),
+    validFrom: date("valid_from").notNull(),
+    /** null = vigente. */
+    validTo: date("valid_to"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("meta_pricing_rule_org_cat_idx").on(
+      t.organizationId,
+      t.category,
+      t.validFrom
+    ),
+  ]
+);

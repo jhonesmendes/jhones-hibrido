@@ -70,6 +70,18 @@ export async function onUserCreated(userId: string, userName: string) {
       trialEndsAt: trialEnd,
       expiresAt: trialEnd,
     });
+    // Preço 0 até o operador configurar o valor real pelo painel central —
+    // nunca inventamos um número de custo da Meta (ver src/server/billing/pricing.ts).
+    const today = new Date().toISOString().slice(0, 10);
+    await tx.insert(schema.metaPricingRule).values(
+      (["marketing", "utility", "authentication"] as const).map((category) => ({
+        id: newId("metaPricingRule"),
+        organizationId: orgId,
+        category,
+        priceBrl: "0",
+        validFrom: today,
+      }))
+    );
   });
 }
 

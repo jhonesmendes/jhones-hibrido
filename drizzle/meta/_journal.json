@@ -288,6 +288,13 @@
       "when": 1787080925714,
       "tag": "0040_department_max_attempts",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1787353138123,
+      "tag": "0041_thin_calypso",
+      "breakpoints": true
     }
   ]
 }

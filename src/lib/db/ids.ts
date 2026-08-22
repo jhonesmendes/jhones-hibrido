@@ -39,6 +39,7 @@ const prefixes = {
   traceEvent: "tre",
   license: "lic",
   adminClient: "acl",
+  metaPricingRule: "mpr",
 } as const;
 
 export type IdKind = keyof typeof prefixes;

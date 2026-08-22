@@ -706,6 +706,11 @@ export async function sendTemplate(input: {
       ),
       status: "pending",
       sentByMemberId: input.actorMemberId ?? null,
+      // Snapshot da categoria de cobrança NO MOMENTO do envio — a Meta cobra
+      // por mensagem de template (marketing/utility/authentication) desde
+      // jul/2025; se o modelo for reeditado/ressincronizado depois, o custo
+      // histórico desta mensagem não pode mudar retroativamente.
+      metaCategory: template.category.toLowerCase(),
     })
     .returning();
   const message = inserted[0]!;

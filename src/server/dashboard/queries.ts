@@ -205,7 +205,7 @@ export async function getDashboardData(
 
 export type DashboardPeriod = "today" | "7d" | "30d";
 
-function periodStart(period: DashboardPeriod): Date {
+export function periodStart(period: DashboardPeriod): Date {
   const d = new Date();
   d.setHours(0, 0, 0, 0);
   if (period === "7d") d.setDate(d.getDate() - 6);

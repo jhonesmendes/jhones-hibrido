@@ -7,6 +7,7 @@ import {
   registerAdminClient,
 } from "@/server/admin/client-registry";
 import { fetchRemoteLicense } from "@/server/admin/remote-license";
+import { fetchRemoteCostReport, RemoteCostError } from "@/server/admin/remote-cost";
 
 export const dynamic = "force-dynamic";
 
@@ -19,8 +20,18 @@ export async function GET() {
   const clients = await listAdminClients();
   const withStatus = await Promise.all(
     clients.map(async (c) => {
+      // Custo é melhor-esforço à parte da licença — uma instância sem essa
+      // rota configurada (ou momentaneamente fora do ar) não pode derrubar
+      // o resto da lista nem o carregamento da licença.
+      const costPromise = fetchRemoteCostReport(c, "30d").catch((err) => {
+        if (err instanceof RemoteCostError) return null;
+        throw err;
+      });
       try {
-        const { license, usage } = await fetchRemoteLicense(c);
+        const [{ license, usage }, cost] = await Promise.all([
+          fetchRemoteLicense(c),
+          costPromise,
+        ]);
         return {
           id: c.id,
           name: c.name,
@@ -30,6 +41,7 @@ export async function GET() {
           reachable: true,
           license,
           usage,
+          costBrl30d: cost?.report.totalCostBrl ?? null,
         };
       } catch {
         return {
@@ -41,6 +53,7 @@ export async function GET() {
           reachable: false,
           license: null,
           usage: null,
+          costBrl30d: null,
         };
       }
     })

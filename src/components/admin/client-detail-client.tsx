@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { ClientCostSection } from "@/components/admin/client-cost-section";
 
 type LicenseType = "trial" | "starter" | "business" | "enterprise";
 type LicenseStatus = "active" | "expired" | "suspended";
@@ -212,6 +213,8 @@ export function ClientDetailClient({ clientId }: { clientId: string }) {
           {saving ? "Salvando…" : "Salvar plano"}
         </button>
       </div>
+
+      <ClientCostSection clientId={clientId} />
 
       <button
         onClick={() => void removeClient()}

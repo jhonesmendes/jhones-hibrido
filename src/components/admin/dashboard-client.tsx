@@ -18,7 +18,12 @@ type ClientRow = {
     trialEndsAt: string | null;
   } | null;
   usage: { maxAgents: number } | null;
+  costBrl30d: number | null;
 };
+
+function fmtBRL(v: number): string {
+  return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
 
 const PLAN_LABEL: Record<string, string> = {
   trial: "Trial",
@@ -54,6 +59,7 @@ export function AdminDashboardClient() {
   const expiringCount = clients.filter(
     (c) => c.license?.trialEndsAt && daysUntil(c.license.trialEndsAt) <= 3 && daysUntil(c.license.trialEndsAt) >= 0
   ).length;
+  const totalCostBrl = clients.reduce((sum, c) => sum + (c.costBrl30d ?? 0), 0);
 
   return (
     <div className="space-y-6">
@@ -72,6 +78,10 @@ export function AdminDashboardClient() {
           </p>
           <p className="text-white/50">Trial expirando em ≤3 dias</p>
         </div>
+        <div className="rounded-lg border border-white/10 px-4 py-3">
+          <p className="text-2xl font-bold">{fmtBRL(totalCostBrl)}</p>
+          <p className="text-white/50">Custo Meta consolidado (30 dias)</p>
+        </div>
       </div>
 
       <div className="overflow-x-auto rounded-lg border border-white/10">
@@ -81,6 +91,7 @@ export function AdminDashboardClient() {
               <th className="px-4 py-2">Cliente</th>
               <th className="px-4 py-2">Plano</th>
               <th className="px-4 py-2">Agentes</th>
+              <th className="px-4 py-2">Custo Meta (30d)</th>
               <th className="px-4 py-2">Status</th>
               <th className="px-4 py-2" />
             </tr>
@@ -100,6 +111,7 @@ export function AdminDashboardClient() {
                     ? `${c.usage.maxAgents} / ${c.license.maxAgents + c.license.addonAgents}`
                     : "—"}
                 </td>
+                <td className="px-4 py-2">{c.costBrl30d != null ? fmtBRL(c.costBrl30d) : "—"}</td>
                 <td className="px-4 py-2">
                   {!c.reachable ? (
                     <span className="text-red-400">Inacessível</span>
@@ -118,7 +130,7 @@ export function AdminDashboardClient() {
             ))}
             {clients.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-white/40">
+                <td colSpan={6} className="px-4 py-6 text-center text-white/40">
                   Nenhum cliente registrado ainda.
                 </td>
               </tr>
