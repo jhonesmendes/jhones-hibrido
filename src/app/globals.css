@@ -9,21 +9,23 @@
 */
 @layer base {
   :root {
-    /* Neutros (valores exactos del handoff) */
-    --bg: #ffffff;
-    --bg-subtle: #fbfbfc;
-    --bg-panel: #f8f8f9;
-    --bg-hover: #f4f4f5;
+    /* Neutros — branco puro cansa a vista em tela com brilho alto; usamos um
+       "papel" levemente morno (off-white) em vez de #ffffff, mantendo a
+       mesma hierarquia relativa de claridade entre as 4 camadas. */
+    --bg: #faf9f7;
+    --bg-subtle: #f6f5f3;
+    --bg-panel: #f1f0ee;
+    --bg-hover: #eae9e6;
     --text: #1a1a1e;
     --text-2: #56565e;
     --text-3: #8c8c95;
     --text-4: #aeaeb6;
-    --border: #ecedf0;
-    --border-strong: #e0e1e6;
+    --border: #e7e6e2;
+    --border-strong: #dad9d4;
 
     /* Chat */
-    --chat-bg: #f4f5f7;
-    --bubble-out: #f2f5f8;
+    --chat-bg: #f0efec;
+    --bubble-out: #ecebe7;
     --bubble-out-text: #33414f;
 
     /* Acento (padrão: azul aço apagado; white-label o sobrescreve) */
