@@ -31,7 +31,14 @@ const DEFAULT_CONFIG: FollowupConfig = {
   requiresDocument: false,
 };
 
-type TemplateOption = { id: string; name: string; status: string };
+type TemplateOption = { id: string; name: string; status: string; body: string };
+
+const VARIABLE_REGEX = /\{\{\s*(\d+)\s*\}\}/g;
+function countVariables(body: string): number {
+  const matches = [...body.matchAll(VARIABLE_REGEX)];
+  if (matches.length === 0) return 0;
+  return Math.max(...matches.map((m) => Number(m[1])));
+}
 
 export function FollowupManager({
   stages,
@@ -60,6 +67,8 @@ export function FollowupManager({
   }, []);
 
   const approvedTemplates = templates.filter((t) => t.status === "approved");
+  const selectedTemplate = approvedTemplates.find((t) => t.id === config.templateId) ?? null;
+  const selectedTemplateVars = selectedTemplate ? countVariables(selectedTemplate.body) : 0;
 
   async function save() {
     setSaving(true);
@@ -196,15 +205,22 @@ export function FollowupManager({
                 className="flex h-9 w-full rounded-md border border-input bg-card px-3 text-sm"
               >
                 <option value="">Nenhum (não lembra quem nunca respondeu)</option>
-                {approvedTemplates.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
+                {approvedTemplates.map((t) => {
+                  const vars = countVariables(t.body);
+                  return (
+                    <option key={t.id} value={t.id} disabled={vars > 1}>
+                      {t.name}
+                      {vars > 1 ? " — tem mais de 1 variável, não pode ser usado aqui" : ""}
+                    </option>
+                  );
+                })}
               </select>
               <p className="text-xs text-text-3">
-                Sem janela aberta, texto livre não é permitido pela Meta — se o modelo tiver
-                variável, a primeira ({"{{1}}"}) recebe o nome do contato.
+                Sem janela aberta, texto livre não é permitido pela Meta — só modelo aprovado.
+                {selectedTemplate &&
+                  (selectedTemplateVars > 0
+                    ? ` Este modelo tem 1 variável ({{1}}) — preenchida automaticamente com o nome do contato, sem precisar configurar nada.`
+                    : ` Este modelo não tem variável — pronto pra usar assim como está.`)}
               </p>
             </div>
 
