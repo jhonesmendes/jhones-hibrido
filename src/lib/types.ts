@@ -3,6 +3,8 @@
 export type ConversationDto = {
   id: string;
   contact: { id: string; name: string; phone: string; kind: "individual" | "group" };
+  assignedTo: string | null;
+  departmentId: string | null;
   stageName: string | null;
   channel: "official" | "unofficial";
   aiEnabled: boolean;

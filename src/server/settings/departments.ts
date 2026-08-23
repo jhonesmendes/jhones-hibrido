@@ -2,6 +2,7 @@
 import { getDb, schema } from "@/lib/db";
 import { newId } from "@/lib/db/ids";
 import { scoped } from "@/lib/db/tenant";
+import { ensureDepartmentHasStages } from "@/server/pipeline/stage-templates";
 
 export class DepartmentError extends Error {
   code: "duplicate_slug" | "not_found";
@@ -80,7 +81,16 @@ export async function createDepartment(
         target: [schema.department.organizationId, schema.department.slug],
       })
       .returning();
-    if (inserted[0]) return inserted[0];
+    if (inserted[0]) {
+      // Cada departamento ganha seu próprio funil (clonado do
+      // compartilhado) — sem isso o Pipeline dele fica vazio até alguém
+      // criar etapa manualmente. Não bloqueia a criação do departamento
+      // se falhar por algum motivo (o board também tenta sob demanda).
+      await ensureDepartmentHasStages(organizationId, inserted[0].id).catch((err) =>
+        console.error("[pipeline] falha ao clonar etapas pro departamento novo:", err)
+      );
+      return inserted[0];
+    }
   }
   throw new DepartmentError(
     "duplicate_slug",

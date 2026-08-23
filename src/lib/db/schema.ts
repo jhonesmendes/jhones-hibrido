@@ -417,6 +417,14 @@ export const lead = pgTable(
     contactId: text("contact_id")
       .notNull()
       .references(() => contact.id, { onDelete: "cascade" }),
+    /** Departamento dono do card — um contato que fala com dois
+     * departamentos (duas conversas, um por canal/depto) agora vira DOIS
+     * cards, um por departamento, igual já acontece com as conversas. Null
+     * = pipeline compartilhado (canal ainda sem departamento vinculado, ou
+     * lead anterior a esta separação). */
+    departmentId: text("department_id").references(() => department.id, {
+      onDelete: "set null",
+    }),
     stageId: text("stage_id")
       .notNull()
       .references(() => pipelineStage.id),
@@ -426,7 +434,7 @@ export const lead = pgTable(
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
   (t) => [
-    uniqueIndex("lead_contact_uq").on(t.contactId),
+    uniqueIndex("lead_contact_department_uq").on(t.contactId, t.departmentId),
     index("lead_org_stage_idx").on(t.organizationId, t.stageId, t.position),
   ]
 );
@@ -855,6 +863,12 @@ export const pipelineFollowup = pgTable(
     organizationId: text("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
+    /** Null = configuração compartilhada (pipeline sem departamento). Cada
+     * departamento tem a própria — antes era 1 config pra organização
+     * inteira, disparando pra todo mundo independente de departamento. */
+    departmentId: text("department_id").references(() => department.id, {
+      onDelete: "cascade",
+    }),
     enabled: boolean("enabled").notNull().default(false),
     triggerStageId: text("trigger_stage_id").references(() => pipelineStage.id),
     intervalValue: integer("interval_value").notNull().default(4),
@@ -867,7 +881,9 @@ export const pipelineFollowup = pgTable(
     requiresDocument: boolean("requires_document").notNull().default(false),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
-  (t) => [uniqueIndex("pipeline_followup_org_uq").on(t.organizationId)]
+  (t) => [
+    uniqueIndex("pipeline_followup_org_dept_uq").on(t.organizationId, t.departmentId),
+  ]
 );
 
 /**

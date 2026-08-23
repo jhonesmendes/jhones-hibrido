@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, isNull } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { scoped } from "@/lib/db/tenant";
 import { parseRecipientsCsv } from "@/lib/campaigns/csv";
@@ -85,9 +85,14 @@ export async function importContactsCsv(
 }
 
 /** Etapa actual del lead del contacto (si existe). */
+/** Um contato pode ter um lead por departamento (mesma separação das
+ * conversas) — sem `departmentId`, cai no lead compartilhado (sem
+ * departamento); com ele, pega especificamente o lead DESSE departamento
+ * (o da conversa que está sendo vista), não um qualquer. */
 export async function getContactStage(
   organizationId: string,
-  contactId: string
+  contactId: string,
+  departmentId: string | null = null
 ) {
   const db = getDb();
   const rows = await db
@@ -101,7 +106,10 @@ export async function getContactStage(
       scoped(
         schema.lead.organizationId,
         organizationId,
-        eq(schema.lead.contactId, contactId)
+        eq(schema.lead.contactId, contactId),
+        departmentId
+          ? eq(schema.lead.departmentId, departmentId)
+          : isNull(schema.lead.departmentId)
       )
     )
     .limit(1);

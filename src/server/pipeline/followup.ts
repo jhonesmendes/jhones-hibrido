@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, isNull } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { newId } from "@/lib/db/ids";
 import { scoped } from "@/lib/db/tenant";
@@ -38,24 +38,35 @@ export function serializeFollowup(row: FollowupRow | null) {
   };
 }
 
+/** Config é por (organização, departamento) — antes era só por organização,
+ * disparando pra todo mundo independente de departamento. `departmentId`
+ * null = configuração compartilhada (Visão consolidada do owner). */
 export async function getFollowupRow(
-  organizationId: string
+  organizationId: string,
+  departmentId: string | null
 ): Promise<FollowupRow | null> {
   const db = getDb();
   const rows = await db
     .select()
     .from(schema.pipelineFollowup)
-    .where(scoped(schema.pipelineFollowup.organizationId, organizationId))
+    .where(
+      scoped(
+        schema.pipelineFollowup.organizationId,
+        organizationId,
+        departmentId ? eq(schema.pipelineFollowup.departmentId, departmentId) : isNull(schema.pipelineFollowup.departmentId)
+      )
+    )
     .limit(1);
   return rows[0] ?? null;
 }
 
-export async function getFollowupConfig(organizationId: string) {
-  return serializeFollowup(await getFollowupRow(organizationId));
+export async function getFollowupConfig(organizationId: string, departmentId: string | null) {
+  return serializeFollowup(await getFollowupRow(organizationId, departmentId));
 }
 
 export async function saveFollowupConfig(
   organizationId: string,
+  departmentId: string | null,
   input: FollowupConfigInput
 ) {
   if (input.enabled && (!input.triggerStageId || !input.message?.trim())) {
@@ -65,7 +76,7 @@ export async function saveFollowupConfig(
   }
 
   const db = getDb();
-  const existing = await getFollowupRow(organizationId);
+  const existing = await getFollowupRow(organizationId, departmentId);
   const values = {
     enabled: input.enabled,
     triggerStageId: input.triggerStageId,
@@ -87,9 +98,10 @@ export async function saveFollowupConfig(
     await db.insert(schema.pipelineFollowup).values({
       id: newId("pipelineFollowup"),
       organizationId,
+      departmentId,
       ...values,
     });
   }
 
-  return getFollowupConfig(organizationId);
+  return getFollowupConfig(organizationId, departmentId);
 }

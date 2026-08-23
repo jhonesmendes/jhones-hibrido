@@ -512,9 +512,9 @@ export async function ingestInboundMessage(input: {
   // Grupo não é lead nem alvo de follow-up de pipeline (Foco Vertical): o
   // pipeline é sobre converter conversas individuais, não threads coletivas.
   if (contact.kind !== "group") {
-    await onLeadActivity(organizationId, contact.id, waTimestamp);
+    await onLeadActivity(organizationId, contact.id, conversation.departmentId, waTimestamp);
     if (!fromMe && MEDIA_TYPES.has(input.type)) {
-      await onInboundMedia(organizationId, contact.id);
+      await onInboundMedia(organizationId, contact.id, conversation.departmentId);
     }
   }
 

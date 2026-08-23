@@ -7,6 +7,7 @@ export type ConversationDto = {
   id: string;
   contact: { id: string; name: string; phone: string; kind: "individual" | "group" };
   assignedTo: string | null;
+  departmentId: string | null;
   stageName: string | null;
   /** Canal activo: official (Cloud API) o unofficial (gateway). */
   channel: "official" | "unofficial";
@@ -49,10 +50,15 @@ export async function listConversations(
     order by m.created_at desc
     limit 1
   )`;
+  // Um contato agora pode ter um lead por departamento (mesma separação
+  // das conversas) — pega o lead DESTE departamento (o da própria
+  // conversa), não um qualquer via LIMIT 1 sem filtro (isso mostrava a
+  // etapa errada quando o contato tinha card em mais de um departamento).
   const stageSql = sql<string | null>`(
     select s.name from lead l
     join pipeline_stage s on s.id = l.stage_id
     where l.contact_id = ${schema.contact.id}
+      and l.department_id is not distinct from ${schema.conversation.departmentId}
     limit 1
   )`;
 
@@ -234,6 +240,7 @@ export function serializeConversation(
       kind: contact.kind,
     },
     assignedTo: c.assignedTo,
+    departmentId: c.departmentId,
     stageName,
     channel: c.channel,
     aiEnabled: c.aiEnabled,

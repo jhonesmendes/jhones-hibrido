@@ -83,10 +83,15 @@ export function ContactPanel({
     agentReady && conversation.aiEnabled && !conversation.handoffAt;
 
   // Carregamento inicial (inclui notas): reexecuta ao trocar de contato.
+  // ?departmentId= da PRÓPRIA conversa (não o departamento ativo da sessão)
+  // — um contato pode ter lead/etapas em mais de um departamento agora
+  // (mesma separação das conversas); sem isso o painel podia mostrar/mover
+  // o lead errado quando o departamento ativo não batia com o da conversa.
+  const deptParam = conversation.departmentId ? `?departmentId=${conversation.departmentId}` : "";
   const refetch = useCallback(async () => {
     const [detail, stagesRes, agentRes] = await Promise.all([
-      fetch(`/api/contacts/${contactId}`).then((r) => (r.ok ? r.json() : null)),
-      fetch("/api/pipeline/stages").then((r) => (r.ok ? r.json() : null)),
+      fetch(`/api/contacts/${contactId}${deptParam}`).then((r) => (r.ok ? r.json() : null)),
+      fetch(`/api/pipeline/stages${deptParam}`).then((r) => (r.ok ? r.json() : null)),
       fetch(`/api/conversations/${conversation.id}/agent-status`).then((r) =>
         r.ok ? r.json() : null
       ),
@@ -101,13 +106,13 @@ export function ContactPanel({
     setAgentEnabled(Boolean(agentRes?.enabled));
     setAiConfigured(Boolean(agentRes?.aiConfigured));
     setNotesLoaded(true);
-  }, [contactId, conversation.id]);
+  }, [contactId, conversation.id, deptParam]);
 
   // Refetch ao vivo (etapa/lead + estado do agente) SEM tocar nas notas, para
   // não sobrescrever o que o operador estiver digitando. Disparado pelo SSE.
   const refreshLive = useCallback(async () => {
     const [detail, agentRes] = await Promise.all([
-      fetch(`/api/contacts/${contactId}`).then((r) => (r.ok ? r.json() : null)),
+      fetch(`/api/contacts/${contactId}${deptParam}`).then((r) => (r.ok ? r.json() : null)),
       fetch(`/api/conversations/${conversation.id}/agent-status`).then((r) =>
         r.ok ? r.json() : null
       ),
@@ -120,7 +125,7 @@ export function ContactPanel({
       setAgentEnabled(Boolean(agentRes.enabled));
       setAiConfigured(Boolean(agentRes.aiConfigured));
     }
-  }, [contactId, conversation.id]);
+  }, [contactId, conversation.id, deptParam]);
 
   useEffect(() => {
     setNotesLoaded(false);

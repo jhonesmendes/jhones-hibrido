@@ -13,11 +13,17 @@ export const dynamic = "force-dynamic";
 
 type Params = { params: Promise<{ id: string }> };
 
-export const GET = withAuth(async (session, _req: Request, ctx: Params) => {
+export const GET = withAuth(async (session, req: Request, ctx: Params) => {
   const { id } = await ctx.params;
   const contact = await getContactById(session.organizationId, id);
   if (!contact) return apiError(404, "not_found", "Contato não encontrado");
-  const stageRow = await getContactStage(session.organizationId, id);
+  // ?departmentId= vem de quem já sabe a conversa específica (painel de
+  // detalhes do inbox) — pega o lead DESSE departamento, não um qualquer
+  // (contato pode ter card em mais de um). Sem o param, usa o departamento
+  // ativo da sessão (ex.: tela de Contatos, sem conversa em foco).
+  const departmentIdParam = new URL(req.url).searchParams.get("departmentId");
+  const departmentId = departmentIdParam !== null ? departmentIdParam || null : session.activeDepartmentId;
+  const stageRow = await getContactStage(session.organizationId, id, departmentId);
   return Response.json({
     contact: serializeContact(contact),
     stage: stageRow

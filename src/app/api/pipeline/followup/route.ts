@@ -9,7 +9,7 @@ import {
 export const dynamic = "force-dynamic";
 
 export const GET = withAuth(async (session) => {
-  const config = await getFollowupConfig(session.organizationId);
+  const config = await getFollowupConfig(session.organizationId, session.activeDepartmentId);
   return Response.json(config);
 });
 
@@ -29,7 +29,11 @@ export const PUT = withAuth(async (session, req: Request) => {
   if (!body.ok) return body.response;
 
   try {
-    const config = await saveFollowupConfig(session.organizationId, body.data);
+    const config = await saveFollowupConfig(
+      session.organizationId,
+      session.activeDepartmentId,
+      body.data
+    );
     return Response.json(config);
   } catch (err) {
     if (err instanceof FollowupConfigError) {
