@@ -4,6 +4,8 @@ import { newId } from "@/lib/db/ids";
 import { getEnv } from "@/lib/env";
 import { sendText } from "@/server/inbox/send";
 import { getMostRecentConversationForContact } from "@/server/inbox/queries";
+import { isWindowOpen } from "@/server/inbox/window";
+import { countVariables, renderBody, sendTemplate, TemplateError } from "@/server/whatsapp/templates";
 import {
   intervalToMs,
   isEligibleForExpiry,
@@ -16,6 +18,12 @@ import {
  * (Constituição II), disparado por um `setInterval` a nível de módulo (ver
  * `startFollowupScheduler`). Percorre TODAS as organizações habilitadas;
  * uma falha pontual em um lead não interrompe o restante (FR-009).
+ *
+ * Duas rotas de lembrete, escolhidas pelo estado da janela de 24h (a Meta
+ * recusa texto livre com a janela fechada — não é frescura do produto):
+ * janela ABERTA manda `config.message` (texto livre); janela FECHADA (ex.:
+ * modelo inicial nunca respondido) manda `config.templateId` (modelo
+ * aprovado, com o nome do contato em {{1}} se o modelo tiver variável).
  */
 export async function runFollowupCycle(now: Date = new Date()): Promise<void> {
   const db = getDb();
@@ -26,7 +34,20 @@ export async function runFollowupCycle(now: Date = new Date()): Promise<void> {
 
   for (const config of configs) {
     if (!config.triggerStageId) continue;
+    if (!config.message && !config.templateId) continue;
     const intervalMs = intervalToMs(config.intervalValue, config.intervalUnit);
+
+    // Modelo é o mesmo pra todo lead desta config — busca uma vez só, fora
+    // do loop de leads, em vez de repetir a query por card.
+    let template: typeof schema.template.$inferSelect | null = null;
+    if (config.templateId) {
+      const rows = await db
+        .select()
+        .from(schema.template)
+        .where(eq(schema.template.id, config.templateId))
+        .limit(1);
+      template = rows[0] ?? null;
+    }
 
     // Só `lead` aqui — um contato pode ter mais de uma conversa (uma por
     // canal, ver ConversationChannel em ingest.ts); resolver "a" conversa
@@ -62,27 +83,57 @@ export async function runFollowupCycle(now: Date = new Date()): Promise<void> {
         lastSend = null;
       }
 
-      if (
-        config.message &&
-        isEligibleForReminder(lead, lastSend, intervalMs, now)
-      ) {
+      if (isEligibleForReminder(lead, lastSend, intervalMs, now)) {
         const conversation = await getMostRecentConversationForContact(
           config.organizationId,
           lead.contactId
         );
         if (!conversation) continue; // contato sem nenhuma conversa ainda — nada pra lembrar
+
+        const windowOpen =
+          conversation.channel === "unofficial" || isWindowOpen(conversation.lastInboundAt);
+
+        // Janela aberta sem mensagem configurada, ou fechada sem modelo
+        // configurado: nada pra mandar nesse estado — não força texto
+        // livre com janela fechada (a Meta recusaria) nem deixa de
+        // lembrar quem tem janela aberta só porque não achou o outro modo.
+        if (windowOpen && !config.message) continue;
+        if (!windowOpen && !template) continue;
+
+        let sentMessage: string;
         try {
-          await sendText({
-            conversationId: conversation.id,
-            organizationId: config.organizationId,
-            text: config.message,
-          });
+          if (windowOpen) {
+            await sendText({
+              conversationId: conversation.id,
+              organizationId: config.organizationId,
+              text: config.message!,
+            });
+            sentMessage = config.message!;
+          } else {
+            const contactRows = await db
+              .select({ name: schema.contact.name })
+              .from(schema.contact)
+              .where(eq(schema.contact.id, lead.contactId))
+              .limit(1);
+            const contactName = contactRows[0]?.name ?? null;
+            const variableCount = countVariables(template!.body);
+            await sendTemplate({
+              organizationId: config.organizationId,
+              conversationId: conversation.id,
+              templateId: template!.id,
+              variables: variableCount > 0 && contactName ? [contactName] : undefined,
+            });
+            sentMessage = renderBody(
+              template!.body,
+              variableCount > 0 && contactName ? [contactName] : []
+            );
+          }
           await db.insert(schema.followupSend).values({
             id: newId("followupSend"),
             organizationId: config.organizationId,
             leadId: lead.id,
             conversationId: conversation.id,
-            message: config.message,
+            message: sentMessage,
             status: "sent",
             sentAt: now,
           });
@@ -92,14 +143,12 @@ export async function runFollowupCycle(now: Date = new Date()): Promise<void> {
             organizationId: config.organizationId,
             leadId: lead.id,
             conversationId: conversation.id,
-            message: config.message,
+            message: windowOpen ? (config.message ?? "") : (template?.name ?? ""),
             status: "failed",
             sentAt: now,
           });
-          console.error(
-            `[followup] falha ao enviar lembrete para lead ${lead.id}:`,
-            err
-          );
+          const label = err instanceof TemplateError ? err.message : err;
+          console.error(`[followup] falha ao enviar lembrete para lead ${lead.id}:`, label);
         }
         continue;
       }

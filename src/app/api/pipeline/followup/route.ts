@@ -19,6 +19,7 @@ const putSchema = z.object({
   intervalValue: z.number().int().min(1).max(720),
   intervalUnit: z.enum(["hours", "days"]),
   message: z.string().trim().max(1024).nullable(),
+  templateId: z.string().min(1).nullable(),
   successStageId: z.string().min(1).nullable(),
   expiredStageId: z.string().min(1).nullable(),
   requiresDocument: z.boolean(),

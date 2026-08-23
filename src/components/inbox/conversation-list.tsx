@@ -4,6 +4,7 @@ import { useState } from "react";
 import {
   Bell,
   BellOff,
+  Clock,
   MessageSquarePlus,
   Search,
   Sparkles,
@@ -331,6 +332,15 @@ export function ConversationList({
                               }}
                             />
                             {c.stageName}
+                          </span>
+                        )}
+                        {c.awaitingFirstReply && c.contact.kind !== "group" && (
+                          <span
+                            className="inline-flex items-center gap-1 rounded-full bg-[#faf3e6] px-2 py-[3px] text-[10px] font-medium text-[#8a6d1f] dark:bg-[#2a2114] dark:text-[#d9b872]"
+                            title="A empresa mandou a última mensagem — o contato ainda não respondeu"
+                          >
+                            <Clock className="h-2.5 w-2.5 shrink-0" strokeWidth={1.9} />
+                            Aguardando resposta
                           </span>
                         )}
                         {c.channel === "unofficial" && (

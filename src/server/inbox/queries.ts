@@ -25,6 +25,7 @@ export type ConversationDto = {
   unreadCount: number;
   windowOpen: boolean;
   windowRemainingMs: number;
+  awaitingFirstReply: boolean;
   preview: string | null;
 };
 
@@ -260,6 +261,13 @@ export function serializeConversation(
     windowRemainingMs: unofficial
       ? Number.MAX_SAFE_INTEGER
       : windowRemainingMs(c.lastInboundAt),
+    // A empresa mandou algo por último e o cliente ainda não respondeu —
+    // vale tanto pra quem nunca respondeu nada quanto pra quem já
+    // respondeu antes mas não a esse round (conversa reaberta com modelo
+    // novo). Diferente de "grupo": grupo nunca tem isso (sempre null).
+    awaitingFirstReply: Boolean(
+      c.lastOutboundAt && (!c.lastInboundAt || c.lastOutboundAt > c.lastInboundAt)
+    ),
     preview,
   };
 }

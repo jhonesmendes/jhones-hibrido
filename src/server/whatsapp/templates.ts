@@ -718,7 +718,7 @@ export async function sendTemplate(input: {
 
   await db
     .update(schema.conversation)
-    .set({ lastMessageAt: new Date(), updatedAt: new Date() })
+    .set({ lastMessageAt: new Date(), lastOutboundAt: new Date(), updatedAt: new Date() })
     .where(eq(schema.conversation.id, input.conversationId));
 
   // Disparar um modelo é atividade de lead igual receber mensagem — se o

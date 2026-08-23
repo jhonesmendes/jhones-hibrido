@@ -250,7 +250,7 @@ export async function sendText(input: {
 
   await db
     .update(schema.conversation)
-    .set({ lastMessageAt: new Date(), updatedAt: new Date() })
+    .set({ lastMessageAt: new Date(), lastOutboundAt: new Date(), updatedAt: new Date() })
     .where(eq(schema.conversation.id, input.conversationId));
 
   publish(input.organizationId, {
@@ -436,7 +436,7 @@ export async function sendMedia(input: {
 
   await db
     .update(schema.conversation)
-    .set({ lastMessageAt: new Date(), updatedAt: new Date() })
+    .set({ lastMessageAt: new Date(), lastOutboundAt: new Date(), updatedAt: new Date() })
     .where(eq(schema.conversation.id, input.conversationId));
 
   publish(input.organizationId, {
@@ -563,7 +563,7 @@ async function sendMediaViaUnofficial(
 
   await db
     .update(schema.conversation)
-    .set({ lastMessageAt: new Date(), updatedAt: new Date() })
+    .set({ lastMessageAt: new Date(), lastOutboundAt: new Date(), updatedAt: new Date() })
     .where(eq(schema.conversation.id, input.conversationId));
 
   if (message) {
@@ -676,7 +676,7 @@ async function sendViaUnofficial(
 
   await db
     .update(schema.conversation)
-    .set({ lastMessageAt: new Date(), updatedAt: new Date() })
+    .set({ lastMessageAt: new Date(), lastOutboundAt: new Date(), updatedAt: new Date() })
     .where(eq(schema.conversation.id, input.conversationId));
 
   if (message) {

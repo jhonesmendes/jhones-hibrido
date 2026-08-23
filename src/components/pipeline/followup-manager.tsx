@@ -13,6 +13,7 @@ type FollowupConfig = {
   intervalValue: number;
   intervalUnit: "hours" | "days";
   message: string | null;
+  templateId: string | null;
   successStageId: string | null;
   expiredStageId: string | null;
   requiresDocument: boolean;
@@ -24,10 +25,13 @@ const DEFAULT_CONFIG: FollowupConfig = {
   intervalValue: 4,
   intervalUnit: "hours",
   message: null,
+  templateId: null,
   successStageId: null,
   expiredStageId: null,
   requiresDocument: false,
 };
+
+type TemplateOption = { id: string; name: string; status: string };
 
 export function FollowupManager({
   stages,
@@ -41,6 +45,7 @@ export function FollowupManager({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [templates, setTemplates] = useState<TemplateOption[]>([]);
 
   useEffect(() => {
     fetch("/api/pipeline/followup")
@@ -48,7 +53,13 @@ export function FollowupManager({
       .then((d: FollowupConfig) => setConfig(d))
       .catch(() => {})
       .finally(() => setLoaded(true));
+    fetch("/api/templates?listable=1")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { templates: TemplateOption[] } | null) => setTemplates(d?.templates ?? []))
+      .catch(() => {});
   }, []);
+
+  const approvedTemplates = templates.filter((t) => t.status === "approved");
 
   async function save() {
     setSaving(true);
@@ -162,7 +173,7 @@ export function FollowupManager({
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="fu-message">Mensagem de follow-up</Label>
+              <Label htmlFor="fu-message">Mensagem de follow-up (janela de 24h aberta)</Label>
               <Textarea
                 id="fu-message"
                 rows={3}
@@ -172,6 +183,29 @@ export function FollowupManager({
                 }
                 placeholder="Olá! Ainda tem interesse? Posso ajudar com mais alguma coisa?"
               />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="fu-template">Modelo de follow-up (janela fechada)</Label>
+              <select
+                id="fu-template"
+                value={config.templateId ?? ""}
+                onChange={(e) =>
+                  setConfig((c) => ({ ...c, templateId: e.target.value || null }))
+                }
+                className="flex h-9 w-full rounded-md border border-input bg-card px-3 text-sm"
+              >
+                <option value="">Nenhum (não lembra quem nunca respondeu)</option>
+                {approvedTemplates.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-text-3">
+                Sem janela aberta, texto livre não é permitido pela Meta — se o modelo tiver
+                variável, a primeira ({"{{1}}"}) recebe o nome do contato.
+              </p>
             </div>
 
             <label className="flex items-center gap-2 text-sm">

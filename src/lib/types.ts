@@ -21,6 +21,10 @@ export type ConversationDto = {
   unreadCount: number;
   windowOpen: boolean;
   windowRemainingMs: number;
+  /** A empresa mandou algo por último (mensagem de sessão ou modelo) e o
+   * cliente ainda não respondeu a isso — nunca respondeu nada, ou já
+   * respondeu antes mas não a este round (conversa reaberta com modelo). */
+  awaitingFirstReply: boolean;
   preview: string | null;
 };
 

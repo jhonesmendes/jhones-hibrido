@@ -508,6 +508,11 @@ export const conversation = pgTable(
       enum: ["cliente", "modelo", "error", "ventana"],
     }),
     lastInboundAt: timestamp("last_inbound_at"),
+    /** Igual a `lastInboundAt`, mas do lado de saída — junto com ela dá pra
+     * saber se a empresa está "aguardando 1ª resposta" (mandou algo por
+     * último e o cliente ainda não respondeu), mesmo numa conversa que já
+     * teve troca antes e foi reaberta com um modelo novo. */
+    lastOutboundAt: timestamp("last_outbound_at"),
     lastMessageAt: timestamp("last_message_at"),
     unreadCount: integer("unread_count").notNull().default(0),
     /** Agente responsável (FR-007); null = não atribuída. */
@@ -883,7 +888,15 @@ export const pipelineFollowup = pgTable(
     intervalUnit: text("interval_unit", { enum: ["hours", "days"] })
       .notNull()
       .default("hours"),
+    /** Lembrete com a janela de 24h ABERTA — texto livre. */
     message: text("message"),
+    /** Lembrete com a janela FECHADA (contato nunca respondeu, ou reabriu
+     * mas ainda não respondeu de novo) — só modelo aprovado é permitido
+     * nesse caso (regra da própria Meta, texto livre é recusado). Se o
+     * modelo tiver variável, `{{1}}` recebe o nome do contato. */
+    templateId: text("template_id").references(() => template.id, {
+      onDelete: "set null",
+    }),
     successStageId: text("success_stage_id").references(() => pipelineStage.id),
     expiredStageId: text("expired_stage_id").references(() => pipelineStage.id),
     requiresDocument: boolean("requires_document").notNull().default(false),
