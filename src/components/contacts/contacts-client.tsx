@@ -214,10 +214,18 @@ export function ContactsClient() {
               >
                 <ContactAvatar name={c.name} seed={c.id} />
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
+                  <div className="flex min-w-0 items-center gap-2">
                     <span className="truncate text-sm font-medium">
                       {c.name}
                     </span>
+                    {c.waProfileName && c.waProfileName !== c.name && (
+                      <span
+                        className="truncate text-xs font-normal text-muted-foreground"
+                        title="Nome do perfil de WhatsApp do contato"
+                      >
+                        · {c.waProfileName}
+                      </span>
+                    )}
                     {c.archivedAt && (
                       <Badge variant="secondary">Arquivado</Badge>
                     )}

@@ -8,6 +8,7 @@ export function serializeContact(c: typeof schema.contact.$inferSelect) {
   return {
     id: c.id,
     name: c.name,
+    waProfileName: c.waProfileName,
     phone: c.phone,
     kind: c.kind,
     reference: c.reference,

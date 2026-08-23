@@ -5,7 +5,13 @@ import { isWindowOpen, windowRemainingMs } from "@/server/inbox/window";
 
 export type ConversationDto = {
   id: string;
-  contact: { id: string; name: string; phone: string; kind: "individual" | "group" };
+  contact: {
+    id: string;
+    name: string;
+    waProfileName: string | null;
+    phone: string;
+    kind: "individual" | "group";
+  };
   assignedTo: string | null;
   departmentId: string | null;
   stageName: string | null;
@@ -236,6 +242,7 @@ export function serializeConversation(
     contact: {
       id: contact.id,
       name: contact.name,
+      waProfileName: contact.waProfileName,
       phone: contact.phone,
       kind: contact.kind,
     },

@@ -224,10 +224,13 @@ export function ContactPanel({
               <p className="truncate text-sm font-[650]">
                 {conversation.contact.name}
               </p>
-              <p className="text-xs text-text-3">
+              <p className="truncate text-xs text-text-3">
                 {conversation.contact.kind === "group"
                   ? "Grupo"
                   : formatPhone(conversation.contact.phone)}
+                {conversation.contact.waProfileName &&
+                  conversation.contact.waProfileName !== conversation.contact.name &&
+                  ` · ${conversation.contact.waProfileName}`}
               </p>
             </div>
             {conversation.contact.kind !== "group" && (

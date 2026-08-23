@@ -365,6 +365,14 @@ export const contact = pgTable(
       .notNull()
       .default("individual"),
     name: text("name").notNull(),
+    /** Nome do perfil de WhatsApp do contato (`contacts[].profile.name` do
+     * webhook da Meta) — informativo, nunca sobrescreve `name` (que o
+     * operador pode ter editado). Atualizado a cada mensagem recebida (o
+     * cliente pode trocar o nome do perfil dele a qualquer momento),
+     * mesmo padrão de `verifiedName` em `meta_credentials`, só que por
+     * mensagem em vez de por reconexão — a Cloud API manda em toda
+     * mensagem, não só na primeira. */
+    waProfileName: text("wa_profile_name"),
     reference: text("reference"),
     comment: text("comment"),
     notes: text("notes"),

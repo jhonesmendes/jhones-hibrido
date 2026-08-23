@@ -2,7 +2,13 @@
 
 export type ConversationDto = {
   id: string;
-  contact: { id: string; name: string; phone: string; kind: "individual" | "group" };
+  contact: {
+    id: string;
+    name: string;
+    waProfileName: string | null;
+    phone: string;
+    kind: "individual" | "group";
+  };
   assignedTo: string | null;
   departmentId: string | null;
   stageName: string | null;
@@ -71,6 +77,11 @@ export type StageDto = {
 export type ContactDto = {
   id: string;
   name: string;
+  /** Nome do perfil de WhatsApp do contato (o que ele mesmo definiu no
+   * app dele) — informativo, pode divergir do `name` salvo/editado no
+   * Vocero. Null quando a Meta nunca mandou (ou o contato não veio do
+   * canal oficial). */
+  waProfileName: string | null;
   phone: string;
   kind: "individual" | "group";
   reference: string | null;

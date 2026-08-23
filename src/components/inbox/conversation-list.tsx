@@ -288,6 +288,14 @@ export function ConversationList({
                             <Users className="h-3.5 w-3.5 shrink-0 text-text-3" strokeWidth={1.7} />
                           )}
                           <span className="truncate">{c.contact.name}</span>
+                          {c.contact.waProfileName && c.contact.waProfileName !== c.contact.name && (
+                            <span
+                              className="truncate text-[11.5px] font-normal text-text-3"
+                              title="Nome do perfil de WhatsApp do contato"
+                            >
+                              · {c.contact.waProfileName}
+                            </span>
+                          )}
                         </span>
                         <span
                           className={cn(

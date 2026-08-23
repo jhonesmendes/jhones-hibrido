@@ -53,6 +53,13 @@ export async function getOrCreateContact(
   // que chegou por uma via diferente (webhook manda cru, "iniciar
   // conversa"/CSV normaliza com 9). Prefere sempre o contato existente a
   // criar um novo — evita o bug real de conversa duplicada por esse motivo.
+  // Se o "nome" recebido é só dígitos, é um telefone disfarçado de nome (ex.:
+  // veio de um formato de origem diferente do `phone` já normalizado acima)
+  // — não é um nome de perfil de verdade, então não vale como waProfileName.
+  const trimmedName = name?.trim() || "";
+  const isRealName = trimmedName.length > 0 && !/^\d+$/.test(trimmedName);
+  const profileName = isRealName ? trimmedName : null;
+
   const altPhone = altBrNinthDigitCandidate(phone);
   if (altPhone) {
     const altRows = await db
@@ -65,15 +72,13 @@ export async function getOrCreateContact(
         )
       )
       .limit(1);
-    if (altRows[0]) return { contact: altRows[0], isNew: false };
+    if (altRows[0]) {
+      const existing = await syncWaProfileName(db, altRows[0], profileName);
+      return { contact: existing, isNew: false };
+    }
   }
 
-  // Se o "nome" recebido é só dígitos, é um telefone disfarçado de nome (ex.:
-  // veio de um formato de origem diferente do `phone` já normalizado acima)
-  // — usa o `phone` normalizado em vez de confiar num valor calculado à
-  // parte, senão o nome fica com um 9º dígito que o telefone de verdade não tem.
-  const trimmedName = name?.trim() || "";
-  const resolvedName = /^\d+$/.test(trimmedName) ? phone : trimmedName || phone;
+  const resolvedName = isRealName ? trimmedName : phone;
   const inserted = await db
     .insert(schema.contact)
     .values({
@@ -82,6 +87,7 @@ export async function getOrCreateContact(
       phone,
       kind,
       name: resolvedName,
+      waProfileName: profileName,
     })
     .onConflictDoNothing({
       target: [schema.contact.organizationId, schema.contact.phone],
@@ -99,7 +105,7 @@ export async function getOrCreateContact(
       )
     )
     .limit(1);
-  const existing = rows[0];
+  let existing = rows[0];
   if (!existing) throw new Error("contato não encontrado após upsert");
 
   // Reativar se estava arquivado (o nome editado pelo operador é respeitado).
@@ -110,7 +116,26 @@ export async function getOrCreateContact(
       .where(eq(schema.contact.id, existing.id));
     existing.archivedAt = null;
   }
+  existing = await syncWaProfileName(db, existing, profileName);
   return { contact: existing, isNew: false };
+}
+
+type ContactRow = typeof schema.contact.$inferSelect;
+
+/** Atualiza `waProfileName` quando a Meta manda um valor novo (o cliente
+ * pode trocar o nome do perfil dele a qualquer momento) — NUNCA toca em
+ * `name` (esse é editável pelo operador, só o dono decide mudar). */
+async function syncWaProfileName(
+  db: ReturnType<typeof getDb>,
+  existing: ContactRow,
+  profileName: string | null
+): Promise<ContactRow> {
+  if (!profileName || profileName === existing.waProfileName) return existing;
+  await db
+    .update(schema.contact)
+    .set({ waProfileName: profileName, updatedAt: new Date() })
+    .where(eq(schema.contact.id, existing.id));
+  return { ...existing, waProfileName: profileName };
 }
 
 /**
