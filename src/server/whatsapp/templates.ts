@@ -15,6 +15,7 @@ import {
 import { callGraphSend, SendError } from "@/server/inbox/send";
 import { serializeMessage } from "@/server/inbox/ingest";
 import { getMemberName } from "@/server/inbox/queries";
+import { onLeadActivity } from "@/server/inbox/lead-activity";
 import { claimOnManualReply } from "@/server/queue/manager";
 import type { WebhookValue } from "@/server/inbox/webhook";
 
@@ -719,6 +720,14 @@ export async function sendTemplate(input: {
     .update(schema.conversation)
     .set({ lastMessageAt: new Date(), updatedAt: new Date() })
     .where(eq(schema.conversation.id, input.conversationId));
+
+  // Disparar um modelo é atividade de lead igual receber mensagem — se o
+  // card estava numa etapa fechada ("Finalizado"), o agente mandando um
+  // modelo pra retomar o contato é sinal de reabertura, mesmo critério do
+  // lado do cliente respondendo (ver onLeadActivity). Grupo não tem lead.
+  if (row.contact.kind !== "group") {
+    await onLeadActivity(input.organizationId, row.contact.id, row.conversation.departmentId, new Date());
+  }
 
   publish(input.organizationId, {
     type: "message.new",
