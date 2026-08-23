@@ -4,6 +4,18 @@
 
 let activeConversationId = null;
 
+// Sem isso, uma versão nova do SW fica "esperando" até TODAS as abas do
+// Vocero fecharem e reabrirem pra assumir — na prática, "implantei mas não
+// mudou nada" até o usuário fechar o navegador inteiro. `skipWaiting` ativa
+// a versão nova assim que ela termina de instalar; `clients.claim` faz ela
+// assumir o controle das abas já abertas, sem precisar de F5.
+self.addEventListener("install", () => {
+  self.skipWaiting();
+});
+self.addEventListener("activate", (event) => {
+  event.waitUntil(self.clients.claim());
+});
+
 // Sem cache/offline (ver comentário acima): o listener existe só porque o
 // Chrome exige um handler de `fetch` registrado para oferecer "Instalar
 // app". Nunca intercepta — deixa a rede seguir o caminho normal.
@@ -36,10 +48,16 @@ self.addEventListener("push", (event) => {
         clientList.some((c) => c.focused);
       if (looking) return; // já está vendo essa conversa em tempo real via SSE
 
+      // `tag` agrupa notificações da mesma conversa (não empilha uma em
+      // cima da outra) — mas sem `renotify: true` o navegador troca o
+      // conteúdo da notificação existente SEM alertar de novo (sem som/
+      // popup), então a segunda mensagem seguida na mesma conversa ficava
+      // muda mesmo tendo chegado.
       await self.registration.showNotification(payload.title, {
         body: payload.body,
         icon: payload.icon,
         tag: `vocero-${payload.conversationId}`,
+        renotify: true,
         data: { url: payload.url },
       });
     })()
