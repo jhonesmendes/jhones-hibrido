@@ -385,7 +385,7 @@ export function ConversationList({
                       setMenuOpenId((cur) => (cur === c.id ? null : c.id));
                     }}
                     className={cn(
-                      "absolute right-3 top-2.5 flex h-6 w-6 items-center justify-center rounded-md text-text-3 transition-colors hover:bg-secondary hover:text-text-1",
+                      "absolute right-3 top-8 flex h-6 w-6 items-center justify-center rounded-md text-text-3 transition-colors hover:bg-secondary hover:text-text-1",
                       menuOpenId === c.id
                         ? "opacity-100"
                         : "opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100"
@@ -404,7 +404,7 @@ export function ConversationList({
                         }}
                       />
                       <div
-                        className="absolute right-3 top-9 z-20 min-w-[190px] rounded-lg border bg-card py-1 shadow-lg"
+                        className="absolute right-3 top-14 z-20 min-w-[190px] rounded-lg border bg-card py-1 shadow-lg"
                         onClick={(e) => e.stopPropagation()}
                       >
                         <button
