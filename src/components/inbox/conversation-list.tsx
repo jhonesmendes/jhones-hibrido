@@ -5,7 +5,9 @@ import {
   Bell,
   BellOff,
   Clock,
+  MailOpen,
   MessageSquarePlus,
+  MoreVertical,
   Search,
   Sparkles,
   UserRound,
@@ -97,6 +99,22 @@ export function ConversationList({
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<"all" | "unread" | "groups">("all");
   const [starting, setStarting] = useState(false);
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
+
+  async function toggleUnread(c: ConversationDto) {
+    setMenuOpenId(null);
+    await fetch(`/api/conversations/${c.id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(
+        c.unreadCount > 0 ? { markRead: true } : { markUnread: true }
+      ),
+    }).catch(() => null);
+    // Sem atualização de estado local aqui de propósito: o PATCH publica
+    // `conversation.updated` via SSE, e o handler em inbox-client.tsx já
+    // refaz o fetch da lista sozinho — mesmo caminho de qualquer outro
+    // PATCH desta tela (ex.: atribuir conversa, trocar canal).
+  }
 
   const loading = conversationsProp === null;
   const conversations = conversationsProp ?? [];
@@ -263,7 +281,7 @@ export function ConversationList({
               const unread = c.unreadCount > 0;
               const active = selectedId === c.id;
               return (
-                <li key={c.id} className="mb-0.5">
+                <li key={c.id} className="group/row relative mb-0.5">
                   <button
                     onClick={() => onSelect(c.id)}
                     className={cn(
@@ -358,6 +376,52 @@ export function ConversationList({
                       </span>
                     </span>
                   </button>
+
+                  <button
+                    type="button"
+                    aria-label="Mais opções"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setMenuOpenId((cur) => (cur === c.id ? null : c.id));
+                    }}
+                    className={cn(
+                      "absolute right-3 top-2.5 flex h-6 w-6 items-center justify-center rounded-md text-text-3 transition-colors hover:bg-secondary hover:text-text-1",
+                      menuOpenId === c.id
+                        ? "opacity-100"
+                        : "opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100"
+                    )}
+                  >
+                    <MoreVertical className="h-4 w-4" strokeWidth={1.7} />
+                  </button>
+
+                  {menuOpenId === c.id && (
+                    <>
+                      <div
+                        className="fixed inset-0 z-10"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setMenuOpenId(null);
+                        }}
+                      />
+                      <div
+                        className="absolute right-3 top-9 z-20 min-w-[190px] rounded-lg border bg-card py-1 shadow-lg"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => void toggleUnread(c)}
+                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] hover:bg-subtle"
+                        >
+                          {unread ? (
+                            <MailOpen className="h-3.5 w-3.5 shrink-0" strokeWidth={1.7} />
+                          ) : (
+                            <Bell className="h-3.5 w-3.5 shrink-0" strokeWidth={1.7} />
+                          )}
+                          {unread ? "Marcar como lida" : "Marcar como não lida"}
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </li>
               );
             })}

@@ -279,6 +279,11 @@ export async function updateConversation(
     aiEnabled?: boolean;
     reactivate?: boolean;
     markRead?: boolean;
+    /** Marca como não lida manualmente (ex.: "lembrar de responder depois")
+     * — mesmo gesto do WhatsApp normal. `unreadCount` vira 1 mesmo sem
+     * mensagem nova de verdade; qualquer lugar que só checa `> 0` (badge,
+     * aba "Não lidas") já entende isso igual a uma mensagem não lida real. */
+    markUnread?: boolean;
     channel?: "official" | "unofficial";
     assignedTo?: string | null;
   }
@@ -294,6 +299,7 @@ export async function updateConversation(
     set.aiEnabled = patch.aiEnabled ?? true;
   }
   if (patch.markRead) set.unreadCount = 0;
+  if (patch.markUnread) set.unreadCount = 1;
 
   const updated = await db
     .update(schema.conversation)

@@ -16,6 +16,7 @@ const patchSchema = z.object({
   aiEnabled: z.boolean().optional(),
   reactivate: z.boolean().optional(),
   markRead: z.boolean().optional(),
+  markUnread: z.boolean().optional(),
   channel: z.enum(["official", "unofficial"]).optional(),
   assignedTo: z.string().nullable().optional(),
 });
