@@ -21,10 +21,23 @@ export const dynamic = "force-dynamic";
  * `?listable=1`: filtra também por `isListable` — usado pelos seletores de
  * escolha rápida (atalho "/" do inbox, "Enviar modelo", Campanhas). Sem o
  * parâmetro (padrão, usado por Configurações → Modelos), devolve todos,
- * inclusive os marcados "não listável", pra dar pra gerenciá-los. */
+ * inclusive os marcados "não listável", pra dar pra gerenciá-los.
+ *
+ * `?departmentId=`: escopo do departamento DA CONVERSA sendo respondida (não
+ * o departamento ativo da sessão nem os departamentos do membro) — mesmo
+ * padrão já usado em `/api/pipeline/stages` e `/api/contacts/[id]`. Sem
+ * isso, o seletor "Enviar modelo" usava só a filtragem por role acima, que
+ * ignora completamente qual departamento é o da conversa: um owner/admin via
+ * TODOS os modelos da org (mesmo de outro departamento) e um agente via os
+ * modelos de QUALQUER departamento que ele pertence, não só o da conversa
+ * aberta — bug real reportado em produção (modelo de outro departamento
+ * aparecendo no picker). Com o parâmetro presente, o escopo por
+ * departamento-da-conversa vale pra QUALQUER role, sobrepondo a filtragem
+ * por role de cima. */
 export const GET = withAuth(async (session, req: Request) => {
   const url = new URL(req.url);
   const listableOnly = url.searchParams.get("listable") === "1";
+  const departmentIdParam = url.searchParams.get("departmentId");
 
   const db = getDb();
   const templates = await db
@@ -34,6 +47,13 @@ export const GET = withAuth(async (session, req: Request) => {
     .orderBy(desc(schema.template.createdAt));
 
   const base = listableOnly ? templates.filter((t) => t.isListable) : templates;
+
+  if (departmentIdParam) {
+    const visible = base.filter(
+      (t) => !t.departmentId || t.departmentId === departmentIdParam
+    );
+    return Response.json({ templates: visible.map(serializeTemplate) });
+  }
 
   if (session.role === "owner" || session.role === "admin") {
     return Response.json({ templates: base.map(serializeTemplate) });

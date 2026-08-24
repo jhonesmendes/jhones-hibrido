@@ -13,9 +13,14 @@ import { Label } from "@/components/ui/label";
  */
 export function TemplateSender({
   conversationId,
+  departmentId,
   onSent,
 }: {
   conversationId: string;
+  /** Departamento DA CONVERSA (não o ativo da sessão) — mesmo escopo já
+   * aplicado em `/api/templates`, senão o picker oferece modelo de outro
+   * departamento/número. */
+  departmentId: string | null;
   onSent: () => void;
 }) {
   const [templates, setTemplates] = useState<TemplateDto[] | null>(null);
@@ -26,7 +31,8 @@ export function TemplateSender({
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/templates?listable=1")
+    const deptParam = departmentId ? `&departmentId=${departmentId}` : "";
+    fetch(`/api/templates?listable=1${deptParam}`)
       .then((r) => (r.ok ? r.json() : { templates: [] }))
       .then((d: { templates?: TemplateDto[] }) => {
         if (!cancelled) {
@@ -41,7 +47,7 @@ export function TemplateSender({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [departmentId]);
 
   if (templates === null) {
     return <p className="text-xs text-muted-foreground">Carregando modelos…</p>;
