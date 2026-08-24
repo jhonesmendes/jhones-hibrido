@@ -86,7 +86,8 @@ export async function runFollowupCycle(now: Date = new Date()): Promise<void> {
       if (isEligibleForReminder(lead, lastSend, intervalMs, now)) {
         const conversation = await getMostRecentConversationForContact(
           config.organizationId,
-          lead.contactId
+          lead.contactId,
+          lead.departmentId
         );
         if (!conversation) continue; // contato sem nenhuma conversa ainda — nada pra lembrar
 

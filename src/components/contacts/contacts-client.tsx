@@ -54,13 +54,33 @@ export function ContactsClient() {
    * não têm conversa — o Link direto pra /inbox?contact=X caía numa tela
    * vazia porque o inbox só seleciona conversas que já existem. Garante a
    * conversa antes de navegar (reusa o mesmo endpoint do "Iniciar conversa").
+   *
+   * Se o contato já está em atendimento com outro agente (sem
+   * conversations:view_all pra ver de qualquer jeito), o backend devolve
+   * `requiresClaim` em vez de abrir de mão — confirma antes de reatribuir,
+   * senão nem navega (evita cair numa tela em branco pra uma conversa que o
+   * agente não teria como ver mesmo).
    */
-  async function openConversation(contactId: string) {
-    await fetch("/api/conversations", {
+  async function openConversation(contactId: string, claim?: boolean) {
+    const res = await fetch("/api/conversations", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ contactId }),
+      body: JSON.stringify({ contactId, claim }),
     }).catch(() => null);
+    if (!res?.ok) return;
+    const data = (await res.json()) as {
+      requiresClaim?: boolean;
+      currentOwner?: { memberId: string; name: string | null };
+    };
+    if (data.requiresClaim) {
+      const ownerName = data.currentOwner?.name ?? "outro agente";
+      const wantsToClaim = confirm(
+        `Este contato já está em atendimento com ${ownerName}. Deseja assumir a conversa?`
+      );
+      if (!wantsToClaim) return;
+      await openConversation(contactId, true);
+      return;
+    }
     router.push(`/inbox?contact=${contactId}`);
   }
 

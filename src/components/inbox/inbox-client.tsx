@@ -336,14 +336,30 @@ export function InboxClient({
   );
 
   const startConversation = useCallback(
-    async (phone: string): Promise<boolean> => {
+    async (phone: string, claim?: boolean): Promise<boolean> => {
       const res = await fetch("/api/conversations", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ phone }),
+        body: JSON.stringify({ phone, claim }),
       }).catch(() => null);
       if (!res?.ok) return false;
-      const data = (await res.json()) as { conversation: ConversationDto };
+      const data = (await res.json()) as {
+        conversation: ConversationDto;
+        requiresClaim?: boolean;
+        currentOwner?: { memberId: string; name: string | null };
+      };
+      // Contato já em atendimento com outro agente (sem conversations:view_all
+      // pra ver de qualquer jeito) — não abre nada às escondidas, pergunta
+      // antes de reatribuir. Recusando, comporta-se como falha normal (ver
+      // comentário do chamador sobre manter a busca preenchida).
+      if (data.requiresClaim) {
+        const ownerName = data.currentOwner?.name ?? "outro agente";
+        const wantsToClaim = confirm(
+          `Este contato já está em atendimento com ${ownerName}. Deseja assumir a conversa?`
+        );
+        if (!wantsToClaim) return false;
+        return startConversation(phone, true);
+      }
       await refetchConversations();
       select(data.conversation.id);
       return true;

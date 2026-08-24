@@ -94,6 +94,33 @@ export async function getCredentialsByOrg(
   return rows[0] ? toCredentials(rows[0]) : null;
 }
 
+/** Número oficial "padrão" de UM departamento específico — o mais antigo
+ * ainda ativo vinculado a ele. Usado por fluxos que precisam abrir/criar
+ * uma conversa já escopada ao departamento ativo de quem está agindo (ex.:
+ * "iniciar conversa"), em vez de cair no primeiro número da organização
+ * inteira (ver `getCredentialsByOrg`) — sem isso, chamar um contato a
+ * partir de um departamento podia criar/reusar a conversa no número de
+ * OUTRO departamento. */
+export async function getCredentialsByDepartment(
+  organizationId: string,
+  departmentId: string
+): Promise<Credentials | null> {
+  const db = getDb();
+  const rows = await db
+    .select()
+    .from(schema.metaCredentials)
+    .where(
+      and(
+        scoped(schema.metaCredentials.organizationId, organizationId),
+        eq(schema.metaCredentials.departmentId, departmentId),
+        eq(schema.metaCredentials.isActive, true)
+      )
+    )
+    .orderBy(asc(schema.metaCredentials.createdAt))
+    .limit(1);
+  return rows[0] ? toCredentials(rows[0]) : null;
+}
+
 /** Todos os números oficiais da organização (v0.1: lista, não mais 1). */
 export async function listCredentialsByOrg(
   organizationId: string

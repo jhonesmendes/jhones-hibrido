@@ -6,6 +6,7 @@ import { scoped } from "@/lib/db/tenant";
 import { phoneSchema } from "@/lib/phone-schema";
 import { resolvePermissions } from "@/lib/auth/require-permission";
 import {
+  getMemberName,
   getMostRecentConversationForContact,
   listConversations,
   serializeConversation,
@@ -45,10 +46,17 @@ export const GET = withAuth(async (session, req: Request) => {
 });
 
 const createSchema = z.union([
-  z.object({ contactId: z.string().min(1) }),
+  z.object({
+    contactId: z.string().min(1),
+    // Confirma que quer assumir uma conversa já atribuída a outro agente
+    // (ver fluxo de "requiresClaim" abaixo) — sem isso, o pedido nunca
+    // rouba a conversa de quem já é dono.
+    claim: z.boolean().optional(),
+  }),
   z.object({
     phone: phoneSchema,
     name: z.string().trim().max(120).optional(),
+    claim: z.boolean().optional(),
   }),
 ]);
 
@@ -86,16 +94,31 @@ export const POST = withAuth(async (session, req: Request) => {
     contact = result.contact;
   }
 
+  // Escopado ao departamento ATIVO de quem está chamando (não a org
+  // inteira) — sem isso, um contato que já tinha conversa em outro
+  // departamento devolvia essa conversa alheia, que a lista (filtrada
+  // estrito por departamento — ver listConversations) nunca ia mostrar pra
+  // quem chamou: a chamada "funcionava" mas a tela ficava em branco. Visão
+  // consolidada do owner (sem departamento ativo) mantém o comportamento
+  // antigo — qualquer departamento serve.
+  const activeDepartmentId = session.activeDepartmentId ?? null;
+
   // Um contato pode ter mais de uma conversa (uma por canal — ver
   // ConversationChannel). "Iniciar conversa" sem escolher canal explícito
-  // abre a mais recente já existente; só cria uma nova (no canal padrão
-  // da organização) se o contato nunca conversou por nenhum canal ainda.
+  // abre a mais recente já existente NESTE departamento; só cria uma nova
+  // (no canal do departamento ativo, ou o padrão da organização se o
+  // departamento não tiver número próprio) se o contato nunca conversou
+  // ainda por nenhum canal deste departamento.
   let conversation = await getMostRecentConversationForContact(
     session.organizationId,
-    contact.id
+    contact.id,
+    activeDepartmentId
   );
   if (!conversation) {
-    const channel = await resolveDefaultChannelForNewConversation(session.organizationId);
+    const channel = await resolveDefaultChannelForNewConversation(
+      session.organizationId,
+      activeDepartmentId
+    );
     if (!channel) {
       return apiError(
         422,
@@ -107,7 +130,7 @@ export const POST = withAuth(async (session, req: Request) => {
       session.organizationId,
       contact.id,
       channel,
-      session.activeDepartmentId
+      activeDepartmentId
     );
     await logTrace({
       organizationId: session.organizationId,
@@ -119,6 +142,32 @@ export const POST = withAuth(async (session, req: Request) => {
       memberId: session.memberId,
       detail: { contactId: contact.id },
     });
+  }
+
+  // Já tem dono e não é quem está chamando: sem conversations:view_all,
+  // devolver a conversa direto significaria abrir algo que a lista de quem
+  // chamou nunca mostra (mesma tela em branco do bug de departamento) — em
+  // vez disso, avisa quem é o dono atual e só reatribui se o pedido veio
+  // com `claim: true` (confirmação explícita, ver diálogo no inbox).
+  if (
+    conversation.assignedTo !== null &&
+    conversation.assignedTo !== session.memberId
+  ) {
+    const effective = await resolvePermissions(session.memberId, session.role);
+    if (!effective.has("conversations:view_all")) {
+      if (!body.data.claim) {
+        const ownerName = await getMemberName(conversation.assignedTo);
+        return Response.json({
+          conversation: serializeConversation(conversation, contact),
+          requiresClaim: true,
+          currentOwner: { memberId: conversation.assignedTo, name: ownerName },
+        });
+      }
+      const updated = await updateConversation(session.organizationId, conversation.id, {
+        assignedTo: session.memberId,
+      });
+      if (updated) conversation = updated;
+    }
   }
 
   // Sempre atribui a quem iniciou — "iniciar conversa" é uma reivindicação

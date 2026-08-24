@@ -138,10 +138,21 @@ export async function listConversations(
  * uma por canal (ver `ConversationChannel` em ingest.ts); usado por quem
  * precisa de "a" conversa de um contato sem saber/escolher o canal (abrir
  * a partir de Contatos/Pipeline, encaminhar mensagem, follow-up).
+ *
+ * `departmentId`: quando informado, só considera conversas DESTE
+ * departamento — sem isso, "chamar" um contato que já tem conversa em
+ * outro departamento devolvia essa conversa alheia (bug real: nunca
+ * aparecia na lista de quem chamou, porque a lista é filtrada estrito por
+ * departamento ativo — ver `listConversations` — resultando em tela em
+ * branco mesmo a chamada tendo funcionado). Sem o parâmetro, mantém o
+ * comportamento antigo (mais recente em qualquer departamento) — usado
+ * pela visão consolidada do owner e por quem já resolve o departamento
+ * certo por fora (ex.: follow-up, que passa o do lead).
  */
 export async function getMostRecentConversationForContact(
   organizationId: string,
-  contactId: string
+  contactId: string,
+  departmentId?: string | null
 ): Promise<typeof schema.conversation.$inferSelect | null> {
   const db = getDb();
   const rows = await db
@@ -151,7 +162,8 @@ export async function getMostRecentConversationForContact(
       and(
         eq(schema.conversation.organizationId, organizationId),
         eq(schema.conversation.contactId, contactId),
-        eq(schema.conversation.isTest, false)
+        eq(schema.conversation.isTest, false),
+        departmentId ? eq(schema.conversation.departmentId, departmentId) : undefined
       )
     )
     .orderBy(desc(sql`coalesce(${schema.conversation.lastMessageAt}, ${schema.conversation.createdAt})`))

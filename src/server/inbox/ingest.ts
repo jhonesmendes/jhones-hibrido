@@ -4,8 +4,15 @@ import { newId } from "@/lib/db/ids";
 import { altBrNinthDigitCandidate } from "@/lib/utils";
 import { publish } from "@/server/events/bus";
 import { sendPushToMember } from "@/server/push/send";
-import { getCredentialsByOrg, getCredentialsByPhoneNumberId } from "@/server/whatsapp/credentials";
-import { resolveDefaultUnofficialChannelId } from "@/server/settings/unofficial-channels";
+import {
+  getCredentialsByDepartment,
+  getCredentialsByOrg,
+  getCredentialsByPhoneNumberId,
+} from "@/server/whatsapp/credentials";
+import {
+  resolveDefaultUnofficialChannelId,
+  resolveDepartmentUnofficialChannelId,
+} from "@/server/settings/unofficial-channels";
 import { downloadMetaMedia, getMetaMediaMeta } from "@/lib/meta/client";
 import type { WebhookMedia, WebhookValue } from "@/server/inbox/webhook";
 import { applyStatusUpdate } from "@/server/inbox/status";
@@ -228,10 +235,25 @@ export async function getOrCreateConversation(
 /** Canal padrão pra uma conversa NOVA sem canal explícito escolhido —
  * prefere o número oficial (se conectado), senão o canal WhatsApp Web
  * padrão da organização. `null` quando não há nenhum canal conectado
- * ainda (a chamador decide o que fazer — normalmente um erro claro). */
+ * ainda (a chamador decide o que fazer — normalmente um erro claro).
+ *
+ * `departmentId`: quando informado, prioriza o número/canal DESTE
+ * departamento antes de cair no padrão da organização inteira — senão
+ * "iniciar conversa" a partir de um departamento podia criar a conversa no
+ * número de outro departamento (bug real: contato chamado do depto B abria
+ * a conversa que já existia no depto A, porque era o primeiro número da
+ * org). Departamento sem número próprio (comum, uso geral) cai no fallback
+ * normal. */
 export async function resolveDefaultChannelForNewConversation(
-  organizationId: string
+  organizationId: string,
+  departmentId?: string | null
 ): Promise<ConversationChannel | null> {
+  if (departmentId) {
+    const deptOfficial = await getCredentialsByDepartment(organizationId, departmentId);
+    if (deptOfficial) return { type: "official", metaCredentialId: deptOfficial.id };
+    const deptUnofficialChannelId = await resolveDepartmentUnofficialChannelId(departmentId);
+    if (deptUnofficialChannelId) return { type: "unofficial", unofficialChannelId: deptUnofficialChannelId };
+  }
   const official = await getCredentialsByOrg(organizationId);
   if (official) return { type: "official", metaCredentialId: official.id };
   const unofficialChannelId = await resolveDefaultUnofficialChannelId(organizationId);
