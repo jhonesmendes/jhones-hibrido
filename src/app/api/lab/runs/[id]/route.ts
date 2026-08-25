@@ -64,3 +64,31 @@ export const GET = withAuth(async (session, _req: Request, ctx: Params) => {
     })),
   });
 });
+
+/** Só o owner apaga rodada do histórico — é um registro de avaliação, não
+ * dado operacional; casos (agent_test_case) cascateiam pela FK. */
+export const DELETE = withAuth(async (session, _req: Request, ctx: Params) => {
+  if (session.role !== "owner") {
+    return apiError(403, "forbidden", "Só o proprietário pode excluir rodadas");
+  }
+  const { id } = await ctx.params;
+  const db = getDb();
+  const existing = await db
+    .select({ status: schema.agentTestRun.status })
+    .from(schema.agentTestRun)
+    .where(
+      scoped(
+        schema.agentTestRun.organizationId,
+        session.organizationId,
+        eq(schema.agentTestRun.id, id)
+      )
+    )
+    .limit(1);
+  if (!existing[0]) return apiError(404, "not_found", "Rodada não encontrada");
+  if (existing[0].status === "running") {
+    return apiError(409, "run_in_progress", "Aguarde a rodada terminar antes de excluir");
+  }
+
+  await db.delete(schema.agentTestRun).where(eq(schema.agentTestRun.id, id));
+  return Response.json({ deleted: true });
+});

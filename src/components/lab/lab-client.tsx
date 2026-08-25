@@ -71,7 +71,7 @@ const TIPO_LABELS: Record<Hallazgo["tipo"], string> = {
   tono: "Tom",
 };
 
-export function LabClient() {
+export function LabClient({ isOwner = false }: { isOwner?: boolean }) {
   const [runs, setRuns] = useState<Run[]>([]);
   const [aiConfigured, setAiConfigured] = useState(true);
   const [departments, setDepartments] = useState<Department[]>([]);
@@ -123,6 +123,23 @@ export function LabClient() {
   useEffect(() => {
     void refetchRuns();
   }, [refetchRuns]);
+
+  async function deleteRun(runId: string) {
+    if (!confirm("Excluir esta rodada do histórico? Não pode ser desfeito.")) return;
+    const res = await fetch(`/api/lab/runs/${runId}`, { method: "DELETE" }).catch(() => null);
+    if (!res?.ok) {
+      const data = (await res?.json().catch(() => null)) as {
+        error?: { message?: string };
+      } | null;
+      setError(data?.error?.message ?? "Não foi possível excluir a rodada");
+      return;
+    }
+    if (selectedRunId === runId) {
+      setSelectedRunId(null);
+      setDetail(null);
+    }
+    void refetchRuns();
+  }
 
   useEffect(() => {
     if (selectedRunId) void refetchDetail(selectedRunId);
@@ -225,6 +242,8 @@ export function LabClient() {
           runs={runs}
           selectedRunId={selectedRunId}
           onSelect={setSelectedRunId}
+          canDelete={isOwner}
+          onDelete={(id) => void deleteRun(id)}
         />
         {detail ? (
           <Report detail={detail} onApplied={() => void refetchDetail(detail.run.id)} />
@@ -314,10 +333,14 @@ function HistoryList({
   runs,
   selectedRunId,
   onSelect,
+  canDelete = false,
+  onDelete,
 }: {
   runs: Run[];
   selectedRunId: string | null;
   onSelect: (id: string) => void;
+  canDelete?: boolean;
+  onDelete?: (id: string) => void;
 }) {
   return (
     <div className="space-y-2">
@@ -328,41 +351,52 @@ function HistoryList({
         <p className="text-xs text-muted-foreground">Nenhuma rodada ainda.</p>
       )}
       {runs.map((run) => (
-        <button
-          key={run.id}
-          onClick={() => onSelect(run.id)}
-          className={`w-full rounded-lg border p-3 text-left transition-colors hover:bg-accent/50 ${
-            selectedRunId === run.id ? "border-primary/50 bg-accent/60" : "bg-card"
-          }`}
-        >
-          <div className="flex items-center justify-between">
-            <ScoreBadge run={run} />
-            {run.delta !== null && run.delta !== 0 && (
-              <span
-                className={`flex items-center gap-0.5 text-xs font-medium ${
-                  run.delta > 0 ? "text-success" : "text-destructive"
-                }`}
-              >
-                {run.delta > 0 ? (
-                  <TrendingUp className="h-3.5 w-3.5" />
-                ) : (
-                  <TrendingDown className="h-3.5 w-3.5" />
-                )}
-                {run.delta > 0 ? "+" : ""}
-                {run.delta}
-              </span>
-            )}
-          </div>
-          <p className="mt-1 text-[11px] text-muted-foreground">
-            {run.departmentName ?? "Geral"} ·{" "}
-            {new Date(run.startedAt).toLocaleString("pt-BR", {
-              day: "numeric",
-              month: "short",
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
-          </p>
-        </button>
+        <div key={run.id} className="group relative">
+          <button
+            onClick={() => onSelect(run.id)}
+            className={`w-full rounded-lg border p-3 text-left transition-colors hover:bg-accent/50 ${
+              selectedRunId === run.id ? "border-primary/50 bg-accent/60" : "bg-card"
+            }`}
+          >
+            <div className="flex items-center justify-between pr-6">
+              <ScoreBadge run={run} />
+              {run.delta !== null && run.delta !== 0 && (
+                <span
+                  className={`flex items-center gap-0.5 text-xs font-medium ${
+                    run.delta > 0 ? "text-success" : "text-destructive"
+                  }`}
+                >
+                  {run.delta > 0 ? (
+                    <TrendingUp className="h-3.5 w-3.5" />
+                  ) : (
+                    <TrendingDown className="h-3.5 w-3.5" />
+                  )}
+                  {run.delta > 0 ? "+" : ""}
+                  {run.delta}
+                </span>
+              )}
+            </div>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              {run.departmentName ?? "Geral"} ·{" "}
+              {new Date(run.startedAt).toLocaleString("pt-BR", {
+                day: "numeric",
+                month: "short",
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </p>
+          </button>
+          {canDelete && run.status !== "running" && onDelete && (
+            <button
+              type="button"
+              aria-label="Excluir rodada"
+              onClick={() => onDelete(run.id)}
+              className="absolute right-2 top-2 rounded-md p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-secondary hover:text-destructive group-hover:opacity-100"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
       ))}
     </div>
   );

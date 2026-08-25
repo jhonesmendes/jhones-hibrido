@@ -7,5 +7,5 @@ export const dynamic = "force-dynamic";
 export default async function LabPage() {
   const session = await getSessionOrNull();
   if (session?.role === "agent") redirect("/inbox");
-  return <LabClient />;
+  return <LabClient isOwner={session?.role === "owner"} />;
 }
