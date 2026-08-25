@@ -5,6 +5,7 @@ import { getEnv } from "@/lib/env";
 import { sendText } from "@/server/inbox/send";
 import { getMostRecentConversationForContact } from "@/server/inbox/queries";
 import { isWindowOpen } from "@/server/inbox/window";
+import { getDepartmentBusinessHours, isWithinBusinessHours } from "@/server/queue/business-hours";
 import { countVariables, renderBody, sendTemplate, TemplateError } from "@/server/whatsapp/templates";
 import {
   intervalToMs,
@@ -31,6 +32,23 @@ export async function runFollowupCycle(now: Date = new Date()): Promise<void> {
     .select()
     .from(schema.pipelineFollowup)
     .where(eq(schema.pipelineFollowup.enabled, true));
+
+  // Cache por departamento dentro do ciclo — evita reconsultar a mesma
+  // config de horário pra cada lead. Departamento sem `business_hours`
+  // configurado (ou lead sem departamento) nunca trava — mesmo default de
+  // "sempre aberto" já usado na Fila (ver business-hours.ts).
+  const businessHoursCache = new Map<
+    string,
+    { businessHours: unknown; timezone: string } | null
+  >();
+  async function isLeadWithinBusinessHours(departmentId: string | null): Promise<boolean> {
+    if (!departmentId) return true;
+    if (!businessHoursCache.has(departmentId)) {
+      businessHoursCache.set(departmentId, await getDepartmentBusinessHours(departmentId));
+    }
+    const dept = businessHoursCache.get(departmentId) ?? null;
+    return isWithinBusinessHours(dept?.businessHours, dept?.timezone ?? "America/Sao_Paulo", now);
+  }
 
   for (const config of configs) {
     if (!config.triggerStageId) continue;
@@ -84,6 +102,12 @@ export async function runFollowupCycle(now: Date = new Date()): Promise<void> {
       }
 
       if (isEligibleForReminder(lead, lastSend, intervalMs, now)) {
+        // Fora do horário de funcionamento do departamento do lead: não
+        // manda agora nem registra tentativa — só adia (o próximo ciclo
+        // reavalia do zero, então dispara assim que o expediente reabrir,
+        // sem perder o lembrete nem duplicar quando finalmente enviar).
+        if (!(await isLeadWithinBusinessHours(lead.departmentId))) continue;
+
         const conversation = await getMostRecentConversationForContact(
           config.organizationId,
           lead.contactId,

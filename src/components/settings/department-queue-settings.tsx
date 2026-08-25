@@ -479,63 +479,66 @@ export function DepartmentQueueSettings({
               )}
             </div>
           </div>
-
-          {/* Horário de funcionamento */}
-          <div className="rounded-lg border">
-            <div className="flex items-center justify-between border-b px-3 py-2">
-              <span className="text-sm font-medium">Horário de funcionamento</span>
-              <select
-                value={timezone}
-                onChange={(e) => setTimezone(e.target.value)}
-                className="h-7 rounded-md border border-input bg-card px-2 text-xs"
-              >
-                {TIMEZONES.map((tz) => (
-                  <option key={tz.value} value={tz.value}>
-                    {tz.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="space-y-2 p-3">
-              <BusinessHoursRow
-                label="Seg–Sex"
-                day={day("mon")}
-                onToggle={(enabled) => setDay(["mon", "tue", "wed", "thu", "fri"], { enabled })}
-                onStart={(start) => setDay(["mon", "tue", "wed", "thu", "fri"], { start })}
-                onEnd={(end) => setDay(["mon", "tue", "wed", "thu", "fri"], { end })}
-              />
-              <BusinessHoursRow
-                label="Sábado"
-                day={day("sat")}
-                onToggle={(enabled) => setDay(["sat"], { enabled })}
-                onStart={(start) => setDay(["sat"], { start })}
-                onEnd={(end) => setDay(["sat"], { end })}
-              />
-              <BusinessHoursRow
-                label="Domingo"
-                day={day("sun")}
-                onToggle={(enabled) => setDay(["sun"], { enabled })}
-                onStart={(start) => setDay(["sun"], { start })}
-                onEnd={(end) => setDay(["sun"], { end })}
-              />
-              <p className="pt-1 text-xs text-muted-foreground">
-                Sem nenhum dia marcado, a fila fica sempre &ldquo;dentro do
-                horário&rdquo; (não bloqueia ninguém por engano).
-              </p>
-            </div>
-          </div>
-
-          {error && <p className="text-sm text-destructive">{error}</p>}
-          <div className="flex items-center gap-2">
-            <Button size="sm" disabled={saving} onClick={() => void saveQueueSettings()}>
-              {saving ? "Salvando…" : "Salvar configurações da fila"}
-            </Button>
-            {saved && !saving && (
-              <span className="text-xs text-[#3f6b52]">Salvo ✓</span>
-            )}
-          </div>
         </div>
       )}
+
+      {/* Horário de funcionamento — não depende da fila estar ligada: também
+          governa o Follow-up automático (Pipeline → Follow-up), que sem
+          isso disparava lembrete a qualquer hora, inclusive de madrugada. */}
+      <div className="rounded-lg border">
+        <div className="flex items-center justify-between border-b px-3 py-2">
+          <span className="text-sm font-medium">Horário de funcionamento</span>
+          <select
+            value={timezone}
+            onChange={(e) => setTimezone(e.target.value)}
+            className="h-7 rounded-md border border-input bg-card px-2 text-xs"
+          >
+            {TIMEZONES.map((tz) => (
+              <option key={tz.value} value={tz.value}>
+                {tz.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="space-y-2 p-3">
+          <BusinessHoursRow
+            label="Seg–Sex"
+            day={day("mon")}
+            onToggle={(enabled) => setDay(["mon", "tue", "wed", "thu", "fri"], { enabled })}
+            onStart={(start) => setDay(["mon", "tue", "wed", "thu", "fri"], { start })}
+            onEnd={(end) => setDay(["mon", "tue", "wed", "thu", "fri"], { end })}
+          />
+          <BusinessHoursRow
+            label="Sábado"
+            day={day("sat")}
+            onToggle={(enabled) => setDay(["sat"], { enabled })}
+            onStart={(start) => setDay(["sat"], { start })}
+            onEnd={(end) => setDay(["sat"], { end })}
+          />
+          <BusinessHoursRow
+            label="Domingo"
+            day={day("sun")}
+            onToggle={(enabled) => setDay(["sun"], { enabled })}
+            onStart={(start) => setDay(["sun"], { start })}
+            onEnd={(end) => setDay(["sun"], { end })}
+          />
+          <p className="pt-1 text-xs text-muted-foreground">
+            Sem nenhum dia marcado, fila e follow-up ficam sempre
+            &ldquo;dentro do horário&rdquo; (não bloqueia ninguém por
+            engano). Fora do horário marcado, o follow-up automático adia o
+            lembrete pro próximo horário aberto — não manda de madrugada nem
+            perde o lembrete.
+          </p>
+        </div>
+      </div>
+
+      {error && <p className="text-sm text-destructive">{error}</p>}
+      <div className="flex items-center gap-2">
+        <Button size="sm" disabled={saving} onClick={() => void saveQueueSettings()}>
+          {saving ? "Salvando…" : "Salvar configurações"}
+        </Button>
+        {saved && !saving && <span className="text-xs text-[#3f6b52]">Salvo ✓</span>}
+      </div>
     </div>
   );
 }
