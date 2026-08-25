@@ -132,11 +132,19 @@ export async function runAgentTurn(conversationId: string): Promise<void> {
     return;
   }
 
-  const kb = await db
+  // Entrada "geral" (department_id null) vale pra qualquer conversa; com
+  // department_id preenchido, só entra no contexto de conversas DESSE
+  // departamento — sem isso, todo o conhecimento da org (inclusive o de
+  // outros times, ex. suporte técnico) era injetado em toda conversa,
+  // mesmo perfis sem nada a ver com aquele assunto.
+  const kbRows = await db
     .select()
     .from(schema.kbEntry)
     .where(eq(schema.kbEntry.organizationId, organizationId))
     .orderBy(asc(schema.kbEntry.createdAt));
+  const kb = kbRows.filter(
+    (e) => !e.departmentId || e.departmentId === conversation.departmentId
+  );
   const stages = await db
     .select({ id: schema.pipelineStage.id, name: schema.pipelineStage.name })
     .from(schema.pipelineStage)

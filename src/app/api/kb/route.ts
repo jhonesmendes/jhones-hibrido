@@ -23,10 +23,15 @@ const createSchema = z
       kind: z.literal("qa"),
       question: z.string().trim().min(1).max(500),
       answer: z.string().trim().min(1).max(4000),
+      // null/ausente = geral, entra no contexto de QUALQUER conversa;
+      // preenchido = só entra em conversas desse departamento (ver filtro
+      // em src/server/ai/pipeline.ts).
+      departmentId: z.string().trim().min(1).nullable().optional(),
     }),
     z.object({
       kind: z.literal("block"),
       content: z.string().trim().min(1).max(8000),
+      departmentId: z.string().trim().min(1).nullable().optional(),
     }),
   ]);
 
@@ -40,6 +45,7 @@ export const POST = withAuth(async (session, req: Request) => {
     .values({
       id: newId("kbEntry"),
       organizationId: session.organizationId,
+      departmentId: body.data.departmentId ?? null,
       kind: body.data.kind,
       question: body.data.kind === "qa" ? body.data.question : null,
       answer: body.data.kind === "qa" ? body.data.answer : null,

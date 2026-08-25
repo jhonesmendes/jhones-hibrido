@@ -12,6 +12,7 @@ const patchSchema = z.object({
   question: z.string().trim().min(1).max(500).optional(),
   answer: z.string().trim().min(1).max(4000).optional(),
   content: z.string().trim().min(1).max(8000).optional(),
+  departmentId: z.string().trim().min(1).nullable().optional(),
 });
 
 export const PATCH = withAuth(async (session, req: Request, ctx: Params) => {

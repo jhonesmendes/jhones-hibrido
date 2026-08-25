@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { ChevronDown, ChevronUp, Plus, Sparkles, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronUp, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,7 +27,10 @@ type KbEntry = {
   question: string | null;
   answer: string | null;
   content: string | null;
+  departmentId: string | null;
 };
+
+type Department = { id: string; name: string };
 
 /**
  * v0.1 (Etapa 6): N perfis de agente reutilizáveis por organização, não
@@ -40,21 +43,24 @@ export function AgentClient() {
   const [profiles, setProfiles] = useState<Profile[] | null>(null);
   const [aiConfigured, setAiConfigured] = useState(true);
   const [entries, setEntries] = useState<KbEntry[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
   const [kbSize, setKbSize] = useState<{ chars: number; warnAt: number; warning: boolean } | null>(null);
   const [creating, setCreating] = useState(false);
 
   const refetch = useCallback(async () => {
-    const [p, kb, size] = await Promise.all([
+    const [p, kb, size, d] = await Promise.all([
       fetch("/api/agent/profiles").then((r) => (r.ok ? r.json() : null)),
       fetch("/api/kb").then((r) => (r.ok ? r.json() : null)),
       fetch("/api/kb/size").then((r) => (r.ok ? r.json() : null)),
-    ]).catch(() => [null, null, null]);
+      fetch("/api/settings/departments").then((r) => (r.ok ? r.json() : null)),
+    ]).catch(() => [null, null, null, null]);
     if (p) {
       setProfiles(p.profiles);
       setAiConfigured(p.aiConfigured);
     }
     if (kb) setEntries(kb.entries);
     if (size) setKbSize(size);
+    if (d) setDepartments(d.departments);
   }, []);
 
   useEffect(() => {
@@ -122,7 +128,12 @@ export function AgentClient() {
           )}
         </div>
 
-        <KbSection entries={entries} kbSize={kbSize} onChanged={() => void refetch()} />
+        <KbSection
+          entries={entries}
+          departments={departments}
+          kbSize={kbSize}
+          onChanged={() => void refetch()}
+        />
       </div>
     </div>
   );
@@ -320,28 +331,66 @@ function ProfileCard({
   );
 }
 
+function DepartmentSelect({
+  value,
+  departments,
+  onChange,
+}: {
+  value: string | null;
+  departments: Department[];
+  onChange: (departmentId: string | null) => void;
+}) {
+  if (departments.length === 0) return null;
+  return (
+    <div className="space-y-1.5">
+      <Label>Departamento</Label>
+      <select
+        value={value ?? ""}
+        onChange={(e) => onChange(e.target.value || null)}
+        className="flex h-9 w-full rounded-md border border-input bg-card px-3 text-sm"
+      >
+        <option value="">Geral — vale pra qualquer conversa</option>
+        {departments.map((d) => (
+          <option key={d.id} value={d.id}>
+            {d.name}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 function KbSection({
   entries,
+  departments,
   kbSize,
   onChanged,
 }: {
   entries: KbEntry[];
+  departments: Department[];
   kbSize: { chars: number; warnAt: number; warning: boolean } | null;
   onChanged: () => void;
 }) {
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
+  const [qaDepartmentId, setQaDepartmentId] = useState<string | null>(null);
   const [block, setBlock] = useState("");
+  const [blockDepartmentId, setBlockDepartmentId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  const departmentName = (id: string | null) =>
+    id ? (departments.find((d) => d.id === id)?.name ?? null) : null;
 
   async function addQa() {
     if (!question.trim() || !answer.trim()) return;
     await fetch("/api/kb", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ kind: "qa", question, answer }),
+      body: JSON.stringify({ kind: "qa", question, answer, departmentId: qaDepartmentId }),
     }).catch(() => null);
     setQuestion("");
     setAnswer("");
+    setQaDepartmentId(null);
     onChanged();
   }
 
@@ -350,9 +399,10 @@ function KbSection({
     await fetch("/api/kb", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ kind: "block", content: block }),
+      body: JSON.stringify({ kind: "block", content: block, departmentId: blockDepartmentId }),
     }).catch(() => null);
     setBlock("");
+    setBlockDepartmentId(null);
     onChanged();
   }
 
@@ -369,7 +419,9 @@ function KbSection({
             <CardTitle>Knowledge base</CardTitle>
             <CardDescription>
               A única fonte de verdade do agente: o que não está aqui, ele não
-              afirma. Compartilhada por todos os perfis da organização.
+              afirma. Entradas &ldquo;gerais&rdquo; valem pra qualquer perfil;
+              entradas de um departamento só entram no contexto de conversas
+              desse departamento.
             </CardDescription>
           </div>
           {kbSize && (
@@ -399,6 +451,11 @@ function KbSection({
             value={answer}
             onChange={(e) => setAnswer(e.target.value)}
           />
+          <DepartmentSelect
+            value={qaDepartmentId}
+            departments={departments}
+            onChange={setQaDepartmentId}
+          />
           <Button
             size="sm"
             onClick={() => void addQa()}
@@ -416,34 +473,63 @@ function KbSection({
             value={block}
             onChange={(e) => setBlock(e.target.value)}
           />
+          <DepartmentSelect
+            value={blockDepartmentId}
+            departments={departments}
+            onChange={setBlockDepartmentId}
+          />
           <Button size="sm" onClick={() => void addBlock()} disabled={!block.trim()}>
             <Plus className="h-4 w-4" /> Adicionar bloco
           </Button>
         </div>
 
         <ul className="space-y-2">
-          {entries.map((e) => (
-            <li key={e.id} className="flex items-start gap-2 rounded-md border p-3">
-              <div className="min-w-0 flex-1 text-sm">
-                {e.kind === "qa" ? (
-                  <>
-                    <p className="font-medium">{e.question}</p>
-                    <p className="mt-0.5 text-muted-foreground">{e.answer}</p>
-                  </>
-                ) : (
-                  <p className="whitespace-pre-wrap text-muted-foreground">{e.content}</p>
-                )}
-              </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label="Excluir entrada"
-                onClick={() => void remove(e.id)}
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </li>
-          ))}
+          {entries.map((e) =>
+            editingId === e.id ? (
+              <KbEntryEditForm
+                key={e.id}
+                entry={e}
+                departments={departments}
+                onCancel={() => setEditingId(null)}
+                onSaved={() => {
+                  setEditingId(null);
+                  onChanged();
+                }}
+              />
+            ) : (
+              <li key={e.id} className="flex items-start gap-2 rounded-md border p-3">
+                <div className="min-w-0 flex-1 text-sm">
+                  {e.kind === "qa" ? (
+                    <>
+                      <p className="font-medium">{e.question}</p>
+                      <p className="mt-0.5 text-muted-foreground">{e.answer}</p>
+                    </>
+                  ) : (
+                    <p className="whitespace-pre-wrap text-muted-foreground">{e.content}</p>
+                  )}
+                  <Badge variant="secondary" className="mt-1.5">
+                    {departmentName(e.departmentId) ?? "Geral"}
+                  </Badge>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Editar entrada"
+                  onClick={() => setEditingId(e.id)}
+                >
+                  <Pencil className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Excluir entrada"
+                  onClick={() => void remove(e.id)}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </li>
+            )
+          )}
           {entries.length === 0 && (
             <p className="py-2 text-center text-xs text-muted-foreground">
               Nenhuma entrada ainda: adicione o que o agente precisa saber.
@@ -452,5 +538,69 @@ function KbSection({
         </ul>
       </CardContent>
     </Card>
+  );
+}
+
+function KbEntryEditForm({
+  entry,
+  departments,
+  onCancel,
+  onSaved,
+}: {
+  entry: KbEntry;
+  departments: Department[];
+  onCancel: () => void;
+  onSaved: () => void;
+}) {
+  const [question, setQuestion] = useState(entry.question ?? "");
+  const [answer, setAnswer] = useState(entry.answer ?? "");
+  const [content, setContent] = useState(entry.content ?? "");
+  const [departmentId, setDepartmentId] = useState<string | null>(entry.departmentId);
+  const [saving, setSaving] = useState(false);
+
+  const valid = entry.kind === "qa" ? question.trim() && answer.trim() : content.trim();
+
+  async function save() {
+    setSaving(true);
+    await fetch(`/api/kb/${entry.id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(
+        entry.kind === "qa" ? { question, answer, departmentId } : { content, departmentId }
+      ),
+    }).catch(() => null);
+    setSaving(false);
+    onSaved();
+  }
+
+  return (
+    <li className="space-y-2 rounded-md border border-brand-soft bg-brand-tint/40 p-3">
+      {entry.kind === "qa" ? (
+        <>
+          <Input
+            placeholder="Pergunta"
+            value={question}
+            onChange={(e) => setQuestion(e.target.value)}
+          />
+          <Textarea
+            placeholder="Resposta"
+            rows={2}
+            value={answer}
+            onChange={(e) => setAnswer(e.target.value)}
+          />
+        </>
+      ) : (
+        <Textarea rows={3} value={content} onChange={(e) => setContent(e.target.value)} />
+      )}
+      <DepartmentSelect value={departmentId} departments={departments} onChange={setDepartmentId} />
+      <div className="flex gap-2">
+        <Button size="sm" disabled={!valid || saving} onClick={() => void save()}>
+          {saving ? "Salvando…" : "Salvar"}
+        </Button>
+        <Button size="sm" variant="ghost" disabled={saving} onClick={onCancel}>
+          Cancelar
+        </Button>
+      </div>
+    </li>
   );
 }
