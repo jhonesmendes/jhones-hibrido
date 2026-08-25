@@ -946,6 +946,14 @@ export const agentTestRun = pgTable(
     organizationId: text("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
+    /** Departamento testado nesta rodada — null = perfil/KB "geral" da org
+     * (comportamento de antes da v0.1, quando só existia 1 perfil). Com
+     * departamento, o Laboratório resolve o MESMO perfil e o MESMO recorte
+     * de knowledge base que uma conversa real desse departamento usaria
+     * (ver resolveAgentProfile e o filtro em server/ai/pipeline.ts). */
+    departmentId: text("department_id").references(() => department.id, {
+      onDelete: "set null",
+    }),
     status: text("status", { enum: ["running", "done", "failed"] })
       .notNull()
       .default("running"),

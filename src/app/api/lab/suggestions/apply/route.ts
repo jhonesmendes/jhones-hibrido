@@ -25,8 +25,12 @@ export const POST = withAuth(async (session, req: Request) => {
 
   const db = getDb();
   const cases = await db
-    .select({ id: schema.agentTestCase.id })
+    .select({
+      id: schema.agentTestCase.id,
+      departmentId: schema.agentTestRun.departmentId,
+    })
     .from(schema.agentTestCase)
+    .innerJoin(schema.agentTestRun, eq(schema.agentTestRun.id, schema.agentTestCase.runId))
     .where(
       scoped(
         schema.agentTestCase.organizationId,
@@ -37,11 +41,15 @@ export const POST = withAuth(async (session, req: Request) => {
     .limit(1);
   if (!cases[0]) return apiError(404, "not_found", "Caso não encontrado");
 
+  // Herda o departamento da rodada testada — senão uma sugestão de uma
+  // rodada escopada a um departamento entrava como "geral" e valeria pra
+  // conversas de qualquer outro departamento também, sem ninguém pedir isso.
   const inserted = await db
     .insert(schema.kbEntry)
     .values({
       id: newId("kbEntry"),
       organizationId: session.organizationId,
+      departmentId: cases[0].departmentId,
       kind: "qa",
       question: body.data.pregunta,
       answer: body.data.respuesta,

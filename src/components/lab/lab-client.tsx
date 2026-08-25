@@ -24,6 +24,8 @@ import { HelpLink } from "@/components/docs/help-link";
 
 type Run = {
   id: string;
+  departmentId: string | null;
+  departmentName: string | null;
   status: "running" | "done" | "failed";
   score: number | null;
   error: string | null;
@@ -31,6 +33,8 @@ type Run = {
   finishedAt: string | null;
   delta: number | null;
 };
+
+type Department = { id: string; name: string };
 
 type Hallazgo = {
   tipo: "alucinacion" | "fuera_de_kb" | "debio_escalar" | "tono";
@@ -58,6 +62,8 @@ const TIPO_LABELS: Record<Hallazgo["tipo"], string> = {
 export function LabClient() {
   const [runs, setRuns] = useState<Run[]>([]);
   const [aiConfigured, setAiConfigured] = useState(true);
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [targetDepartmentId, setTargetDepartmentId] = useState<string | null>(null);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [detail, setDetail] = useState<{ run: Run; cases: Case[] } | null>(null);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
@@ -72,6 +78,13 @@ export function LabClient() {
     setAiConfigured(data.aiConfigured);
     if (!selectedRunId && data.runs[0]) setSelectedRunId(data.runs[0].id);
   }, [selectedRunId]);
+
+  useEffect(() => {
+    fetch("/api/settings/departments")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { departments: Department[] } | null) => setDepartments(d?.departments ?? []))
+      .catch(() => {});
+  }, []);
 
   const refetchDetail = useCallback(async (runId: string) => {
     const res = await fetch(`/api/lab/runs/${runId}`).catch(() => null);
@@ -101,7 +114,11 @@ export function LabClient() {
   async function launch() {
     setLaunching(true);
     setError(null);
-    const res = await fetch("/api/lab/runs", { method: "POST" }).catch(() => null);
+    const res = await fetch("/api/lab/runs", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ departmentId: targetDepartmentId }),
+    }).catch(() => null);
     setLaunching(false);
     if (!res) return;
     if (!res.ok) {
@@ -145,6 +162,9 @@ export function LabClient() {
         launching={launching}
         onLaunch={() => void launch()}
         disabled={false}
+        departments={departments}
+        targetDepartmentId={targetDepartmentId}
+        onTargetDepartmentChange={setTargetDepartmentId}
       />
       {error && <p className="px-6 pt-3 text-sm text-destructive">{error}</p>}
 
@@ -190,14 +210,20 @@ function Header({
   launching,
   onLaunch,
   disabled,
+  departments = [],
+  targetDepartmentId = null,
+  onTargetDepartmentChange,
 }: {
   running: boolean;
   launching: boolean;
   onLaunch: () => void;
   disabled: boolean;
+  departments?: Department[];
+  targetDepartmentId?: string | null;
+  onTargetDepartmentChange?: (departmentId: string | null) => void;
 }) {
   return (
-    <header className="flex items-center justify-between border-b px-6 py-4">
+    <header className="flex items-center justify-between gap-3 border-b px-6 py-4">
       <div>
         <h2 className="flex items-center gap-2 font-semibold">
           <FlaskConical className="h-4 w-4 text-primary" /> Laboratório
@@ -207,10 +233,28 @@ function Header({
           Sandbox interno — não envia mensagens reais
         </p>
       </div>
-      <Button onClick={onLaunch} disabled={disabled || running || launching}>
-        <Play className="h-4 w-4" />
-        {running ? "Rodada em andamento…" : "Rodar avaliação"}
-      </Button>
+      <div className="flex items-center gap-2">
+        {departments.length > 0 && onTargetDepartmentChange && (
+          <select
+            value={targetDepartmentId ?? ""}
+            disabled={disabled || running || launching}
+            onChange={(e) => onTargetDepartmentChange(e.target.value || null)}
+            className="h-9 rounded-md border border-input bg-card px-2.5 text-sm"
+            aria-label="Departamento a testar"
+          >
+            <option value="">Perfil geral da organização</option>
+            {departments.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name}
+              </option>
+            ))}
+          </select>
+        )}
+        <Button onClick={onLaunch} disabled={disabled || running || launching}>
+          <Play className="h-4 w-4" />
+          {running ? "Rodada em andamento…" : "Rodar avaliação"}
+        </Button>
+      </div>
     </header>
   );
 }
@@ -259,6 +303,7 @@ function HistoryList({
             )}
           </div>
           <p className="mt-1 text-[11px] text-muted-foreground">
+            {run.departmentName ?? "Geral"} ·{" "}
             {new Date(run.startedAt).toLocaleString("pt-BR", {
               day: "numeric",
               month: "short",
@@ -293,7 +338,12 @@ function Report({
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle>Relatório</CardTitle>
+            <div>
+              <CardTitle>Relatório</CardTitle>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Perfil testado: {run.departmentName ?? "Geral (padrão da organização)"}
+              </p>
+            </div>
             <ScoreBadge run={run} />
           </div>
           {run.status === "failed" && (

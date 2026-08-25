@@ -25,6 +25,16 @@ export const GET = withAuth(async (session, _req: Request, ctx: Params) => {
   const run = runs[0];
   if (!run) return apiError(404, "not_found", "Rodada não encontrada");
 
+  let departmentName: string | null = null;
+  if (run.departmentId) {
+    const deptRows = await db
+      .select({ name: schema.department.name })
+      .from(schema.department)
+      .where(eq(schema.department.id, run.departmentId))
+      .limit(1);
+    departmentName = deptRows[0]?.name ?? null;
+  }
+
   const cases = await db
     .select()
     .from(schema.agentTestCase)
@@ -34,6 +44,8 @@ export const GET = withAuth(async (session, _req: Request, ctx: Params) => {
   return Response.json({
     run: {
       id: run.id,
+      departmentId: run.departmentId,
+      departmentName,
       status: run.status,
       score: run.score,
       error: run.error,

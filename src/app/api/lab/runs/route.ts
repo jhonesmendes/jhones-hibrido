@@ -1,5 +1,6 @@
-import { desc } from "drizzle-orm";
-import { apiError, withAuth } from "@/lib/api";
+import { desc, eq } from "drizzle-orm";
+import { z } from "zod";
+import { apiError, parseBody, withAuth } from "@/lib/api";
 import { getDb, schema } from "@/lib/db";
 import { scoped } from "@/lib/db/tenant";
 import { resolveAiConfig } from "@/server/ai/config";
@@ -17,12 +18,26 @@ export const GET = withAuth(async (session) => {
     .orderBy(desc(schema.agentTestRun.startedAt))
     .limit(50);
 
+  const departments = await db
+    .select({ id: schema.department.id, name: schema.department.name })
+    .from(schema.department)
+    .where(eq(schema.department.organizationId, session.organizationId));
+  const deptName = new Map(departments.map((d) => [d.id, d.name]));
+
+  // Só compara score com a rodada anterior DO MESMO departamento (ou
+  // ambas "geral") — senão o delta comparava avaliações de perfis/KB
+  // diferentes entre si, um número sem significado.
   const withDelta = runs.map((run, i) => {
     const prev = runs
       .slice(i + 1)
-      .find((r) => r.status === "done" && r.score !== null);
+      .find(
+        (r) =>
+          r.status === "done" && r.score !== null && r.departmentId === run.departmentId
+      );
     return {
       id: run.id,
+      departmentId: run.departmentId,
+      departmentName: run.departmentId ? (deptName.get(run.departmentId) ?? null) : null,
       status: run.status,
       score: run.score,
       error: run.error,
@@ -38,7 +53,14 @@ export const GET = withAuth(async (session) => {
   return Response.json({ runs: withDelta, aiConfigured: aiConfig !== null });
 });
 
-export const POST = withAuth(async (session) => {
+const createSchema = z.object({
+  departmentId: z.string().trim().min(1).nullable().optional(),
+});
+
+export const POST = withAuth(async (session, req: Request) => {
+  const body = await parseBody(req, createSchema);
+  if (!body.ok) return body.response;
+
   const aiConfig = await resolveAiConfig(session.organizationId);
   if (!aiConfig) {
     return apiError(
@@ -48,7 +70,7 @@ export const POST = withAuth(async (session) => {
     );
   }
   try {
-    const runId = await startRun(session.organizationId);
+    const runId = await startRun(session.organizationId, body.data.departmentId ?? null);
     return Response.json({ runId }, { status: 202 });
   } catch (err) {
     if (err instanceof RunConflictError) {

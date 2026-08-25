@@ -24,13 +24,16 @@ const RUN_TIMEOUT_MS = 10 * 60 * 1000;
 
 export class RunConflictError extends Error {}
 
-export async function startRun(organizationId: string): Promise<string> {
+export async function startRun(
+  organizationId: string,
+  departmentId: string | null = null
+): Promise<string> {
   const db = getDb();
   let runId: string;
   try {
     const inserted = await db
       .insert(schema.agentTestRun)
-      .values({ id: newId("testRun"), organizationId, status: "running" })
+      .values({ id: newId("testRun"), organizationId, departmentId, status: "running" })
       .returning();
     runId = inserted[0]!.id;
   } catch (err) {
@@ -52,7 +55,7 @@ export async function startRun(organizationId: string): Promise<string> {
   );
 
   // Fire-and-forget in-process: o POST já retorna; o progresso vai por SSE.
-  void executeRun(runId, organizationId).catch(async (err) => {
+  void executeRun(runId, organizationId, departmentId).catch(async (err) => {
     console.error("[lab] execução falhou:", err);
     await failRun(runId, organizationId, String(err));
   });
@@ -62,7 +65,8 @@ export async function startRun(organizationId: string): Promise<string> {
 
 async function executeRun(
   runId: string,
-  organizationId: string
+  organizationId: string,
+  departmentId: string | null
 ): Promise<void> {
   const timeout = new Promise<never>((_, reject) =>
     setTimeout(
@@ -71,7 +75,7 @@ async function executeRun(
     )
   );
   try {
-    await Promise.race([runAllCases(runId, organizationId), timeout]);
+    await Promise.race([runAllCases(runId, organizationId, departmentId), timeout]);
   } catch (err) {
     await failRun(runId, organizationId, String(err));
   }
@@ -79,7 +83,8 @@ async function executeRun(
 
 async function runAllCases(
   runId: string,
-  organizationId: string
+  organizationId: string,
+  departmentId: string | null
 ): Promise<void> {
   const db = getDb();
   const cases = await db
@@ -91,19 +96,29 @@ async function runAllCases(
   const aiConfig = await resolveAiConfig(organizationId);
   if (!aiConfig) throw new Error("Sem provedor de IA configurado");
 
-  const kbEntries = await db
+  // Mesmo recorte que uma conversa real deste departamento usaria (ver
+  // filtro equivalente em server/ai/pipeline.ts): entrada "geral" +
+  // entradas do departamento testado. O agente REAL (chamado dentro de
+  // runConversation) já aplica esse filtro sozinho porque a conversa
+  // sintética é criada com esse mesmo departamento — isto aqui é só a
+  // cópia que o JUIZ usa pra saber o que era "correto" alegar.
+  const allKbEntries = await db
     .select()
     .from(schema.kbEntry)
     .where(eq(schema.kbEntry.organizationId, organizationId));
+  const kbEntries = allKbEntries.filter(
+    (e) => !e.departmentId || e.departmentId === departmentId
+  );
   const kbText = renderKb(kbEntries);
 
   // Texto descritivo pro juiz: o mesmo perfil que `runAgentTurn` vai
-  // resolver para as conversas de teste desta rodada (sem departamento nem
-  // atendente atribuído, cai no padrão da org — mesmo comportamento de
-  // antes da v0.1, quando só existia 1 perfil por org).
+  // resolver pras conversas de teste desta rodada — com departamento,
+  // resolve o perfil PADRÃO DESSE departamento (mesma cadeia de uma
+  // conversa real); sem departamento, cai no perfil mais antigo ativo da
+  // org (comportamento de antes da v0.1, quando só existia 1 perfil).
   const profile = await resolveAgentProfile(
     organizationId,
-    { agentProfileId: null, assignedTo: null, departmentId: null },
+    { agentProfileId: null, assignedTo: null, departmentId },
     { includeDisabled: true }
   );
   const behaviorText = profile
@@ -132,7 +147,8 @@ async function runAllCases(
 
     const { transcript, conversationId } = await runConversation(
       organizationId,
-      persona
+      persona,
+      departmentId
     );
 
     const outcome = await judgeCase({
@@ -177,7 +193,8 @@ async function runAllCases(
 /** Conversa o roteiro completo com o agente real; corta no primeiro handoff. */
 async function runConversation(
   organizationId: string,
-  persona: Persona
+  persona: Persona,
+  departmentId: string | null
 ): Promise<{
   transcript: { role: "cliente" | "agente"; text: string }[];
   conversationId: string;
@@ -187,10 +204,16 @@ async function runConversation(
   // Contato sintético ARQUIVADO (não aparece na lista nem gera leads).
   const contactId = await upsertTestContact(organizationId, persona);
 
+  // Departamento da conversa sintética = o testado nesta rodada — é isso
+  // que faz o agente REAL (chamado logo abaixo) resolver sozinho o MESMO
+  // perfil e o MESMO recorte de KB que uma conversa real desse
+  // departamento usaria (resolveAgentProfile + filtro em ai/pipeline.ts),
+  // sem precisar duplicar essa lógica aqui.
   const convId = newId("conversation");
   await db.insert(schema.conversation).values({
     id: convId,
     organizationId,
+    departmentId,
     contactId,
     isTest: true,
     aiEnabled: true,
