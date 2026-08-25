@@ -20,6 +20,7 @@ import { MessageThread } from "./message-thread";
 import { Composer } from "./composer";
 import { ContactPanel } from "./contact-panel";
 import { WallpaperPicker } from "./wallpaper-picker";
+import { ClaimConversationDialog } from "./claim-conversation-dialog";
 
 export function InboxClient({
   canDeleteConversation = false,
@@ -30,6 +31,11 @@ export function InboxClient({
     null
   );
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [claimPrompt, setClaimPrompt] = useState<{
+    phone: string;
+    ownerName: string;
+    departmentName: string | null;
+  } | null>(null);
   const [messages, setMessages] = useState<MessageDto[]>([]);
   const [replyTo, setReplyTo] = useState<MessageDto | null>(null);
   const replyToRef = useRef<MessageDto | null>(null);
@@ -347,18 +353,20 @@ export function InboxClient({
         conversation: ConversationDto;
         requiresClaim?: boolean;
         currentOwner?: { memberId: string; name: string | null };
+        conversationDepartmentName?: string | null;
       };
       // Contato já em atendimento com outro agente (sem conversations:view_all
       // pra ver de qualquer jeito) — não abre nada às escondidas, pergunta
-      // antes de reatribuir. Recusando, comporta-se como falha normal (ver
-      // comentário do chamador sobre manter a busca preenchida).
+      // antes de reatribuir (modal abaixo). Recusando, comporta-se como
+      // falha normal (ver comentário do chamador sobre manter a busca
+      // preenchida).
       if (data.requiresClaim) {
-        const ownerName = data.currentOwner?.name ?? "outro agente";
-        const wantsToClaim = confirm(
-          `Este contato já está em atendimento com ${ownerName}. Deseja assumir a conversa?`
-        );
-        if (!wantsToClaim) return false;
-        return startConversation(phone, true);
+        setClaimPrompt({
+          phone,
+          ownerName: data.currentOwner?.name ?? "outro agente",
+          departmentName: data.conversationDepartmentName ?? null,
+        });
+        return false;
       }
       await refetchConversations();
       select(data.conversation.id);
@@ -511,6 +519,19 @@ export function InboxClient({
           </div>
         )}
       </section>
+
+      {claimPrompt && (
+        <ClaimConversationDialog
+          ownerName={claimPrompt.ownerName}
+          departmentName={claimPrompt.departmentName}
+          onCancel={() => setClaimPrompt(null)}
+          onConfirm={() => {
+            const phone = claimPrompt.phone;
+            setClaimPrompt(null);
+            void startConversation(phone, true);
+          }}
+        />
+      )}
     </div>
   );
 }

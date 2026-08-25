@@ -157,10 +157,29 @@ export const POST = withAuth(async (session, req: Request) => {
     if (!effective.has("conversations:view_all")) {
       if (!body.data.claim) {
         const ownerName = await getMemberName(conversation.assignedTo);
+        // A conversa achada pode ser de OUTRO departamento (mesmo número
+        // compartilhado — sem número próprio, o departamento ativo cai no
+        // padrão da organização e esbarra na mesma conversa de quem já
+        // atende por ali; WhatsApp só permite 1 conversa por contato por
+        // número, não dá pra abrir uma "separada"). Avisa isso explicitamente
+        // pra não parecer um bug quando na real é limite do próprio número.
+        let conversationDepartmentName: string | null = null;
+        if (
+          conversation.departmentId &&
+          conversation.departmentId !== activeDepartmentId
+        ) {
+          const deptRows = await db
+            .select({ name: schema.department.name })
+            .from(schema.department)
+            .where(eq(schema.department.id, conversation.departmentId))
+            .limit(1);
+          conversationDepartmentName = deptRows[0]?.name ?? null;
+        }
         return Response.json({
           conversation: serializeConversation(conversation, contact),
           requiresClaim: true,
           currentOwner: { memberId: conversation.assignedTo, name: ownerName },
+          conversationDepartmentName,
         });
       }
       const updated = await updateConversation(session.organizationId, conversation.id, {

@@ -22,6 +22,7 @@ import {
   ContactFormDialog,
   type ContactFormValues,
 } from "@/components/contacts/contact-form-dialog";
+import { ClaimConversationDialog } from "@/components/inbox/claim-conversation-dialog";
 
 export function ContactsClient() {
   const router = useRouter();
@@ -32,6 +33,11 @@ export function ContactsClient() {
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<string | null>(null);
+  const [claimPrompt, setClaimPrompt] = useState<{
+    contactId: string;
+    ownerName: string;
+    departmentName: string | null;
+  } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const refetch = useCallback(async () => {
@@ -57,9 +63,9 @@ export function ContactsClient() {
    *
    * Se o contato já está em atendimento com outro agente (sem
    * conversations:view_all pra ver de qualquer jeito), o backend devolve
-   * `requiresClaim` em vez de abrir de mão — confirma antes de reatribuir,
-   * senão nem navega (evita cair numa tela em branco pra uma conversa que o
-   * agente não teria como ver mesmo).
+   * `requiresClaim` em vez de abrir de mão — mostra o modal de confirmação
+   * antes de reatribuir, senão nem navega (evita cair numa tela em branco
+   * pra uma conversa que o agente não teria como ver mesmo).
    */
   async function openConversation(contactId: string, claim?: boolean) {
     const res = await fetch("/api/conversations", {
@@ -71,14 +77,14 @@ export function ContactsClient() {
     const data = (await res.json()) as {
       requiresClaim?: boolean;
       currentOwner?: { memberId: string; name: string | null };
+      conversationDepartmentName?: string | null;
     };
     if (data.requiresClaim) {
-      const ownerName = data.currentOwner?.name ?? "outro agente";
-      const wantsToClaim = confirm(
-        `Este contato já está em atendimento com ${ownerName}. Deseja assumir a conversa?`
-      );
-      if (!wantsToClaim) return;
-      await openConversation(contactId, true);
+      setClaimPrompt({
+        contactId,
+        ownerName: data.currentOwner?.name ?? "outro agente",
+        departmentName: data.conversationDepartmentName ?? null,
+      });
       return;
     }
     router.push(`/inbox?contact=${contactId}`);
@@ -311,6 +317,19 @@ export function ContactsClient() {
               notes: values.notes || null,
             });
             return null;
+          }}
+        />
+      )}
+
+      {claimPrompt && (
+        <ClaimConversationDialog
+          ownerName={claimPrompt.ownerName}
+          departmentName={claimPrompt.departmentName}
+          onCancel={() => setClaimPrompt(null)}
+          onConfirm={() => {
+            const contactId = claimPrompt.contactId;
+            setClaimPrompt(null);
+            void openConversation(contactId, true);
           }}
         />
       )}
