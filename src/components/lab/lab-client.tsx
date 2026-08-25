@@ -7,10 +7,14 @@ import {
   ChevronDown,
   ChevronUp,
   FlaskConical,
+  Pencil,
   Play,
+  Plus,
   Sparkles,
+  Trash2,
   TrendingDown,
   TrendingUp,
+  Users,
   XCircle,
 } from "lucide-react";
 import { useEvents } from "@/components/use-events";
@@ -35,6 +39,14 @@ type Run = {
 };
 
 type Department = { id: string; name: string };
+
+type LabPersona = {
+  id: string;
+  name: string;
+  departmentId: string | null;
+  scenarioDescription: string;
+  script: string[];
+};
 
 type Hallazgo = {
   tipo: "alucinacion" | "fuera_de_kb" | "debio_escalar" | "tono";
@@ -63,7 +75,9 @@ export function LabClient() {
   const [runs, setRuns] = useState<Run[]>([]);
   const [aiConfigured, setAiConfigured] = useState(true);
   const [departments, setDepartments] = useState<Department[]>([]);
+  const [personas, setPersonas] = useState<LabPersona[]>([]);
   const [targetDepartmentId, setTargetDepartmentId] = useState<string | null>(null);
+  const [managingPersonas, setManagingPersonas] = useState(false);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [detail, setDetail] = useState<{ run: Run; cases: Case[] } | null>(null);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
@@ -79,12 +93,26 @@ export function LabClient() {
     if (!selectedRunId && data.runs[0]) setSelectedRunId(data.runs[0].id);
   }, [selectedRunId]);
 
+  const refetchPersonas = useCallback(async () => {
+    const res = await fetch("/api/lab/personas").catch(() => null);
+    if (!res?.ok) return;
+    const data = (await res.json()) as { personas: LabPersona[] };
+    setPersonas(data.personas);
+  }, []);
+
   useEffect(() => {
     fetch("/api/settings/departments")
       .then((r) => (r.ok ? r.json() : null))
       .then((d: { departments: Department[] } | null) => setDepartments(d?.departments ?? []))
       .catch(() => {});
-  }, []);
+    void refetchPersonas();
+  }, [refetchPersonas]);
+
+  // Só as personas relevantes pro escopo escolhido (geral + as do
+  // departamento) — mesmo filtro que o backend aplica ao montar a rodada.
+  const relevantPersonas = personas.filter(
+    (p) => !p.departmentId || p.departmentId === targetDepartmentId
+  );
 
   const refetchDetail = useCallback(async (runId: string) => {
     const res = await fetch(`/api/lab/runs/${runId}`).catch(() => null);
@@ -130,7 +158,7 @@ export function LabClient() {
     }
     const data = (await res.json()) as { runId: string };
     setSelectedRunId(data.runId);
-    setProgress({ done: 0, total: 6 });
+    setProgress({ done: 0, total: relevantPersonas.length });
     void refetchRuns();
   }
 
@@ -161,12 +189,19 @@ export function LabClient() {
         running={running}
         launching={launching}
         onLaunch={() => void launch()}
-        disabled={false}
+        disabled={relevantPersonas.length === 0}
         departments={departments}
         targetDepartmentId={targetDepartmentId}
         onTargetDepartmentChange={setTargetDepartmentId}
+        onManagePersonas={() => setManagingPersonas(true)}
       />
       {error && <p className="px-6 pt-3 text-sm text-destructive">{error}</p>}
+      {relevantPersonas.length === 0 && (
+        <p className="px-6 pt-3 text-sm text-muted-foreground">
+          Nenhuma persona cadastrada para este escopo — clique em
+          &ldquo;Personas&rdquo; pra criar a primeira antes de rodar.
+        </p>
+      )}
 
       {running && progress && (
         <div className="mx-6 mt-4 rounded-lg border bg-card p-4">
@@ -196,11 +231,20 @@ export function LabClient() {
         ) : (
           <div className="rounded-lg border border-dashed p-10 text-center text-sm text-muted-foreground">
             {runs.length === 0
-              ? "Rode sua primeira avaliação: 6 clientes simulados vão conversar com seu agente e um juiz dará nota a cada conversa."
+              ? "Rode sua primeira avaliação: as personas cadastradas vão conversar com seu agente e um juiz dará nota a cada conversa."
               : "Escolha uma rodada do histórico."}
           </div>
         )}
       </div>
+
+      {managingPersonas && (
+        <PersonaManagerDialog
+          personas={personas}
+          departments={departments}
+          onClose={() => setManagingPersonas(false)}
+          onChanged={() => void refetchPersonas()}
+        />
+      )}
     </div>
   );
 }
@@ -213,6 +257,7 @@ function Header({
   departments = [],
   targetDepartmentId = null,
   onTargetDepartmentChange,
+  onManagePersonas,
 }: {
   running: boolean;
   launching: boolean;
@@ -221,6 +266,7 @@ function Header({
   departments?: Department[];
   targetDepartmentId?: string | null;
   onTargetDepartmentChange?: (departmentId: string | null) => void;
+  onManagePersonas?: () => void;
 }) {
   return (
     <header className="flex items-center justify-between gap-3 border-b px-6 py-4">
@@ -237,7 +283,7 @@ function Header({
         {departments.length > 0 && onTargetDepartmentChange && (
           <select
             value={targetDepartmentId ?? ""}
-            disabled={disabled || running || launching}
+            disabled={running || launching}
             onChange={(e) => onTargetDepartmentChange(e.target.value || null)}
             className="h-9 rounded-md border border-input bg-card px-2.5 text-sm"
             aria-label="Departamento a testar"
@@ -249,6 +295,11 @@ function Header({
               </option>
             ))}
           </select>
+        )}
+        {onManagePersonas && (
+          <Button variant="outline" onClick={onManagePersonas}>
+            <Users className="h-4 w-4" /> Personas
+          </Button>
         )}
         <Button onClick={onLaunch} disabled={disabled || running || launching}>
           <Play className="h-4 w-4" />
@@ -534,6 +585,362 @@ function HallazgoCard({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * CRUD das personas de teste do Laboratório (substitui o antigo elenco fixo
+ * genérico) — nome + cenário livre + departamento; o roteiro (falas do
+ * cliente) é gerado por IA a partir do cenário, e fica editável depois.
+ */
+function PersonaManagerDialog({
+  personas,
+  departments,
+  onClose,
+  onChanged,
+}: {
+  personas: LabPersona[];
+  departments: Department[];
+  onClose: () => void;
+  onChanged: () => void;
+}) {
+  const [creating, setCreating] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  async function remove(id: string) {
+    if (!confirm("Excluir esta persona? Rodadas antigas continuam com o roteiro que usaram.")) {
+      return;
+    }
+    await fetch(`/api/lab/personas/${id}`, { method: "DELETE" }).catch(() => null);
+    onChanged();
+  }
+
+  const departmentName = (id: string | null) =>
+    id ? (departments.find((d) => d.id === id)?.name ?? null) : null;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-lg border bg-card p-5 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-1 flex items-center justify-between">
+          <h3 className="font-semibold">Personas do Laboratório</h3>
+          <Button variant="ghost" onClick={onClose}>
+            Fechar
+          </Button>
+        </div>
+        <p className="mb-4 text-xs text-muted-foreground">
+          Descreva o cenário e a IA gera o roteiro de falas do cliente
+          simulado. Personas &ldquo;gerais&rdquo; entram em qualquer rodada;
+          as de um departamento só entram quando esse departamento é testado.
+        </p>
+
+        <div className="space-y-2">
+          {personas.map((p) =>
+            editingId === p.id ? (
+              <PersonaEditForm
+                key={p.id}
+                persona={p}
+                departments={departments}
+                onCancel={() => setEditingId(null)}
+                onSaved={() => {
+                  setEditingId(null);
+                  onChanged();
+                }}
+              />
+            ) : (
+              <div key={p.id} className="rounded-md border p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">{p.name}</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {p.scenarioDescription}
+                    </p>
+                    <Badge variant="secondary" className="mt-1.5">
+                      {departmentName(p.departmentId) ?? "Geral"}
+                    </Badge>
+                  </div>
+                  <div className="flex shrink-0 gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label="Editar persona"
+                      onClick={() => setEditingId(p.id)}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label="Excluir persona"
+                      onClick={() => void remove(p.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+                <ul className="mt-2 space-y-0.5 text-xs text-muted-foreground">
+                  {p.script.map((line, i) => (
+                    <li key={i}>&ldquo;{line}&rdquo;</li>
+                  ))}
+                </ul>
+              </div>
+            )
+          )}
+          {personas.length === 0 && !creating && (
+            <p className="rounded-md border border-dashed p-4 text-center text-xs text-muted-foreground">
+              Nenhuma persona ainda — crie a primeira abaixo.
+            </p>
+          )}
+        </div>
+
+        <div className="mt-4 border-t pt-4">
+          {creating ? (
+            <PersonaCreateForm
+              departments={departments}
+              onCancel={() => setCreating(false)}
+              onCreated={() => {
+                setCreating(false);
+                onChanged();
+              }}
+            />
+          ) : (
+            <Button variant="outline" onClick={() => setCreating(true)}>
+              <Plus className="h-4 w-4" /> Nova persona
+            </Button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PersonaCreateForm({
+  departments,
+  onCancel,
+  onCreated,
+}: {
+  departments: Department[];
+  onCancel: () => void;
+  onCreated: () => void;
+}) {
+  const [name, setName] = useState("");
+  const [scenarioDescription, setScenarioDescription] = useState("");
+  const [departmentId, setDepartmentId] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function create() {
+    if (!name.trim() || !scenarioDescription.trim()) return;
+    setSaving(true);
+    setError(null);
+    const res = await fetch("/api/lab/personas", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name, scenarioDescription, departmentId }),
+    }).catch(() => null);
+    setSaving(false);
+    if (!res?.ok) {
+      const data = (await res?.json().catch(() => null)) as {
+        error?: { message?: string };
+      } | null;
+      setError(data?.error?.message ?? "Não foi possível gerar a persona");
+      return;
+    }
+    onCreated();
+  }
+
+  return (
+    <div className="space-y-3 rounded-md border p-3">
+      <div className="space-y-1.5">
+        <Label>Nome</Label>
+        <Input
+          placeholder="ex.: Impressora com driver quebrado"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+      </div>
+      <div className="space-y-1.5">
+        <Label>Cenário</Label>
+        <Textarea
+          rows={3}
+          placeholder="Descreva a situação que o cliente simulado deve viver — a IA transforma isso num roteiro de mensagens."
+          value={scenarioDescription}
+          onChange={(e) => setScenarioDescription(e.target.value)}
+        />
+      </div>
+      {departments.length > 0 && (
+        <div className="space-y-1.5">
+          <Label>Departamento</Label>
+          <select
+            value={departmentId ?? ""}
+            onChange={(e) => setDepartmentId(e.target.value || null)}
+            className="flex h-9 w-full rounded-md border border-input bg-card px-3 text-sm"
+          >
+            <option value="">Geral — entra em qualquer rodada</option>
+            {departments.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+      {error && <p className="text-sm text-destructive">{error}</p>}
+      <div className="flex gap-2">
+        <Button
+          size="sm"
+          disabled={saving || !name.trim() || !scenarioDescription.trim()}
+          onClick={() => void create()}
+        >
+          <Sparkles className="h-3.5 w-3.5" />
+          {saving ? "Gerando roteiro…" : "Gerar roteiro com IA"}
+        </Button>
+        <Button size="sm" variant="ghost" disabled={saving} onClick={onCancel}>
+          Cancelar
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function PersonaEditForm({
+  persona,
+  departments,
+  onCancel,
+  onSaved,
+}: {
+  persona: LabPersona;
+  departments: Department[];
+  onCancel: () => void;
+  onSaved: () => void;
+}) {
+  const [name, setName] = useState(persona.name);
+  const [scenarioDescription, setScenarioDescription] = useState(persona.scenarioDescription);
+  const [departmentId, setDepartmentId] = useState<string | null>(persona.departmentId);
+  const [script, setScript] = useState<string[]>(persona.script);
+  const [saving, setSaving] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function save() {
+    setSaving(true);
+    setError(null);
+    const res = await fetch(`/api/lab/personas/${persona.id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name, scenarioDescription, departmentId, script }),
+    }).catch(() => null);
+    setSaving(false);
+    if (!res?.ok) {
+      setError("Não foi possível salvar");
+      return;
+    }
+    onSaved();
+  }
+
+  async function regenerate() {
+    setRegenerating(true);
+    setError(null);
+    const res = await fetch(`/api/lab/personas/${persona.id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name, scenarioDescription, departmentId, regenerate: true }),
+    }).catch(() => null);
+    setRegenerating(false);
+    if (!res?.ok) {
+      const data = (await res?.json().catch(() => null)) as {
+        error?: { message?: string };
+      } | null;
+      setError(data?.error?.message ?? "Não foi possível gerar o roteiro");
+      return;
+    }
+    const data = (await res.json()) as { persona: LabPersona };
+    setScript(data.persona.script);
+  }
+
+  function updateLine(i: number, value: string) {
+    setScript((prev) => prev.map((l, idx) => (idx === i ? value : l)));
+  }
+
+  function removeLine(i: number) {
+    setScript((prev) => prev.filter((_, idx) => idx !== i));
+  }
+
+  return (
+    <div className="space-y-3 rounded-md border border-brand-soft bg-brand-tint/40 p-3">
+      <div className="space-y-1.5">
+        <Label>Nome</Label>
+        <Input value={name} onChange={(e) => setName(e.target.value)} />
+      </div>
+      <div className="space-y-1.5">
+        <Label>Cenário</Label>
+        <Textarea
+          rows={2}
+          value={scenarioDescription}
+          onChange={(e) => setScenarioDescription(e.target.value)}
+        />
+      </div>
+      {departments.length > 0 && (
+        <div className="space-y-1.5">
+          <Label>Departamento</Label>
+          <select
+            value={departmentId ?? ""}
+            onChange={(e) => setDepartmentId(e.target.value || null)}
+            className="flex h-9 w-full rounded-md border border-input bg-card px-3 text-sm"
+          >
+            <option value="">Geral — entra em qualquer rodada</option>
+            {departments.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between">
+          <Label>Roteiro (falas do cliente)</Label>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={regenerating || !scenarioDescription.trim()}
+            onClick={() => void regenerate()}
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+            {regenerating ? "Gerando…" : "Gerar de novo com IA"}
+          </Button>
+        </div>
+        <div className="space-y-1.5">
+          {script.map((line, i) => (
+            <div key={i} className="flex gap-1.5">
+              <Input value={line} onChange={(e) => updateLine(i, e.target.value)} />
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Remover fala"
+                onClick={() => removeLine(i)}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      </div>
+      {error && <p className="text-sm text-destructive">{error}</p>}
+      <div className="flex gap-2">
+        <Button size="sm" disabled={saving || !name.trim() || script.length === 0} onClick={() => void save()}>
+          {saving ? "Salvando…" : "Salvar"}
+        </Button>
+        <Button size="sm" variant="ghost" disabled={saving} onClick={onCancel}>
+          Cancelar
+        </Button>
+      </div>
     </div>
   );
 }

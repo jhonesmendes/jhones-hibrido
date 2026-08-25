@@ -2,7 +2,6 @@ import { asc, eq } from "drizzle-orm";
 import { apiError, withAuth } from "@/lib/api";
 import { getDb, schema } from "@/lib/db";
 import { scoped } from "@/lib/db/tenant";
-import { PERSONA_LABELS } from "@/server/lab/personas";
 
 export const dynamic = "force-dynamic";
 
@@ -55,7 +54,9 @@ export const GET = withAuth(async (session, _req: Request, ctx: Params) => {
     cases: cases.map((c) => ({
       id: c.id,
       persona: c.persona,
-      personaLabel: PERSONA_LABELS[c.persona] ?? c.persona,
+      // `persona` já é o nome cadastrado pelo cliente (não uma chave de um
+      // elenco fixo) — não precisa mais de tabela de labels separada.
+      personaLabel: c.persona,
       status: c.status,
       veredicto: c.veredicto,
       hallazgos: c.hallazgos ?? [],

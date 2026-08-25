@@ -17,6 +17,7 @@ const prefixes = {
   template: "tpl",
   testRun: "run",
   testCase: "case",
+  labPersona: "lps",
   campaign: "camp",
   campaignRecipient: "crc",
   pipelineFollowup: "pfu",

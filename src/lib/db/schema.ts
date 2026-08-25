@@ -981,7 +981,14 @@ export const agentTestCase = pgTable(
     runId: text("run_id")
       .notNull()
       .references(() => agentTestRun.id, { onDelete: "cascade" }),
+    // Nome da persona no momento da rodada (não é mais uma chave de um
+    // elenco fixo — cada persona é cadastrada em lab_persona e pode ser
+    // editada/excluída depois; isto aqui é o snapshot pro histórico).
     persona: text("persona").notNull(),
+    // Roteiro (falas do cliente) USADO nesta rodada, congelado no momento
+    // da criação — sobrevive mesmo que a persona original seja depois
+    // editada ou excluída.
+    script: jsonb("script"),
     conversationId: text("conversation_id").references(() => conversation.id, {
       onDelete: "set null",
     }),
@@ -996,6 +1003,34 @@ export const agentTestCase = pgTable(
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (t) => [index("test_case_run_idx").on(t.runId)]
+);
+
+/**
+ * Persona de teste do Laboratório — substitui o antigo elenco fixo (6
+ * roteiros genéricos de loja de ferragens, sem relação com o produto real
+ * de cada cliente). `departmentId` null = "geral" (entra em qualquer
+ * rodada); preenchido = só entra na rodada testando ESSE departamento
+ * (mesmo padrão de kb_entry.department_id). `script` é gerado por IA a
+ * partir de `scenarioDescription` (editável depois) — array de falas
+ * sequenciais do cliente simulado.
+ */
+export const labPersona = pgTable(
+  "lab_persona",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    departmentId: text("department_id").references(() => department.id, {
+      onDelete: "set null",
+    }),
+    name: text("name").notNull(),
+    scenarioDescription: text("scenario_description").notNull(),
+    script: jsonb("script").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [index("lab_persona_org_idx").on(t.organizationId)]
 );
 
 /**

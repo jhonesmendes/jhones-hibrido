@@ -4,7 +4,7 @@ import { apiError, parseBody, withAuth } from "@/lib/api";
 import { getDb, schema } from "@/lib/db";
 import { scoped } from "@/lib/db/tenant";
 import { resolveAiConfig } from "@/server/ai/config";
-import { RunConflictError, startRun } from "@/server/lab/runner";
+import { NoPersonasError, RunConflictError, startRun } from "@/server/lab/runner";
 
 export const dynamic = "force-dynamic";
 
@@ -79,6 +79,9 @@ export const POST = withAuth(async (session, req: Request) => {
         "run_in_progress",
         "Já há uma rodada em andamento; aguarde terminar"
       );
+    }
+    if (err instanceof NoPersonasError) {
+      return apiError(422, "no_personas", err.message);
     }
     throw err;
   }
