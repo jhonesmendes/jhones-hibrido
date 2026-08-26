@@ -76,8 +76,23 @@ export async function resolveAgentProfile(
       const byDept = await byId(deptProfileId);
       if (byDept) return byDept;
     }
+
+    // Conversa COM departamento, sem perfil próprio ativo (não configurado,
+    // ou configurado mas ainda desativado): NÃO cai no fallback abaixo —
+    // isso pegava emprestado o perfil ativo de QUALQUER OUTRO departamento
+    // (bug real em produção: departamento sem perfil próprio herdava o
+    // tom/instruções de outro departamento que por acaso estava ativo).
+    // Sem perfil = agente não responde nessa conversa (mesmo
+    // comportamento seguro de "nenhum perfil configurado" — ver
+    // `if (!profile) return;` em ai/pipeline.ts), até o dono ativar o
+    // perfil certo pra esse departamento.
+    return null;
   }
 
+  // Só chega aqui numa conversa SEM departamento (fila pendente, canal sem
+  // departamento vinculado, ou organização que ainda não usa departamentos)
+  // — mantém o comportamento anterior à separação por departamento: usa o
+  // perfil mais antigo ativo da org inteira.
   const fallbackRows = await db
     .select()
     .from(schema.agentProfile)
