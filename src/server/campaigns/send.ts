@@ -6,8 +6,9 @@ import {
   getOrCreateConversation,
   type ConversationChannel,
 } from "@/server/inbox/ingest";
-import { sendText } from "@/server/inbox/send";
+import { sendMedia, sendText } from "@/server/inbox/send";
 import { sendTemplate } from "@/server/whatsapp/templates";
+import { getCampaignMedia } from "@/server/campaigns/media";
 import { getCredentialsById, getCredentialsByOrg } from "@/server/whatsapp/credentials";
 import {
   isAnyUnofficialChannelConnected,
@@ -136,6 +137,9 @@ async function runCampaign(
   campaignId: string
 ): Promise<void> {
   const db = getDb();
+  // Mídia (se houver) é a mesma pra todo destinatário — busca uma vez só
+  // fora do loop, não repete a query/decode de base64 a cada recipient.
+  const media = await getCampaignMedia(campaignId);
 
   for (;;) {
     const campaign = await getCampaign(organizationId, campaignId);
@@ -206,12 +210,24 @@ async function runCampaign(
         // se sobrescreve o canal de uma conversa existente aqui.
         const variables = (recipient.variables as Record<string, string>) ?? {};
         const text = renderMessage(campaign.messageTemplate ?? "", variables);
-        const result = await sendText({
-          conversationId: conversation.id,
-          organizationId,
-          text,
-        });
-        messageId = result.messageId;
+        if (media) {
+          const result = await sendMedia({
+            conversationId: conversation.id,
+            organizationId,
+            buffer: media.buffer,
+            mimeType: media.mimeType,
+            filename: media.filename,
+            caption: text || undefined,
+          });
+          messageId = result.messageId;
+        } else {
+          const result = await sendText({
+            conversationId: conversation.id,
+            organizationId,
+            text,
+          });
+          messageId = result.messageId;
+        }
       }
 
       await db

@@ -7,13 +7,15 @@ import { extractVariables } from "@/lib/campaigns/render";
 import { isAnyUnofficialChannelConnected } from "@/server/settings/unofficial-channels";
 import { countVariables } from "@/server/whatsapp/templates";
 import { serializeCampaign } from "@/server/campaigns/queries";
+import { CampaignMediaError, fetchCampaignMediaFromUrl, type FetchedCampaignMedia } from "@/server/campaigns/media";
 
 export class CampaignError extends Error {
   code:
     | "invalid"
     | "template_not_approved"
     | "channel_not_connected"
-    | "no_recipients";
+    | "no_recipients"
+    | "media_failed";
 
   constructor(code: CampaignError["code"], message: string) {
     super(message);
@@ -27,6 +29,7 @@ const CAMPAIGN_ERROR_STATUS: Record<CampaignError["code"], number> = {
   template_not_approved: 422,
   channel_not_connected: 409,
   no_recipients: 422,
+  media_failed: 422,
 };
 
 export function campaignErrorStatus(err: CampaignError): number {
@@ -42,6 +45,13 @@ type RecipientSource =
       originChannel?: "official" | "unofficial" | null;
       /** Contatos escolhidos manualmente na UI — unidos ao filtro acima. */
       contactIds?: string[];
+    }
+  | {
+      /** Lista pronta de destinatários — usado por integrações externas
+       * (ex.: N8N via /api/internal/campaigns) que já têm os telefones em
+       * mãos, sem precisar montar um CSV só pra isso. */
+      source: "list";
+      recipients: { phone: string; variables?: Record<string, string> }[];
     };
 
 type CreateOfficialInput = {
@@ -58,6 +68,10 @@ type CreateUnofficialInput = {
   sendIntervalMs: number;
   riskAcknowledged: boolean;
   scheduledAt?: string | null;
+  /** URL pública de uma imagem — baixada e congelada em `campaign_media`
+   * na criação (ver server/campaigns/media.ts). Opcional: sem ela, a
+   * campanha manda só texto, como sempre foi. */
+  mediaUrl?: string | null;
 } & RecipientSource;
 
 export type CreateCampaignInput = CreateOfficialInput | CreateUnofficialInput;
@@ -158,6 +172,17 @@ async function resolveRecipients(
       })),
       invalidRows,
       csvVariableNames: variableNames,
+    };
+  }
+
+  if (input.source === "list") {
+    return {
+      validRows: input.recipients.map((r) => ({
+        phone: r.phone,
+        variables: r.variables ?? {},
+      })),
+      invalidRows: [],
+      csvVariableNames: [],
     };
   }
 
@@ -265,6 +290,24 @@ export async function createCampaign(
   const campaignId = newId("campaign");
   const now = new Date();
 
+  // Baixa a imagem ANTES de criar a campanha — se a URL estiver quebrada,
+  // falha na criação (o operador corrige e tenta de novo) em vez de deixar
+  // uma campanha "sending" travar no meio do disparo por causa de mídia.
+  // Só busca (rede); o insert em `campaign_media` entra na MESMA transação
+  // que cria a campanha logo abaixo (a linha referencia campaign.id, que
+  // só existe a partir dali).
+  let media: FetchedCampaignMedia | null = null;
+  if (input.channel === "unofficial" && input.mediaUrl) {
+    try {
+      media = await fetchCampaignMediaFromUrl(input.mediaUrl);
+    } catch (err) {
+      if (err instanceof CampaignMediaError) {
+        throw new CampaignError("media_failed", err.message);
+      }
+      throw err;
+    }
+  }
+
   await db.transaction(async (tx) => {
     await tx.insert(schema.campaign).values({
       id: campaignId,
@@ -294,6 +337,15 @@ export async function createCampaign(
         variables: row.variables,
       }))
     );
+
+    if (media) {
+      await tx.insert(schema.campaignMedia).values({
+        campaignId,
+        dataBase64: media.dataBase64,
+        mimeType: media.mimeType,
+        filename: media.filename,
+      });
+    }
   });
 
   const campaigns = await db

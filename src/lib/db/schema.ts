@@ -865,6 +865,25 @@ export const campaignRecipient = pgTable(
 );
 
 /**
+ * Mídia (hoje só imagem) de uma campanha não oficial — tabela separada de
+ * `campaign` de propósito: `listCampaigns`/`getCampaign` fazem `select()`
+ * simples e são chamados o tempo todo (lista, polling de progresso); juntar
+ * um base64 de imagem na própria linha inflaria essas leituras à toa. Só
+ * `runCampaign` (server/campaigns/send.ts) toca aqui, uma vez por rodada.
+ * Baixada da URL fornecida na criação e congelada aqui — nunca rebaixada a
+ * cada destinatário (rede instável não deve travar o meio de um disparo).
+ */
+export const campaignMedia = pgTable("campaign_media", {
+  campaignId: text("campaign_id")
+    .primaryKey()
+    .references(() => campaign.id, { onDelete: "cascade" }),
+  dataBase64: text("data_base64").notNull(),
+  mimeType: text("mime_type").notNull(),
+  filename: text("filename"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+/**
  * Configuração de follow-up automático do pipeline — singular por
  * organização (este projeto não modela múltiplos pipelines nomeados).
  * Nada de negócio fixo no código: etapas, intervalo e mensagem vêm daqui.
