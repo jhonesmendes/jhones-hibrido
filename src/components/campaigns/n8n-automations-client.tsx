@@ -72,10 +72,16 @@ export function N8nAutomationsClient() {
 
   async function execute(workflowId: string) {
     setExecutingId(workflowId);
-    await fetch(`/api/n8n/workflows/${workflowId}/execute`, { method: "POST" }).catch(
-      () => null
-    );
+    const res = await fetch(`/api/n8n/workflows/${workflowId}/execute`, {
+      method: "POST",
+    }).catch(() => null);
     setExecutingId(null);
+    if (!res?.ok) {
+      const data = (await res?.json().catch(() => null)) as {
+        error?: { message?: string };
+      } | null;
+      alert(data?.error?.message ?? "Não foi possível executar o workflow");
+    }
     void refetch();
   }
 

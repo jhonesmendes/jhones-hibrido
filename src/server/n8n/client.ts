@@ -88,14 +88,18 @@ export async function listWorkflows(creds: N8nCredentials): Promise<N8nWorkflow[
   }));
 }
 
+/** O endpoint público do n8n é `/run`, não `/execute` — `/execute` não
+ * existe na API pública (sempre 405); ver docs.n8n.io/api. Sem
+ * `startNodes`/`runData` no body, algumas versões do n8n recusam a
+ * chamada. */
 export async function executeWorkflow(
   creds: N8nCredentials,
   workflowId: string
 ): Promise<{ executionId: string | null }> {
   const data = await n8nRequest<{ executionId?: string; id?: string }>(
     creds,
-    `/api/v1/workflows/${encodeURIComponent(workflowId)}/execute`,
-    { method: "POST" }
+    `/api/v1/workflows/${encodeURIComponent(workflowId)}/run`,
+    { method: "POST", body: JSON.stringify({ startNodes: [], runData: {} }) }
   );
   return { executionId: data.executionId ?? data.id ?? null };
 }
