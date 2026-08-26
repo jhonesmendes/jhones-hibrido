@@ -18,6 +18,8 @@ const prefixes = {
   testRun: "run",
   testCase: "case",
   labPersona: "lps",
+  dbBackup: "bkp",
+  dbRestoreLog: "rst",
   campaign: "camp",
   campaignRecipient: "crc",
   pipelineFollowup: "pfu",

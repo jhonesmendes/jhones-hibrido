@@ -25,6 +25,8 @@ export async function register(): Promise<void> {
       "@/server/license/expiry-scheduler"
     );
     startLicenseExpiryScheduler();
+    const { startBackupScheduler } = await import("@/server/backup/scheduler");
+    startBackupScheduler();
     // Só a instância dedicada ao painel central envia o relatório — nas
     // instâncias de cliente normais `ADMIN_PANEL_HOST` nunca é configurado.
     if (process.env.ADMIN_PANEL_HOST) {

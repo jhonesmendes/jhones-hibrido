@@ -30,8 +30,13 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 # ffmpeg: reconverte áudio gravado no navegador (audio/webm) pra ogg/opus
 # antes do upload — a Cloud API da Meta rejeita webm (erro #100).
-RUN apk add --no-cache ffmpeg
+# postgresql16-client: pg_dump/pg_restore do backup interno (server/backup) —
+# dump local, nunca sai da instância (Constituição II, sem S3/R2).
+RUN apk add --no-cache ffmpeg postgresql16-client
 RUN addgroup -S vocero && adduser -S vocero -G vocero
+# BACKUP_DIR (default /app/backups) — monte um volume aqui em produção,
+# senão os backups somem a cada redeploy.
+RUN mkdir -p /app/backups && chown vocero:vocero /app/backups
 
 COPY --from=builder --chown=vocero:vocero /app/.next/standalone ./
 COPY --from=builder --chown=vocero:vocero /app/.next/static ./.next/static

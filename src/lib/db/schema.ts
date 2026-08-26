@@ -1034,6 +1034,75 @@ export const labPersona = pgTable(
 );
 
 /**
+ * Backup do banco desta instância (pg_dump, arquivo local — Constituição
+ * II: nada de S3/R2, o dump fica no disco da própria instância, num volume
+ * persistente). Sem `organizationId`: é um dump do BANCO INTEIRO, não
+ * escopado por org (mesma premissa de "uma instância = um negócio" já usada
+ * nas rotas `/api/internal/*`). Só o painel central do operador enxerga
+ * isso (`/api/internal/backups`, mesmo padrão de auditoria/custo/licença).
+ */
+export const dbBackup = pgTable(
+  "db_backup",
+  {
+    id: text("id").primaryKey(),
+    filename: text("filename").notNull(),
+    /** Caminho absoluto no disco da instância — nunca exposto pra fora,
+     * só usado internamente pra servir o download/streaming e apagar. */
+    filePath: text("file_path").notNull(),
+    sizeBytes: integer("size_bytes"),
+    status: text("status", { enum: ["running", "done", "failed"] })
+      .notNull()
+      .default("running"),
+    /** scheduled = ciclo diário automático · manual = disparado pelo painel
+     * · pre_restore = snapshot de segurança tirado automaticamente ANTES de
+     * uma restauração (ver dbRestoreLog) — nunca some com o rodízio de
+     * retenção normal sozinho, só se o operador apagar à mão. */
+    kind: text("kind", { enum: ["scheduled", "manual", "pre_restore"] }).notNull(),
+    error: text("error"),
+    startedAt: timestamp("started_at").notNull().defaultNow(),
+    finishedAt: timestamp("finished_at"),
+  },
+  (t) => [index("db_backup_started_idx").on(t.startedAt)]
+);
+
+/**
+ * Log de uma restauração (pg_restore) — ação destrutiva e rara, mantida
+ * separada de dbBackup (não é um backup, é o registro de já ter restaurado
+ * um). `preRestoreBackupId` aponta pro snapshot de segurança tirado
+ * automaticamente antes de começar.
+ */
+export const dbRestoreLog = pgTable("db_restore_log", {
+  id: text("id").primaryKey(),
+  sourceBackupId: text("source_backup_id")
+    .notNull()
+    .references(() => dbBackup.id, { onDelete: "cascade" }),
+  preRestoreBackupId: text("pre_restore_backup_id").references(() => dbBackup.id, {
+    onDelete: "set null",
+  }),
+  status: text("status", { enum: ["running", "done", "failed"] })
+    .notNull()
+    .default("running"),
+  error: text("error"),
+  startedAt: timestamp("started_at").notNull().defaultNow(),
+  finishedAt: timestamp("finished_at"),
+});
+
+/** Configuração do backup automático desta instância — linha única
+ * (id fixo "singleton"), editada só pelo painel central do operador. */
+export const backupConfig = pgTable("backup_config", {
+  id: text("id").primaryKey().default("singleton"),
+  enabled: boolean("enabled").notNull().default(true),
+  /** Hora do dia (0-23, horário do servidor/container) em que o backup
+   * diário automático roda. */
+  hourOfDay: integer("hour_of_day").notNull().default(3),
+  /** Quantos backups "done" manter antes de apagar os mais antigos
+   * (scheduled + manual juntos na mesma contagem — pre_restore nunca entra
+   * nesse rodízio automático). */
+  retentionCount: integer("retention_count").notNull().default(7),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+/**
  * Concessão/revogação individual de permissão por membro — sobrepõe o
  * default do papel (src/lib/auth/permissions.ts). Ausência de linha = usa o
  * default; presença sempre vence.

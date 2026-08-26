@@ -36,6 +36,11 @@ services:
       OPERATOR_EMAIL: ${OPERATOR_EMAIL:-}
       INTERNAL_API_KEY: vocero_internal_2024
 
+    volumes:
+      # Backup do banco (pg_dump) — disco local da própria instância,
+      # persiste entre redeploys (Constituição II: nada de S3/R2).
+      - vocero_backups:/app/backups
+
     depends_on:
       postgres:
         condition: service_healthy
@@ -68,6 +73,8 @@ services:
 volumes:
   vocero_pg:
     name: ${POSTGRES_VOLUME}
+  vocero_backups:
+    name: ${BACKUPS_VOLUME:-vocero_backups}
 
 networks:
   vocero-net:

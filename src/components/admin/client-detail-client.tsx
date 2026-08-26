@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { ClientBackupSection } from "@/components/admin/client-backup-section";
 import { ClientCostSection } from "@/components/admin/client-cost-section";
 import { AdminTopbar } from "@/components/admin/admin-topbar";
 
@@ -220,6 +221,8 @@ export function ClientDetailClient({ clientId }: { clientId: string }) {
             {saving ? "Salvando…" : "Salvar plano"}
           </button>
         </div>
+
+        <ClientBackupSection clientId={clientId} clientName={detail.client.name} />
 
         <ClientCostSection clientId={clientId} />
 
