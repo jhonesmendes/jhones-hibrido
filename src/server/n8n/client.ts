@@ -22,7 +22,7 @@ export type N8nExecution = {
 };
 
 export class N8nApiError extends Error {
-  code: "unauthorized" | "not_found" | "unavailable" | "error";
+  code: "unauthorized" | "not_found" | "unavailable" | "error" | "no_webhook";
   constructor(code: N8nApiError["code"], message: string) {
     super(message);
     this.name = "N8nApiError";
@@ -88,20 +88,63 @@ export async function listWorkflows(creds: N8nCredentials): Promise<N8nWorkflow[
   }));
 }
 
-/** O endpoint público do n8n é `/run`, não `/execute` — `/execute` não
- * existe na API pública (sempre 405); ver docs.n8n.io/api. Sem
- * `startNodes`/`runData` no body, algumas versões do n8n recusam a
- * chamada. */
+type N8nNode = {
+  type: string;
+  parameters?: { path?: string; httpMethod?: string };
+};
+
+/** Nem `/execute` nem `/run` existem de fato pra disparar um workflow de
+ * fora do editor do n8n quando o gatilho é "Manual Trigger" — por design
+ * do próprio n8n, esse node só roda pelo botão "Execute workflow" dentro
+ * do editor (confirmado empiricamente: ambos os endpoints devolvem 405/
+ * comportamento inconsistente). A forma suportada é um node Webhook: o
+ * operador adiciona um no workflow, e chamamos a URL pública dele
+ * diretamente — não é uma chamada autenticada pela API de gestão, é a
+ * mesma URL que qualquer serviço externo chamaria. */
 export async function executeWorkflow(
   creds: N8nCredentials,
   workflowId: string
-): Promise<{ executionId: string | null }> {
-  const data = await n8nRequest<{ executionId?: string; id?: string }>(
+): Promise<{ status: number }> {
+  const detail = await n8nRequest<{ nodes?: N8nNode[] }>(
     creds,
-    `/api/v1/workflows/${encodeURIComponent(workflowId)}/run`,
-    { method: "POST", body: JSON.stringify({ startNodes: [], runData: {} }) }
+    `/api/v1/workflows/${encodeURIComponent(workflowId)}`
   );
-  return { executionId: data.executionId ?? data.id ?? null };
+  const webhookNode = (detail.nodes ?? []).find((n) => n.type === "n8n-nodes-base.webhook");
+  const path = webhookNode?.parameters?.path;
+  if (!path) {
+    throw new N8nApiError(
+      "no_webhook",
+      "Este workflow não tem um node Webhook — adicione um no n8n pra poder disparar por aqui (Manual Trigger só roda de dentro do editor do n8n)"
+    );
+  }
+  const method = (webhookNode?.parameters?.httpMethod ?? "POST").toUpperCase();
+  const webhookUrl = `${baseApiUrl(creds.baseUrl)}/webhook/${path}`;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15_000);
+  try {
+    const res = await fetch(webhookUrl, { method, signal: controller.signal });
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      // 404 aqui quase sempre significa "workflow inativo" — webhook de
+      // produção só escuta com o workflow ativado no n8n.
+      const hint =
+        res.status === 404
+          ? " — confira se o workflow está ATIVO no n8n (webhook de produção não escuta com o workflow inativo)"
+          : "";
+      throw new N8nApiError(
+        "error",
+        `O webhook respondeu ${res.status}${hint}: ${text.slice(0, 200)}`
+      );
+    }
+    return { status: res.status };
+  } catch (err) {
+    if (err instanceof N8nApiError) throw err;
+    const detail2 = err instanceof Error ? err.message : String(err);
+    throw new N8nApiError("unavailable", `Não foi possível chamar o webhook do workflow: ${detail2}`);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /** Apaga o workflow NO PRÓPRIO N8N do operador — ação irreversível lá,

@@ -27,12 +27,19 @@ export const POST = withAuth(async (session, req: Request, ctx: Params) => {
       resource: "n8n_workflow",
       resourceId: id,
       req,
-      metadata: { executionId: result.executionId },
+      metadata: { status: result.status },
     });
-    return Response.json(result);
+    return Response.json({ started: true });
   } catch (err) {
     if (err instanceof N8nApiError) {
-      const status = err.code === "unauthorized" ? 401 : err.code === "not_found" ? 404 : 502;
+      const status =
+        err.code === "unauthorized"
+          ? 401
+          : err.code === "not_found"
+            ? 404
+            : err.code === "no_webhook"
+              ? 422
+              : 502;
       return apiError(status, err.code, err.message);
     }
     throw err;
