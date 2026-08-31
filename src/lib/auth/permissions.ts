@@ -19,6 +19,9 @@ export const PERMISSIONS = {
   "contacts:view": "Ver contatos",
   "contacts:create": "Criar contatos",
   "contacts:edit": "Editar contatos",
+  /** Mesmo padrão de "conversations:delete" — owner por padrão, concedível
+   * a admin/agente. */
+  "contacts:delete": "Excluir contatos",
 
   "campaigns:view": "Ver campanhas",
   "campaigns:create": "Criar campanhas",
@@ -46,7 +49,7 @@ const AGENT_DEFAULT_PERMISSIONS: Permission[] = [
 ];
 
 const ADMIN_DEFAULT_PERMISSIONS: Permission[] = ALL_PERMISSIONS.filter(
-  (p) => p !== "conversations:delete"
+  (p) => p !== "conversations:delete" && p !== "contacts:delete"
 );
 
 /** Default de permissões por papel — ponto de partida, ajustável por membro. */

@@ -1,7 +1,12 @@
 import { z } from "zod";
 import { apiError, parseBody, withAuth } from "@/lib/api";
 import { logAudit } from "@/server/auth/audit";
-import { memberUpdateErrorStatus, MemberUpdateError, updateMember } from "@/server/auth/member-management";
+import {
+  deleteMember,
+  memberUpdateErrorStatus,
+  MemberUpdateError,
+  updateMember,
+} from "@/server/auth/member-management";
 
 export const dynamic = "force-dynamic";
 
@@ -51,6 +56,35 @@ export const PATCH = withAuth(async (session, req: Request, ctx: Params) => {
     resourceId: memberId,
     req,
     metadata: { patch: body.data },
+  });
+
+  return Response.json({ ok: true });
+});
+
+/** Exclui a conta de um membro de vez (diferente de desativar — ver
+ * comentário de deleteMember). Só owner/admin, mesma regra da PATCH. */
+export const DELETE = withAuth(async (session, req: Request, ctx: Params) => {
+  if (session.role !== "owner" && session.role !== "admin") {
+    return apiError(403, "forbidden", "Só owner/admin gerenciam membros");
+  }
+  const { memberId } = await ctx.params;
+
+  try {
+    await deleteMember(session.organizationId, memberId, session.role, session.memberId);
+  } catch (err) {
+    if (err instanceof MemberUpdateError) {
+      return apiError(memberUpdateErrorStatus(err), err.code, err.message);
+    }
+    throw err;
+  }
+
+  await logAudit({
+    organizationId: session.organizationId,
+    memberId: session.memberId,
+    action: "settings.member_deleted",
+    resource: "member",
+    resourceId: memberId,
+    req,
   });
 
   return Response.json({ ok: true });

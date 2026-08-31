@@ -61,7 +61,11 @@ export const GET = withAuth(async (session) => {
     })
   );
 
-  return Response.json({ members: detailed });
+  return Response.json({
+    members: detailed,
+    viewerMemberId: session.memberId,
+    viewerRole: session.role,
+  });
 });
 
 const createSchema = z.object({

@@ -8,6 +8,7 @@ import {
   Download,
   MessageSquareText,
   Search,
+  Trash2,
   UserPlus,
   Upload,
 } from "lucide-react";
@@ -96,6 +97,29 @@ export function ContactsClient() {
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
     }).catch(() => null);
+    void refetch();
+  }
+
+  /** Exclusão de vez — pensada pra corrigir um cadastro errado (número/nome
+   * digitado errado), não pra "limpar a base" no dia a dia (isso é o
+   * arquivar). Apaga conversas/leads desse contato junto (cascata no
+   * schema), por isso a confirmação é explícita sobre isso. */
+  async function removeContact(c: ContactDto) {
+    if (
+      !confirm(
+        `Excluir "${c.name}" (${formatPhone(c.phone)}) de vez? Isso apaga também as conversas e o histórico no pipeline dele — não pode ser desfeito. Se for só pra reorganizar, prefira Arquivar.`
+      )
+    ) {
+      return;
+    }
+    const res = await fetch(`/api/contacts/${c.id}`, { method: "DELETE" }).catch(() => null);
+    if (!res?.ok) {
+      const data = (await res?.json().catch(() => null)) as {
+        error?: { message?: string };
+      } | null;
+      alert(data?.error?.message ?? "Não foi possível excluir o contato");
+      return;
+    }
     void refetch();
   }
 
@@ -288,6 +312,15 @@ export function ContactsClient() {
                     ) : (
                       <Archive className="h-4 w-4" />
                     )}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Excluir contato"
+                    onClick={() => void removeContact(c)}
+                    className="text-muted-foreground hover:text-destructive"
+                  >
+                    <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
               </li>

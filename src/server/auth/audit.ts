@@ -17,6 +17,8 @@ export type AuditAction =
   | "n8n.workflow_executed"
   | "n8n.workflow_deleted"
   | "conversation.deleted"
+  | "contact.deleted"
+  | "settings.member_deleted"
   | "department.created"
   | "department.updated"
   | "department.deleted"

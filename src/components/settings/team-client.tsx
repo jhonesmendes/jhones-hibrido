@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Link2, Settings2, UserPlus, X } from "lucide-react";
+import { Link2, Settings2, Trash2, UserPlus, X } from "lucide-react";
 import { ContactAvatar } from "@/components/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -53,6 +53,8 @@ function formatExpiresIn(expiresAt: string): string {
 
 export function TeamClient() {
   const [members, setMembers] = useState<Member[]>([]);
+  const [viewerMemberId, setViewerMemberId] = useState<string | null>(null);
+  const [viewerRole, setViewerRole] = useState<Role | null>(null);
   const [invites, setInvites] = useState<PendingInvite[]>([]);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -71,8 +73,14 @@ export function TeamClient() {
   const refetch = useCallback(async () => {
     const res = await fetch("/api/settings/team").catch(() => null);
     if (!res?.ok) return;
-    const data = (await res.json()) as { members: Member[] };
+    const data = (await res.json()) as {
+      members: Member[];
+      viewerMemberId: string;
+      viewerRole: Role;
+    };
     setMembers(data.members);
+    setViewerMemberId(data.viewerMemberId);
+    setViewerRole(data.viewerRole);
   }, []);
 
   const refetchInvites = useCallback(async () => {
@@ -86,6 +94,29 @@ export function TeamClient() {
     void refetch();
     void refetchInvites();
   }, [refetch, refetchInvites]);
+
+  /** Exclusão de vez (diferente de "Conta ativa" no editar, que só
+   * desativa o login sem apagar nada) — pensada pra remover um cadastro de
+   * verdade. Conversas/mensagens desse membro ficam intactas, só perdem a
+   * atribuição/assinatura (ver deleteMember no backend). */
+  async function removeMember(m: Member) {
+    if (
+      !confirm(
+        `Excluir "${m.name}" da equipe de vez? As conversas que ele atendeu continuam no histórico, só ficam sem atendente atribuído. Não pode ser desfeito — se for só afastar temporariamente, desative a conta em vez de excluir.`
+      )
+    ) {
+      return;
+    }
+    const res = await fetch(`/api/settings/team/${m.id}`, { method: "DELETE" }).catch(() => null);
+    if (!res?.ok) {
+      const data = (await res?.json().catch(() => null)) as {
+        error?: { message?: string };
+      } | null;
+      alert(data?.error?.message ?? "Não foi possível excluir o membro");
+      return;
+    }
+    void refetch();
+  }
 
   async function revokeInvite(id: string) {
     const res = await fetch(`/api/settings/invites/${id}`, { method: "DELETE" }).catch(
@@ -262,6 +293,17 @@ export function TeamClient() {
             >
               <Settings2 className="h-4 w-4" />
             </Button>
+            {m.id !== viewerMemberId && (m.role !== "owner" || viewerRole === "owner") && (
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label={`Excluir ${m.name}`}
+                onClick={() => void removeMember(m)}
+                className="text-muted-foreground hover:text-destructive"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            )}
           </div>
         ))}
       </div>

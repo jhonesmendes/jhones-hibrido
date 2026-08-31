@@ -171,3 +171,79 @@ export async function updateMember(
     }
   });
 }
+
+/**
+ * Exclui a conta de um membro de vez (diferente de desativar — `isActive:
+ * false` já cobre "tirar de circulação sem apagar histórico"; isto aqui é
+ * pra remover um cadastro de verdade). Apaga o `user` (Better Auth) —
+ * `member` cascateia junto pela FK, e com ele member_permission/
+ * member_channel/member_department/agent_status/push_subscription (todos
+ * já `onDelete: cascade` no schema). `conversation.assigned_to` e
+ * `message.sent_by_member_id` já são `set null` — histórico de conversa
+ * fica intacto, só perde a atribuição/assinatura de quem foi removido.
+ *
+ * Duas referências a `member.id` NÃO cascateiam sozinhas e bloqueariam o
+ * delete se deixadas como estão: `conversation_queue.assigned_to` (sem
+ * onDelete) e `invite_token.used_by`/`created_by` (sem onDelete, e
+ * `created_by` é NOT NULL) — resolvidas explicitamente abaixo antes de
+ * apagar o usuário.
+ */
+export async function deleteMember(
+  organizationId: string,
+  memberId: string,
+  actorRole: string,
+  actorMemberId: string
+): Promise<void> {
+  if (memberId === actorMemberId) {
+    throw new MemberUpdateError("forbidden", "Você não pode excluir a própria conta");
+  }
+
+  const db = getDb();
+  const rows = await db
+    .select({ role: schema.member.role, userId: schema.member.userId })
+    .from(schema.member)
+    .where(scoped(schema.member.organizationId, organizationId, eq(schema.member.id, memberId)))
+    .limit(1);
+  const target = rows[0];
+  if (!target) throw new MemberUpdateError("not_found", "Membro não encontrado");
+
+  if (actorRole !== "owner" && target.role === "owner") {
+    throw new MemberUpdateError("forbidden", "Só o proprietário exclui outro proprietário");
+  }
+
+  if (target.role === "owner") {
+    const [remaining] = await db
+      .select({ n: count() })
+      .from(schema.member)
+      .where(
+        and(
+          eq(schema.member.organizationId, organizationId),
+          eq(schema.member.role, "owner"),
+          eq(schema.member.isActive, true),
+          ne(schema.member.id, memberId)
+        )
+      );
+    if ((remaining?.n ?? 0) === 0) {
+      throw new MemberUpdateError(
+        "last_owner",
+        "A organização precisa de ao menos um proprietário ativo"
+      );
+    }
+  }
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(schema.conversationQueue)
+      .set({ assignedTo: null })
+      .where(eq(schema.conversationQueue.assignedTo, memberId));
+    await tx
+      .update(schema.inviteToken)
+      .set({ usedBy: null })
+      .where(eq(schema.inviteToken.usedBy, memberId));
+    // created_by é NOT NULL — não dá pra zerar; convites que essa pessoa
+    // gerou deixam de existir junto (são links de onboarding efêmeros, não
+    // dado de negócio).
+    await tx.delete(schema.inviteToken).where(eq(schema.inviteToken.createdBy, memberId));
+    await tx.delete(schema.user).where(eq(schema.user.id, target.userId));
+  });
+}

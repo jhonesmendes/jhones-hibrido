@@ -3,11 +3,13 @@ import { z } from "zod";
 import { apiError, parseBody, withAuth } from "@/lib/api";
 import { getDb, schema } from "@/lib/db";
 import { scoped } from "@/lib/db/tenant";
+import { requirePermission } from "@/lib/auth/require-permission";
 import {
   getContactById,
   getContactStage,
   serializeContact,
 } from "@/server/contacts";
+import { logAudit } from "@/server/auth/audit";
 
 export const dynamic = "force-dynamic";
 
@@ -74,4 +76,39 @@ export const PATCH = withAuth(async (session, req: Request, ctx: Params) => {
     .returning();
   if (!updated[0]) return apiError(404, "not_found", "Contato não encontrado");
   return Response.json({ contact: serializeContact(updated[0]) });
+});
+
+/** Exclui um contato de vez — pensado pra corrigir um cadastro errado
+ * (número/nome digitado errado), não pra "limpar a base": leads e
+ * conversas cascateiam pelo schema (contact_id → cascade); histórico de
+ * campanha não cascateia de propósito — desvincula em vez de bloquear,
+ * mesmo padrão já usado em deleteConversation. */
+export const DELETE = withAuth(async (session, req: Request, ctx: Params) => {
+  await requirePermission(session, "contacts:delete");
+  const { id } = await ctx.params;
+
+  const db = getDb();
+  await db
+    .update(schema.campaignRecipient)
+    .set({ contactId: null })
+    .where(eq(schema.campaignRecipient.contactId, id));
+
+  const deleted = await db
+    .delete(schema.contact)
+    .where(
+      scoped(schema.contact.organizationId, session.organizationId, eq(schema.contact.id, id))
+    )
+    .returning({ id: schema.contact.id });
+  if (!deleted[0]) return apiError(404, "not_found", "Contato não encontrado");
+
+  await logAudit({
+    organizationId: session.organizationId,
+    memberId: session.memberId,
+    action: "contact.deleted",
+    resource: "contact",
+    resourceId: id,
+    req,
+  });
+
+  return Response.json({ deleted: true });
 });
