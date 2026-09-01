@@ -52,13 +52,22 @@ async function nextPositionInStage(db: Db, organizationId: string, stageId: stri
  * Atividade de lead — mensagem recebida OU modelo disparado pelo agente
  * (US2, evoluído): se o contato não tem lead NESTE departamento, ele é
  * criado na primeira etapa aberta do pipeline DESSE departamento. Se já
- * tem, sua última atividade é atualizada — e, se a etapa atual é "fechada"
- * (kind won/lost — ex.: "Finalizado"), o card VOLTA pra primeira etapa
+ * tem, sua última atividade é atualizada — e, se a etapa atual é "perdido"
+ * (kind=lost — ex.: expirou sem resposta), o card VOLTA pra primeira etapa
  * aberta automaticamente: qualquer atividade nova (cliente respondeu, ou o
  * agente reabriu mandando um modelo) sinaliza que o card precisa de
- * atenção de novo, não devia continuar parado num board "encerrado". Um
- * contato que fala com dois departamentos (duas conversas) tem um card em
- * cada — mesma separação já aplicada às conversas.
+ * atenção de novo, não devia continuar parado num board "encerrado".
+ *
+ * "Ganho" (kind=won) NUNCA reabre sozinho — bug real: o Follow-up move o
+ * lead pra uma etapa "won" ao receber o comprovante (ver
+ * followup-document.ts) e cancela o lembrete; uma mensagem trivial do
+ * contato DEPOIS disso (ex.: "obrigado!") reabria o card de volta pra
+ * etapa-gatilho do Follow-up, reiniciando a cobrança de um comprovante que
+ * já tinha sido entregue. "Ganho" passa a significar conclusão de verdade
+ * — reabrir um card assim é decisão manual no board, não automática.
+ *
+ * Um contato que fala com dois departamentos (duas conversas) tem um card
+ * em cada — mesma separação já aplicada às conversas.
  */
 export async function onLeadActivity(
   organizationId: string,
@@ -82,7 +91,7 @@ export async function onLeadActivity(
 
   if (existing[0]) {
     const lead = existing[0];
-    if (lead.kind !== "open") {
+    if (lead.kind === "lost") {
       const firstStage = await findFirstOpenStage(db, organizationId, departmentId);
       // Só reabre se a etapa alvo for diferente da atual (evita mexer em
       // posição à toa se por algum motivo a única etapa aberta for a que
