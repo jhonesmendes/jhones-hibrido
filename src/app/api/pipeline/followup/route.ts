@@ -23,6 +23,8 @@ const putSchema = z.object({
   successStageId: z.string().min(1).nullable(),
   expiredStageId: z.string().min(1).nullable(),
   requiresDocument: z.boolean(),
+  maxAttempts: z.number().int().min(1).max(10),
+  staleConversationDays: z.number().int().min(1).max(365),
 });
 
 export const PUT = withAuth(async (session, req: Request) => {

@@ -351,6 +351,13 @@
       "when": 1787776078207,
       "tag": "0049_outstanding_steel_serpent",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1788445975599,
+      "tag": "0050_rapid_wolfsbane",
+      "breakpoints": true
     }
   ]
 }

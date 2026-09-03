@@ -17,6 +17,8 @@ type FollowupConfig = {
   successStageId: string | null;
   expiredStageId: string | null;
   requiresDocument: boolean;
+  maxAttempts: number;
+  staleConversationDays: number;
 };
 
 const DEFAULT_CONFIG: FollowupConfig = {
@@ -29,6 +31,8 @@ const DEFAULT_CONFIG: FollowupConfig = {
   successStageId: null,
   expiredStageId: null,
   requiresDocument: false,
+  maxAttempts: 3,
+  staleConversationDays: 90,
 };
 
 type TemplateOption = { id: string; name: string; status: string; body: string };
@@ -290,6 +294,48 @@ export function FollowupManager({
             <p className="text-xs text-text-3">
               O prazo de expiração é o mesmo intervalo do lembrete (ex.: 4h
               para lembrar + 4h de tolerância = 8h sem resposta até expirar).
+            </p>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="fu-max-attempts">Máximo de lembretes por lead</Label>
+                <Input
+                  id="fu-max-attempts"
+                  type="number"
+                  min={1}
+                  max={10}
+                  value={config.maxAttempts}
+                  onChange={(e) =>
+                    setConfig((c) => ({
+                      ...c,
+                      maxAttempts: Math.min(10, Math.max(1, Number(e.target.value) || 1)),
+                    }))
+                  }
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="fu-stale-days">Ignorar conversa parada há mais de (dias)</Label>
+                <Input
+                  id="fu-stale-days"
+                  type="number"
+                  min={1}
+                  max={365}
+                  value={config.staleConversationDays}
+                  onChange={(e) =>
+                    setConfig((c) => ({
+                      ...c,
+                      staleConversationDays: Math.min(365, Math.max(1, Number(e.target.value) || 1)),
+                    }))
+                  }
+                />
+              </div>
+            </div>
+            <p className="text-xs text-text-3">
+              Depois do máximo de lembretes sem resposta, o lead vai direto pra
+              &ldquo;Etapa ao expirar&rdquo; (se configurada) e para de tentar — evita
+              recobrar pra sempre um lead que fica sendo reaberto ao longo do
+              tempo. Conversas mais paradas que o segundo campo não recebem
+              lembrete (provavelmente não são mais um caso ativo).
             </p>
 
             {error && <p className="text-sm text-destructive">{error}</p>}

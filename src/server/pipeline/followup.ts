@@ -29,6 +29,12 @@ export type FollowupConfigInput = {
   successStageId: string | null;
   expiredStageId: string | null;
   requiresDocument: boolean;
+  /** Teto de lembretes (sent/failed) por lead antes de desistir e mover
+   * pra `expiredStageId` — rede de segurança contra um lead sendo reaberto
+   * e recobrado indefinidamente ao longo do tempo. */
+  maxAttempts: number;
+  /** Conversa sem nenhuma mensagem há mais que isso não recebe lembrete. */
+  staleConversationDays: number;
 };
 
 export function serializeFollowup(row: FollowupRow | null) {
@@ -42,6 +48,8 @@ export function serializeFollowup(row: FollowupRow | null) {
     successStageId: row?.successStageId ?? null,
     expiredStageId: row?.expiredStageId ?? null,
     requiresDocument: row?.requiresDocument ?? false,
+    maxAttempts: row?.maxAttempts ?? 3,
+    staleConversationDays: row?.staleConversationDays ?? 90,
   };
 }
 
@@ -120,6 +128,8 @@ export async function saveFollowupConfig(
     successStageId: input.successStageId,
     expiredStageId: input.expiredStageId,
     requiresDocument: input.requiresDocument,
+    maxAttempts: input.maxAttempts,
+    staleConversationDays: input.staleConversationDays,
     updatedAt: new Date(),
   };
 

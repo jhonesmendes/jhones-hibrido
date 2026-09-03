@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, count, desc, eq, inArray } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { newId } from "@/lib/db/ids";
 import { getEnv } from "@/lib/env";
@@ -108,6 +108,33 @@ export async function runFollowupCycle(now: Date = new Date()): Promise<void> {
         // sem perder o lembrete nem duplicar quando finalmente enviar).
         if (!(await isLeadWithinBusinessHours(lead.departmentId))) continue;
 
+        // Teto de tentativas: conta quantos lembretes (sent/failed) esse
+        // lead já recebeu NA HISTÓRIA TODA, não só nesta passagem pela
+        // etapa-gatilho — sem isso, um lead que fica sendo reaberto (ex.:
+        // "Perdido" reabre sozinho ao ouvir do contato de novo, ver
+        // lead-activity.ts) ganha mais um ciclo INTEIRO de lembrete a cada
+        // reabertura, pra sempre. Ao estourar o teto, desiste de vez:
+        // move pra `expiredStageId` (se configurado) e não tenta mais.
+        const priorAttempts = await db
+          .select({ n: count() })
+          .from(schema.followupSend)
+          .where(
+            and(
+              eq(schema.followupSend.leadId, lead.id),
+              inArray(schema.followupSend.status, ["sent", "failed"])
+            )
+          );
+        const attemptNumber = (priorAttempts[0]?.n ?? 0) + 1;
+        if (attemptNumber > config.maxAttempts) {
+          if (config.expiredStageId && lead.stageId !== config.expiredStageId) {
+            await db
+              .update(schema.lead)
+              .set({ stageId: config.expiredStageId, updatedAt: now })
+              .where(eq(schema.lead.id, lead.id));
+          }
+          continue;
+        }
+
         const conversation = await getMostRecentConversationForContact(
           config.organizationId,
           lead.contactId,
@@ -115,15 +142,30 @@ export async function runFollowupCycle(now: Date = new Date()): Promise<void> {
         );
         if (!conversation) continue; // contato sem nenhuma conversa ainda — nada pra lembrar
 
+        // Conversa "fria" há tempo demais: provavelmente não é mais um
+        // caso ativo (lead esquecido/reaberto por engano) — mandar
+        // lembrete nela é ruído, não reengajamento de verdade.
+        const lastActivityAt = conversation.lastMessageAt ?? conversation.createdAt;
+        const staleMs = config.staleConversationDays * 24 * 60 * 60 * 1000;
+        if (now.getTime() - lastActivityAt.getTime() > staleMs) continue;
+
         const windowOpen =
           conversation.channel === "unofficial" || isWindowOpen(conversation.lastInboundAt);
 
-        // Janela aberta sem mensagem configurada, ou fechada sem modelo
-        // configurado: nada pra mandar nesse estado — não força texto
-        // livre com janela fechada (a Meta recusaria) nem deixa de
-        // lembrar quem tem janela aberta só porque não achou o outro modo.
+        // Janela aberta sem mensagem configurada: nada pra mandar (não
+        // força texto livre com janela fechada, a Meta recusaria).
         if (windowOpen && !config.message) continue;
-        if (!windowOpen && !template) continue;
+        // Janela fechada sem modelo configurado: isso é uma LACUNA DE
+        // CONFIGURAÇÃO do operador, não abandono do cliente — não conta
+        // como tentativa nem move o lead pra "expirado" (não é justo pro
+        // lead pagar por algo que a gente esqueceu de configurar). Só
+        // avisa nos logs até alguém configurar o modelo.
+        if (!windowOpen && !template) {
+          console.warn(
+            `[followup] lead ${lead.id} elegível mas sem modelo configurado pra janela fechada — configure um modelo em Pipeline → Follow-up`
+          );
+          continue;
+        }
 
         let sentMessage: string;
         try {
@@ -160,6 +202,7 @@ export async function runFollowupCycle(now: Date = new Date()): Promise<void> {
             conversationId: conversation.id,
             message: sentMessage,
             status: "sent",
+            attemptNumber,
             sentAt: now,
           });
         } catch (err) {
@@ -170,6 +213,7 @@ export async function runFollowupCycle(now: Date = new Date()): Promise<void> {
             conversationId: conversation.id,
             message: windowOpen ? (config.message ?? "") : (template?.name ?? ""),
             status: "failed",
+            attemptNumber,
             sentAt: now,
           });
           const label = err instanceof TemplateError ? err.message : err;

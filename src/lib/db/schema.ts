@@ -919,6 +919,16 @@ export const pipelineFollowup = pgTable(
     successStageId: text("success_stage_id").references(() => pipelineStage.id),
     expiredStageId: text("expired_stage_id").references(() => pipelineStage.id),
     requiresDocument: boolean("requires_document").notNull().default(false),
+    /** Teto de lembretes (status sent/failed) por lead antes de desistir e
+     * mover pra `expiredStageId` — rede de segurança pra quando o lead fica
+     * sendo reaberto e recobrado indefinidamente (ex.: cliente some, volta
+     * a falar algo trivial meses depois, o card reabre — sem esse teto,
+     * cada reabertura permite mais um ciclo completo de lembrete). */
+    maxAttempts: integer("max_attempts").notNull().default(3),
+    /** Conversa sem NENHUMA mensagem há mais que isso não recebe lembrete
+     * — lead "esquecido" há muito tempo provavelmente não é mais um caso
+     * ativo, mandar lembrete nele é ruído. */
+    staleConversationDays: integer("stale_conversation_days").notNull().default(90),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
   (t) => [
@@ -946,6 +956,10 @@ export const followupSend = pgTable(
     status: text("status", {
       enum: ["sent", "failed", "cancelled", "expired"],
     }).notNull(),
+    /** Qual tentativa este envio representa pro lead (1ª, 2ª...) — usado
+     * pra aplicar `pipelineFollowup.maxAttempts` sem precisar contar
+     * `followup_send` toda vez em runtime crítico. */
+    attemptNumber: integer("attempt_number").notNull().default(1),
     sentAt: timestamp("sent_at").notNull().defaultNow(),
     resolvedAt: timestamp("resolved_at"),
   },
