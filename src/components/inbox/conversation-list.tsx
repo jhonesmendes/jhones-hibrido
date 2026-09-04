@@ -18,6 +18,8 @@ import type { ConversationDto } from "@/lib/types";
 import { cn, formatPhone, normalizePhoneInput } from "@/lib/utils";
 import { ContactAvatar } from "@/components/avatar";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { formatTime, previewText } from "./helpers";
 import { HelpLink } from "@/components/docs/help-link";
 
@@ -86,10 +88,11 @@ export function ConversationList({
   onSeeded: () => void;
   /**
    * Cria/abre a conversa de um número digitado na busca (estilo WhatsApp).
+   * `name` vem do modal de cadastro rápido (ver NewConversationDialog).
    * Retorna `false` em falha, para não limpar a busca e deixar o botão
    * reintentável.
    */
-  onStartConversation: (phone: string) => Promise<boolean>;
+  onStartConversation: (phone: string, name?: string) => Promise<boolean>;
   notificationPermission: NotificationPermission | "unsupported";
   onEnableNotifications: () => void;
   /** Preferência pessoal (Configurações → Preferências): grupos aparecem
@@ -100,6 +103,9 @@ export function ConversationList({
   const [filter, setFilter] = useState<"all" | "unread" | "groups">("all");
   const [starting, setStarting] = useState(false);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
+  // Telefone pendente de cadastro — abre o modal de "Nova conversa" (nome
+  // opcional) antes de criar/abrir de vez, em vez de ir direto sem nome.
+  const [newConversationPhone, setNewConversationPhone] = useState<string | null>(null);
 
   async function toggleUnread(c: ConversationDto) {
     setMenuOpenId(null);
@@ -145,12 +151,15 @@ export function ConversationList({
   // Busca parece um telefone → atalho "iniciar conversa" (como no WhatsApp).
   const phoneCandidate = normalizePhoneInput(query);
 
-  async function startConversation() {
-    if (!phoneCandidate || starting) return;
+  async function startConversation(phone: string, name?: string) {
     setStarting(true);
     try {
-      const ok = await onStartConversation(phoneCandidate);
-      if (ok) setQuery("");
+      const ok = await onStartConversation(phone, name);
+      if (ok) {
+        setQuery("");
+        setNewConversationPhone(null);
+      }
+      return ok;
     } finally {
       setStarting(false);
     }
@@ -159,7 +168,7 @@ export function ConversationList({
   const startButton = phoneCandidate && (
     <div className="px-4 py-3">
       <button
-        onClick={() => void startConversation()}
+        onClick={() => setNewConversationPhone(phoneCandidate)}
         disabled={starting}
         className="flex w-full items-center gap-3 rounded-md border border-dashed px-3 py-2.5 text-left text-sm transition-colors hover:border-brand hover:bg-brand-tint"
       >
@@ -427,6 +436,77 @@ export function ConversationList({
             })}
           </ul>
         )}
+      </div>
+
+      {newConversationPhone && (
+        <NewConversationDialog
+          phone={newConversationPhone}
+          starting={starting}
+          onCancel={() => setNewConversationPhone(null)}
+          onConfirm={(name) => void startConversation(newConversationPhone, name)}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Cadastro rápido antes de abrir uma conversa nova via busca por telefone —
+ * pedido explícito pra evitar contato sem nome ("55619..." como nome,
+ * quando ninguém preenche depois). Nome é opcional: sem ele, cai no mesmo
+ * fallback de sempre (telefone como nome, editável depois em Contatos).
+ */
+function NewConversationDialog({
+  phone,
+  starting,
+  onCancel,
+  onConfirm,
+}: {
+  phone: string;
+  starting: boolean;
+  onCancel: () => void;
+  onConfirm: (name?: string) => void;
+}) {
+  const [name, setName] = useState("");
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      onClick={onCancel}
+    >
+      <div
+        className="w-full max-w-sm rounded-lg border bg-card p-5 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="mb-4 font-semibold">Nova conversa</h3>
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="new-conv-phone">Telefone</Label>
+            <Input id="new-conv-phone" value={formatPhone(phone)} readOnly disabled />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="new-conv-name">Nome do cliente (opcional)</Label>
+            <Input
+              id="new-conv-name"
+              autoFocus
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Como o cliente se chama?"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !starting) onConfirm(name.trim() || undefined);
+              }}
+            />
+          </div>
+        </div>
+        <div className="mt-5 flex justify-end gap-2">
+          <Button variant="ghost" disabled={starting} onClick={onCancel}>
+            Cancelar
+          </Button>
+          <Button disabled={starting} onClick={() => onConfirm(name.trim() || undefined)}>
+            <MessageSquarePlus className="h-4 w-4" strokeWidth={1.7} />
+            {starting ? "Abrindo…" : "Abrir conversa"}
+          </Button>
+        </div>
       </div>
     </div>
   );

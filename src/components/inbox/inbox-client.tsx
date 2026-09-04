@@ -342,11 +342,11 @@ export function InboxClient({
   );
 
   const startConversation = useCallback(
-    async (phone: string, claim?: boolean): Promise<boolean> => {
+    async (phone: string, name?: string, claim?: boolean): Promise<boolean> => {
       const res = await fetch("/api/conversations", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ phone, claim }),
+        body: JSON.stringify({ phone, name, claim }),
       }).catch(() => null);
       if (!res?.ok) return false;
       const data = (await res.json()) as {
@@ -528,7 +528,7 @@ export function InboxClient({
           onConfirm={() => {
             const phone = claimPrompt.phone;
             setClaimPrompt(null);
-            void startConversation(phone, true);
+            void startConversation(phone, undefined, true);
           }}
         />
       )}
