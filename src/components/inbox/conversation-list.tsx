@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Bell,
   BellOff,
@@ -106,6 +106,34 @@ export function ConversationList({
   // Telefone pendente de cadastro — abre o modal de "Nova conversa" (nome
   // opcional) antes de criar/abrir de vez, em vez de ir direto sem nome.
   const [newConversationPhone, setNewConversationPhone] = useState<string | null>(null);
+  // IDs de conversa achados pelo texto das mensagens (não só nome/telefone/
+  // última prévia) — preenchido de forma assíncrona/"aos poucos" conforme o
+  // servidor responde, daí a busca "varrer" o histórico em vez de só o que
+  // já está carregado na tela.
+  const [messageMatchIds, setMessageMatchIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    const q = query.trim();
+    if (q.length < 2) {
+      setMessageMatchIds(new Set());
+      return;
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      fetch(`/api/conversations/search-messages?q=${encodeURIComponent(q)}`, {
+        signal: controller.signal,
+      })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d: { conversationIds: string[] } | null) => {
+          if (d) setMessageMatchIds(new Set(d.conversationIds));
+        })
+        .catch(() => {});
+    }, 300);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [query]);
 
   async function toggleUnread(c: ConversationDto) {
     setMenuOpenId(null);
@@ -130,7 +158,8 @@ export function ConversationList({
         (c) =>
           c.contact.name.toLowerCase().includes(q) ||
           c.contact.phone.includes(q) ||
-          (c.preview ?? "").toLowerCase().includes(q)
+          (c.preview ?? "").toLowerCase().includes(q) ||
+          messageMatchIds.has(c.id)
       )
     : conversations;
   // Fora da aba "Grupos", a preferência pessoal decide se grupos entram no

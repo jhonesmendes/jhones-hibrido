@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, isNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, ilike, isNull, or, sql } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { scoped } from "@/lib/db/tenant";
 import { isWindowOpen, windowRemainingMs } from "@/server/inbox/window";
@@ -131,6 +131,69 @@ export async function listConversations(
   return rows.map((r) =>
     serializeConversation(r.conversation, r.contact, r.preview, r.stageName)
   );
+}
+
+/**
+ * IDs de conversa com pelo menos uma mensagem cujo texto contém `queryText`
+ * — busca "dentro da conversa" pedida pelo usuário (a busca da caixa de
+ * entrada, antes, só olhava nome/telefone/última mensagem — texto antigo
+ * enterrado no histórico nunca aparecia). Mesmas regras de visibilidade de
+ * `listConversations` (assignedToFilter/departmentFilter), pra não vazar
+ * texto de conversa que o agente nem deveria ver na lista.
+ */
+export async function searchMessageConversationIds(
+  organizationId: string,
+  queryText: string,
+  assignedToFilter?: string,
+  departmentFilter?: string
+): Promise<string[]> {
+  const db = getDb();
+  const rows = await db
+    .selectDistinct({ id: schema.conversation.id })
+    .from(schema.message)
+    .innerJoin(
+      schema.conversation,
+      eq(schema.message.conversationId, schema.conversation.id)
+    )
+    .innerJoin(
+      schema.contact,
+      eq(schema.conversation.contactId, schema.contact.id)
+    )
+    .where(
+      scoped(
+        schema.conversation.organizationId,
+        organizationId,
+        eq(schema.conversation.isTest, false),
+        ilike(schema.message.text, `%${queryText}%`),
+        assignedToFilter
+          ? or(
+              eq(schema.conversation.assignedTo, assignedToFilter),
+              and(
+                eq(schema.contact.kind, "group"),
+                or(
+                  isNull(schema.conversation.departmentId),
+                  sql`exists (
+                    select 1 from member_department md
+                    where md.member_id = ${assignedToFilter}
+                      and md.department_id = ${schema.conversation.departmentId}
+                  )`
+                )
+              )
+            )
+          : undefined,
+        departmentFilter
+          ? or(
+              eq(schema.conversation.departmentId, departmentFilter),
+              and(
+                eq(schema.contact.kind, "group"),
+                isNull(schema.conversation.departmentId)
+              )
+            )
+          : undefined
+      )
+    )
+    .limit(200);
+  return rows.map((r) => r.id);
 }
 
 /**
