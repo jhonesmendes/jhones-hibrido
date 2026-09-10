@@ -15,7 +15,7 @@ import {
 import {
   getOrCreateContact,
   getOrCreateConversation,
-  resolveDefaultChannelForNewConversation,
+  resolveDefaultChannelInfoForNewConversation,
 } from "@/server/inbox/ingest";
 import { logTrace } from "@/server/observability/trace";
 
@@ -115,22 +115,24 @@ export const POST = withAuth(async (session, req: Request) => {
     activeDepartmentId
   );
   if (!conversation) {
-    const channel = await resolveDefaultChannelForNewConversation(
+    const channelInfo = await resolveDefaultChannelInfoForNewConversation(
       session.organizationId,
       activeDepartmentId
     );
-    if (!channel) {
+    if (!channelInfo) {
       return apiError(
         422,
         "no_channel_connected",
         "Nenhum canal de WhatsApp conectado — conecte um em Configurações → Canais"
       );
     }
+    const { channel, exclusiveToDepartment } = channelInfo;
     conversation = await getOrCreateConversation(
       session.organizationId,
       contact.id,
       channel,
-      activeDepartmentId
+      activeDepartmentId,
+      exclusiveToDepartment
     );
     await logTrace({
       organizationId: session.organizationId,

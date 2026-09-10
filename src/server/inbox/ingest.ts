@@ -185,13 +185,30 @@ export type ConversationChannel =
  * Busca (ou cria) a conversa deste contato NESTE canal específico —
  * um contato pode ter uma conversa por número oficial + uma por canal
  * WhatsApp Web, todas independentes. `departmentId` só se aplica à
- * criação (conversas já existentes mantêm o departamento atual).
+ * criação (conversas já existentes mantêm o departamento atual) — EXCETO
+ * quando `departmentIsExclusive` é true (ver abaixo).
+ *
+ * `departmentIsExclusive`: true quando `channel` é o número PRÓPRIO deste
+ * `departmentId` (resolvido via `getCredentialsByDepartment`/
+ * `resolveDepartmentUnofficialChannelId` em
+ * `resolveDefaultChannelForNewConversation`), não um fallback compartilhado
+ * da organização. Nesse caso, se a conversa já existente neste canal está
+ * com `department_id` de OUTRO departamento — resíduo de uma reatribuição
+ * de número feita depois que a conversa já existia, ou de uma rota de fila
+ * antiga —, corrige na hora: o número é exclusivo, então só pode haver um
+ * departamento dono de verdade (bug real: conversa ficava presa pra sempre
+ * no departamento antigo, fazendo "iniciar conversa" no departamento certo
+ * parecer roubo de conversa de outro departamento). NUNCA aplicar isso a
+ * canal compartilhado (fallback sem número próprio) — ali, departamentos
+ * diferentes genuinamente disputam a mesma conversa, e corrigir sozinho
+ * seria o bug que o diálogo de "assumir conversa" existe pra evitar.
  */
 export async function getOrCreateConversation(
   organizationId: string,
   contactId: string,
   channel: ConversationChannel,
-  departmentId?: string | null
+  departmentId?: string | null,
+  departmentIsExclusive = false
 ) {
   const db = getDb();
   const metaCredentialId = channel.type === "official" ? channel.metaCredentialId : null;
@@ -229,6 +246,16 @@ export async function getOrCreateConversation(
     .limit(1);
   const existing = rows[0];
   if (!existing) throw new Error("conversa não encontrada após upsert");
+
+  if (departmentIsExclusive && departmentId && existing.departmentId !== departmentId) {
+    const updated = await db
+      .update(schema.conversation)
+      .set({ departmentId, updatedAt: new Date() })
+      .where(eq(schema.conversation.id, existing.id))
+      .returning();
+    return updated[0] ?? existing;
+  }
+
   return existing;
 }
 
@@ -248,16 +275,47 @@ export async function resolveDefaultChannelForNewConversation(
   organizationId: string,
   departmentId?: string | null
 ): Promise<ConversationChannel | null> {
+  return (await resolveDefaultChannelInfoForNewConversation(organizationId, departmentId))?.channel ?? null;
+}
+
+/**
+ * Igual a `resolveDefaultChannelForNewConversation`, mas também informa se
+ * o canal resolvido é EXCLUSIVO deste departamento (número próprio) ou um
+ * fallback compartilhado da organização — usado por quem cria a conversa
+ * pra decidir se pode corrigir com segurança um `department_id` desatualizado
+ * numa conversa já existente nesse canal (ver `getOrCreateConversation`).
+ */
+export async function resolveDefaultChannelInfoForNewConversation(
+  organizationId: string,
+  departmentId?: string | null
+): Promise<{ channel: ConversationChannel; exclusiveToDepartment: boolean } | null> {
   if (departmentId) {
     const deptOfficial = await getCredentialsByDepartment(organizationId, departmentId);
-    if (deptOfficial) return { type: "official", metaCredentialId: deptOfficial.id };
+    if (deptOfficial) {
+      return {
+        channel: { type: "official", metaCredentialId: deptOfficial.id },
+        exclusiveToDepartment: true,
+      };
+    }
     const deptUnofficialChannelId = await resolveDepartmentUnofficialChannelId(departmentId);
-    if (deptUnofficialChannelId) return { type: "unofficial", unofficialChannelId: deptUnofficialChannelId };
+    if (deptUnofficialChannelId) {
+      return {
+        channel: { type: "unofficial", unofficialChannelId: deptUnofficialChannelId },
+        exclusiveToDepartment: true,
+      };
+    }
   }
   const official = await getCredentialsByOrg(organizationId);
-  if (official) return { type: "official", metaCredentialId: official.id };
+  if (official) {
+    return {
+      channel: { type: "official", metaCredentialId: official.id },
+      exclusiveToDepartment: false,
+    };
+  }
   const unofficialChannelId = await resolveDefaultUnofficialChannelId(organizationId);
-  if (unofficialChannelId) return { type: "unofficial", unofficialChannelId };
+  if (unofficialChannelId) {
+    return { channel: { type: "unofficial", unofficialChannelId }, exclusiveToDepartment: false };
+  }
   return null;
 }
 
