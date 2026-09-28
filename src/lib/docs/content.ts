@@ -56,9 +56,47 @@ export const DOC_SECTIONS: DocSection[] = [
       {
         type: "fields",
         items: [
-          { name: "Follow-up automático", desc: "reenvia uma mensagem sozinho quando um lead fica parado numa etapa-gatilho por tempo demais. Configurado em Configurações → Pipeline: etapa que ativa, intervalo, mensagem, e para onde o lead vai em caso de sucesso ou expiração." },
+          { name: "Follow-up automático", desc: "reenvia uma mensagem sozinho quando um lead fica parado numa etapa-gatilho por tempo demais — ver seção própria \"Follow-up automático\" abaixo para todos os detalhes." },
           { name: "Intervalo do follow-up", desc: "nunca é um valor fixo escondido no código — sempre editável por você." },
         ],
+      },
+    ],
+  },
+  {
+    slug: "followup",
+    title: "Follow-up automático",
+    summary: "Cobrança automática de leads parados numa etapa, sem precisar de ninguém lembrar manualmente.",
+    blocks: [
+      {
+        type: "p",
+        text: "Fica dentro de Pipeline → botão \"Follow-up\" (ou Configurações → Pipeline, dependendo da tela). Quando um lead entra numa etapa configurada como \"gatilho\" e fica parado ali (sem o cliente responder) por mais tempo que o intervalo definido, o sistema manda um lembrete sozinho — sem precisar de ninguém de olho no funil o dia inteiro. Roda em ciclos automáticos no próprio processo do CRM (não depende de nenhum serviço externo).",
+      },
+      {
+        type: "fields",
+        items: [
+          { name: "Habilitar follow-up automático", desc: "liga/desliga o recurso inteiro para o pipeline atual. Desligado, nada nesta tela tem efeito." },
+          { name: "Etapa gatilho", desc: "a etapa que, ao ficar parada, começa a contar o prazo do lembrete. Só etapas \"abertas\" (não etapas de ganho/perda) aparecem na lista." },
+          { name: "Intervalo + Unidade", desc: "quanto tempo o lead precisa ficar parado na etapa gatilho, sem resposta do cliente, antes do lembrete disparar (em horas ou dias). Também é o prazo de tolerância usado para decidir quando o lead \"expira\" (ver campo Etapa ao expirar)." },
+          { name: "Mensagem de follow-up (janela de 24h aberta)", desc: "texto livre, enviado quando a janela de atendimento do WhatsApp Oficial ainda está aberta (cliente escreveu nas últimas 24h) — no WhatsApp Web não existe essa janela, então esta mensagem sempre pode ser usada." },
+          { name: "Modelo de follow-up (janela fechada)", desc: "modelo aprovado pela Meta, usado quando a janela de 24h já fechou e o canal é o Oficial (a Meta não permite texto livre nesse caso). Só aceita modelos com no máximo 1 variável — ela é preenchida sozinha com o nome do contato. Sem um modelo configurado aqui, um lead cuja janela está fechada simplesmente não recebe lembrete (fica só um aviso no log do servidor, sem contar como tentativa nem mudar o lead de etapa — não é justo penalizar o cliente por uma configuração que falta)." },
+          { name: "Aguarda o recebimento de um documento/imagem", desc: "quando marcado, o lembrete é sobre receber um arquivo do cliente (ex.: comprovante de pagamento). Assim que o cliente manda qualquer imagem/documento na conversa, o lead é movido direto para a \"Etapa ao receber documento\" e o lembrete pendente é cancelado — sem esperar o próximo ciclo." },
+          { name: "Etapa ao receber documento", desc: "para onde o lead vai quando o documento esperado chega (normalmente uma etapa de sucesso, tipo \"Ganho\")." },
+          { name: "Etapa ao expirar sem resposta", desc: "para onde o lead vai se ninguém responder mesmo depois do lembrete, esperando mais um intervalo inteiro de tolerância (ex.: 4h para lembrar + 4h de tolerância = 8h sem resposta até expirar)." },
+          { name: "Máximo de lembretes por lead", desc: "depois de mandar esse número de lembretes sem resposta, o sistema desiste: move o lead direto para a \"Etapa ao expirar\" (se configurada) e para de tentar. Conta lembretes da HISTÓRIA INTEIRA do lead, não só da passagem atual pela etapa — evita ficar cobrando pra sempre um lead que reabre e cai na etapa gatilho de novo." },
+          { name: "Ignorar conversa parada há mais de (dias)", desc: "conversas mais antigas que esse prazo (sem nenhuma mensagem, em nenhuma direção) não recebem lembrete — provavelmente não é mais um caso ativo, e mandar mensagem ali seria ruído." },
+        ],
+      },
+      {
+        type: "tip",
+        text: "O horário de funcionamento respeitado pelo follow-up é o mesmo configurado em Configurações → Departamentos → Fila e roteamento → Horário de funcionamento — e vale mesmo com a fila desligada. Fora do expediente, o lembrete simplesmente espera: não manda de madrugada, e não perde a vez — assim que o expediente reabre, o próximo ciclo já dispara.",
+      },
+      {
+        type: "tip",
+        text: "Um lead marcado como \"Ganho\" nunca reabre sozinho, mesmo que o cliente escreva de novo depois — só uma etapa de \"Perdido\" reabre automaticamente ao ouvir do contato. Isso evita que uma mensagem trivial do cliente (\"oi\", \"obrigado\") depois de um follow-up já concluído reative lembretes que não fazem mais sentido.",
+      },
+      {
+        type: "warning",
+        text: "O follow-up só considera UMA conversa por lead — a mais recentemente ativa no departamento do lead. Um contato com conversas em mais de um canal/departamento não recebe lembrete duplicado.",
       },
     ],
   },

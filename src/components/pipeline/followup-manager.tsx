@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { HelpLink } from "@/components/docs/help-link";
 
 type FollowupConfig = {
   enabled: boolean;
@@ -106,7 +107,10 @@ export function FollowupManager({
         className="w-full max-w-lg rounded-lg border bg-card p-5 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="mb-1 font-semibold">Follow-up automático</h3>
+        <div className="mb-1 flex items-center gap-1">
+          <h3 className="font-semibold">Follow-up automático</h3>
+          <HelpLink slug="followup" />
+        </div>
         <p className="mb-4 text-xs text-muted-foreground">
           Envia uma mensagem sozinho quando um lead fica parado numa etapa sem
           responder. Nada aqui é fixo — tudo é configurável.

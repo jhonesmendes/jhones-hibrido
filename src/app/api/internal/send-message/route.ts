@@ -1,35 +1,37 @@
+// src/app/api/internal/send-template/route.ts
+//
+// Rota interna para disparar um template Meta aprovado a partir de um
+// conversationId existente. Usada pelo N8N para recobrança de follow-ups
+// sem resposta.
+//
+// POST /api/internal/send-template
+// Headers: x-internal-key: <INTERNAL_API_KEY>
+// Body:
+//   {
+//     "conversationId": "cv_...",   // conversa existente do lead
+//     "templateId":     "tpl_...",  // ID interno do template (tabela template)
+//     "variables":      ["valor1"]  // array posicional — 1 item por {{N}} no body (pode ser [])
+//   }
+//
+// Resposta 200: { success: true, messageId: "<wa_message_id>" }
+
 import { timingSafeEqual } from "node:crypto";
 import { z } from "zod";
+import { eq, and } from "drizzle-orm";
 import { apiError } from "@/lib/api";
 import { getEnv } from "@/lib/env";
 import { getDb, schema } from "@/lib/db";
-import { getCredentialsByOrg } from "@/server/whatsapp/credentials";
-import { normalizeRecipient } from "@/lib/meta/client";
-import { callGraphSend, SendError } from "@/server/inbox/send";
 import { verifyApiKey } from "@/server/integrations/api-keys";
+import { callGraphSend, SendError } from "@/server/inbox/send";
+import { normalizeRecipient } from "@/lib/meta/client";
 
 export const dynamic = "force-dynamic";
 
-/**
- * API interna pra automações externas (N8N, ERP, qualquer integração por
- * token) enviarem texto livre pelo número oficial já conectado nesta
- * instância — autenticada por chave (`x-internal-key`), nunca por sessão de
- * usuário. Duas formas de chave são aceitas:
- *
- * 1) Chave nomeada e revogável, gerada em Configurações → Integrações (uma
- *    por sistema externo, ex. "Sankhya" — ver `src/server/integrations/
- *    api-keys.ts`). Preferida: cada integração tem a própria chave,
- *    revogável sem afetar as outras.
- * 2) `INTERNAL_API_KEY` (env var) — mecanismo legado, mantido só pra não
- *    quebrar quem já configurou assim antes das chaves nomeadas existirem.
- *
- * Deliberadamente simples (passthrough): não cria/atualiza conversa nem
- * mensagem no CRM (a mensagem não aparece na Caixa de entrada) e não checa a
- * janela de 24h da Meta — quem chama essa rota é responsável por só usá-la
- * dentro de uma janela de conversa válida ou com conteúdo permitido fora
- * dela, senão a Meta recusa o envio do lado dela.
- */
-async function resolveCaller(req: Request): Promise<{ organizationId: string } | Response> {
+// ── Autenticação (mesmo padrão de send-message/route.ts) ─────────────────────
+
+async function resolveCaller(
+  req: Request
+): Promise<{ organizationId: string } | Response> {
   const header = req.headers.get("x-internal-key") ?? "";
   if (!header) return apiError(401, "unauthorized", "Chave inválida");
 
@@ -49,7 +51,6 @@ async function resolveCaller(req: Request): Promise<{ organizationId: string } |
   return apiError(401, "unauthorized", "Chave inválida");
 }
 
-/** A org desta instância — sempre a mais antiga (só existe 1 de verdade). */
 async function getInstanceOrganizationId(): Promise<string | null> {
   const db = getDb();
   const rows = await db
@@ -60,45 +61,150 @@ async function getInstanceOrganizationId(): Promise<string | null> {
   return rows[0]?.id ?? null;
 }
 
-const SEND_ERROR_STATUS: Record<SendError["code"], number> = {
-  sandbox_violation: 403,
-  not_connected: 409,
-  recipient_not_found: 404,
-  reconnect_required: 409,
-  window_closed: 422,
-  meta_error: 422,
-  meta_unavailable: 503,
-};
+// ── Schema do body ────────────────────────────────────────────────────────────
 
 const bodySchema = z.object({
-  to: z.string().trim().min(8).max(20),
-  text: z.string().trim().min(1).max(4096),
+  conversationId: z.string().trim().min(1),
+  templateId: z.string().trim().min(1),
+  variables: z.array(z.string()).optional().default([]),
 });
 
+// ── Mapa de status HTTP para erros conhecidos do callGraphSend ────────────────
+
+const SEND_ERROR_STATUS: Record<SendError["code"], number> = {
+  sandbox_violation:   403,
+  not_connected:       409,
+  recipient_not_found: 404,
+  reconnect_required:  409,
+  window_closed:       422,
+  meta_error:          422,
+  meta_unavailable:    503,
+};
+
+// ── Handler ───────────────────────────────────────────────────────────────────
+
 export async function POST(req: Request) {
+  // 1. Autenticação
   const caller = await resolveCaller(req);
   if (caller instanceof Response) return caller;
+  const { organizationId } = caller;
 
+  // 2. Parse do body
   const body = bodySchema.safeParse(await req.json().catch(() => null));
   if (!body.success) {
-    return apiError(422, "invalid_body", "Corpo inválido — espera { to, text }");
+    const msg = body.error.issues
+      .map((i) => `${i.path.join(".") || "body"}: ${i.message}`)
+      .join("; ");
+    return apiError(422, "invalid_body", msg);
   }
 
-  const creds = await getCredentialsByOrg(caller.organizationId);
+  const { conversationId, templateId, variables } = body.data;
+  const db = getDb();
+
+  // 3. Busca conversa + contato (precisa do phone para o "to")
+  const convRow = await db
+    .select({
+      id:             schema.conversation.id,
+      organizationId: schema.conversation.organizationId,
+      contactId:      schema.conversation.contactId,
+      isTest:         schema.conversation.isTest,
+      contactPhone:   schema.contact.phone,
+    })
+    .from(schema.conversation)
+    .innerJoin(
+      schema.contact,
+      eq(schema.conversation.contactId, schema.contact.id)
+    )
+    .where(
+      and(
+        eq(schema.conversation.id, conversationId),
+        eq(schema.conversation.organizationId, organizationId)
+      )
+    )
+    .limit(1)
+    .then((r) => r[0] ?? null);
+
+  if (!convRow) {
+    return apiError(404, "not_found", "Conversa não encontrada");
+  }
+  if (convRow.isTest) {
+    return apiError(403, "sandbox_violation", "Conversa de teste: envio real proibido");
+  }
+
+  // 4. Busca o template + credencial Meta vinculada
+  const tplRow = await db
+    .select({
+      id:           schema.template.id,
+      name:         schema.template.name,
+      language:     schema.template.language,
+      body:         schema.template.body,
+      status:       schema.template.status,
+      credentialId: schema.template.credentialId,
+    })
+    .from(schema.template)
+    .where(
+      and(
+        eq(schema.template.id, templateId),
+        eq(schema.template.organizationId, organizationId)
+      )
+    )
+    .limit(1)
+    .then((r) => r[0] ?? null);
+
+  if (!tplRow) {
+    return apiError(404, "not_found", "Template não encontrado");
+  }
+  if (tplRow.status !== "approved") {
+    return apiError(422, "invalid", "Só é possível enviar templates aprovados");
+  }
+
+  // 5. Resolve credencial Meta: prefere a vinculada ao template,
+  //    cai na credencial ativa da org se não tiver
+  let creds: Awaited<ReturnType<typeof getCredentialById>> | null = null;
+
+  if (tplRow.credentialId) {
+    creds = await getCredentialById(tplRow.credentialId, organizationId, db);
+  }
   if (!creds) {
-    return apiError(409, "not_connected", "Nenhum número oficial conectado nesta instância");
+    // fallback: primeira credencial ativa da org
+    creds = await getActiveCredential(organizationId, db);
+  }
+  if (!creds) {
+    return apiError(409, "not_connected", "Nenhum número oficial conectado");
   }
   if (creds.status === "reconnect_required") {
     return apiError(409, "reconnect_required", "O número oficial precisa ser reconectado");
   }
 
+  // 6. Monta o payload do template para a Graph API
+  //    Conta variáveis {{N}} no body do template
+  const varCount = countTemplateVariables(tplRow.body);
+  const components =
+    varCount > 0
+      ? [
+          {
+            type: "body",
+            parameters: Array.from({ length: varCount }, (_, i) => ({
+              type: "text",
+              text: (variables[i] ?? "").trim(),
+            })),
+          },
+        ]
+      : undefined;
+
+  // 7. Dispara via callGraphSend (mesmo helper usado em send-message)
   try {
     const messageId = await callGraphSend(creds, {
       messaging_product: "whatsapp",
-      to: normalizeRecipient(body.data.to),
-      type: "text",
-      text: { body: body.data.text },
+      to: normalizeRecipient(convRow.contactPhone),
+      type: "template",
+      template: {
+        name: tplRow.name,
+        language: { code: tplRow.language },
+        ...(components ? { components } : {}),
+      },
     });
+
     return Response.json({ success: true, messageId });
   } catch (err) {
     if (err instanceof SendError) {
@@ -106,4 +212,47 @@ export async function POST(req: Request) {
     }
     throw err;
   }
+}
+
+// ── Helpers de banco ──────────────────────────────────────────────────────────
+
+type Db = ReturnType<typeof getDb>;
+
+async function getCredentialById(id: string, organizationId: string, db: Db) {
+  const rows = await db
+    .select()
+    .from(schema.metaCredentials)
+    .where(
+      and(
+        eq(schema.metaCredentials.id, id),
+        eq(schema.metaCredentials.organizationId, organizationId),
+        eq(schema.metaCredentials.isActive, true)
+      )
+    )
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+async function getActiveCredential(organizationId: string, db: Db) {
+  const rows = await db
+    .select()
+    .from(schema.metaCredentials)
+    .where(
+      and(
+        eq(schema.metaCredentials.organizationId, organizationId),
+        eq(schema.metaCredentials.isActive, true)
+      )
+    )
+    .orderBy(schema.metaCredentials.createdAt)
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+/** Conta quantas variáveis {{N}} existem no body do template. */
+function countTemplateVariables(body: string): number {
+  const matches = body.match(/\{\{\d+\}\}/g) ?? [];
+  return matches.reduce((max, m) => {
+    const n = Number(m.replace(/\D/g, ""));
+    return Math.max(max, n);
+  }, 0);
 }
