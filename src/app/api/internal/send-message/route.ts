@@ -24,6 +24,7 @@ import { getDb, schema } from "@/lib/db";
 import { verifyApiKey } from "@/server/integrations/api-keys";
 import { callGraphSend, SendError } from "@/server/inbox/send";
 import { normalizeRecipient } from "@/lib/meta/client";
+import { getCredentialsByOrg } from "@/server/whatsapp/credentials";
 
 export const dynamic = "force-dynamic";
 
@@ -131,15 +132,14 @@ export async function POST(req: Request) {
     return apiError(403, "sandbox_violation", "Conversa de teste: envio real proibido");
   }
 
-  // 4. Busca o template + credencial Meta vinculada
+  // 4. Busca o template
   const tplRow = await db
     .select({
-      id:           schema.template.id,
-      name:         schema.template.name,
-      language:     schema.template.language,
-      body:         schema.template.body,
-      status:       schema.template.status,
-      credentialId: schema.template.credentialId,
+      id:       schema.template.id,
+      name:     schema.template.name,
+      language: schema.template.language,
+      body:     schema.template.body,
+      status:   schema.template.status,
     })
     .from(schema.template)
     .where(
@@ -158,17 +158,9 @@ export async function POST(req: Request) {
     return apiError(422, "invalid", "Só é possível enviar templates aprovados");
   }
 
-  // 5. Resolve credencial Meta: prefere a vinculada ao template,
-  //    cai na credencial ativa da org se não tiver
-  let creds: Awaited<ReturnType<typeof getCredentialById>> | null = null;
-
-  if (tplRow.credentialId) {
-    creds = await getCredentialById(tplRow.credentialId, organizationId, db);
-  }
-  if (!creds) {
-    // fallback: primeira credencial ativa da org
-    creds = await getActiveCredential(organizationId, db);
-  }
+  // 5. Resolve credencial Meta com token já decriptado (via getCredentialsByOrg,
+  //    que usa o mesmo fluxo de send-message e internamente descriptografa o token)
+  const creds = await getCredentialsByOrg(organizationId);
   if (!creds) {
     return apiError(409, "not_connected", "Nenhum número oficial conectado");
   }
@@ -212,40 +204,6 @@ export async function POST(req: Request) {
     }
     throw err;
   }
-}
-
-// ── Helpers de banco ──────────────────────────────────────────────────────────
-
-type Db = ReturnType<typeof getDb>;
-
-async function getCredentialById(id: string, organizationId: string, db: Db) {
-  const rows = await db
-    .select()
-    .from(schema.metaCredentials)
-    .where(
-      and(
-        eq(schema.metaCredentials.id, id),
-        eq(schema.metaCredentials.organizationId, organizationId),
-        eq(schema.metaCredentials.isActive, true)
-      )
-    )
-    .limit(1);
-  return rows[0] ?? null;
-}
-
-async function getActiveCredential(organizationId: string, db: Db) {
-  const rows = await db
-    .select()
-    .from(schema.metaCredentials)
-    .where(
-      and(
-        eq(schema.metaCredentials.organizationId, organizationId),
-        eq(schema.metaCredentials.isActive, true)
-      )
-    )
-    .orderBy(schema.metaCredentials.createdAt)
-    .limit(1);
-  return rows[0] ?? null;
 }
 
 /** Conta quantas variáveis {{N}} existem no body do template. */
