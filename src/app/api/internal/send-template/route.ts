@@ -25,6 +25,7 @@ import { verifyApiKey } from "@/server/integrations/api-keys";
 import { callGraphSend, SendError } from "@/server/inbox/send";
 import { normalizeRecipient } from "@/lib/meta/client";
 import { getCredentialsByOrg } from "@/server/whatsapp/credentials";
+import { generateId } from "@/lib/id";
 
 export const dynamic = "force-dynamic";
 
@@ -158,8 +159,7 @@ export async function POST(req: Request) {
     return apiError(422, "invalid", "Só é possível enviar templates aprovados");
   }
 
-  // 5. Resolve credencial Meta com token já decriptado (via getCredentialsByOrg,
-  //    que usa o mesmo fluxo de send-message e internamente descriptografa o token)
+  // 5. Resolve credencial Meta com token já decriptado
   const creds = await getCredentialsByOrg(organizationId);
   if (!creds) {
     return apiError(409, "not_connected", "Nenhum número oficial conectado");
@@ -169,7 +169,6 @@ export async function POST(req: Request) {
   }
 
   // 6. Monta o payload do template para a Graph API
-  //    Conta variáveis {{N}} no body do template
   const varCount = countTemplateVariables(tplRow.body);
   const components =
     varCount > 0
@@ -184,7 +183,10 @@ export async function POST(req: Request) {
         ]
       : undefined;
 
-  // 7. Dispara via callGraphSend (mesmo helper usado em send-message)
+  // 7. Resolve o texto final do template substituindo variáveis
+  const resolvedText = resolveTemplateText(tplRow.body, variables);
+
+  // 8. Dispara via callGraphSend
   try {
     const messageId = await callGraphSend(creds, {
       messaging_product: "whatsapp",
@@ -197,6 +199,21 @@ export async function POST(req: Request) {
       },
     });
 
+    // 9. Salva a mensagem na conversa para aparecer na caixa de entrada
+    await db.insert(schema.message).values({
+      id:              generateId("msg"),
+      organizationId,
+      conversationId,
+      waMessageId:     messageId,
+      direction:       "out",
+      type:            "template",
+      text:            resolvedText,
+      status:          "sent",
+      aiGenerated:     false,
+      metaCategory:    "utility",
+      createdAt:       new Date(),
+    });
+
     return Response.json({ success: true, messageId });
   } catch (err) {
     if (err instanceof SendError) {
@@ -206,6 +223,8 @@ export async function POST(req: Request) {
   }
 }
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
 /** Conta quantas variáveis {{N}} existem no body do template. */
 function countTemplateVariables(body: string): number {
   const matches = body.match(/\{\{\d+\}\}/g) ?? [];
@@ -214,4 +233,8 @@ function countTemplateVariables(body: string): number {
     return Math.max(max, n);
   }, 0);
 }
-/** validar buid */
+
+/** Substitui {{1}}, {{2}}... pelo valor real para salvar como texto legível. */
+function resolveTemplateText(body: string, variables: string[]): string {
+  return body.replace(/\{\{(\d+)\}\}/g, (_, n) => variables[Number(n) - 1] ?? "");
+}
