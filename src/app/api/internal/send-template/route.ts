@@ -1,21 +1,6 @@
 // src/app/api/internal/send-template/route.ts
-//
-// Rota interna para disparar um template Meta aprovado a partir de um
-// conversationId existente. Usada pelo N8N para recobrança de follow-ups
-// sem resposta.
-//
-// POST /api/internal/send-template
-// Headers: x-internal-key: <INTERNAL_API_KEY>
-// Body:
-//   {
-//     "conversationId": "cv_...",   // conversa existente do lead
-//     "templateId":     "tpl_...",  // ID interno do template (tabela template)
-//     "variables":      ["valor1"]  // array posicional — 1 item por {{N}} no body (pode ser [])
-//   }
-//
-// Resposta 200: { success: true, messageId: "<wa_message_id>" }
-
 import { timingSafeEqual } from "node:crypto";
+import { customAlphabet } from "nanoid";
 import { z } from "zod";
 import { eq, and } from "drizzle-orm";
 import { apiError } from "@/lib/api";
@@ -25,11 +10,11 @@ import { verifyApiKey } from "@/server/integrations/api-keys";
 import { callGraphSend, SendError } from "@/server/inbox/send";
 import { normalizeRecipient } from "@/lib/meta/client";
 import { getCredentialsByOrg } from "@/server/whatsapp/credentials";
-import { generateId } from "@/lib/id";
+
+const nanoid = customAlphabet("0123456789abcdefghijklmnopqrstuvwxyz", 20);
+const genId = (prefix: string) => `${prefix}_${nanoid()}`;
 
 export const dynamic = "force-dynamic";
-
-// ── Autenticação (mesmo padrão de send-message/route.ts) ─────────────────────
 
 async function resolveCaller(
   req: Request
@@ -63,15 +48,11 @@ async function getInstanceOrganizationId(): Promise<string | null> {
   return rows[0]?.id ?? null;
 }
 
-// ── Schema do body ────────────────────────────────────────────────────────────
-
 const bodySchema = z.object({
   conversationId: z.string().trim().min(1),
   templateId: z.string().trim().min(1),
   variables: z.array(z.string()).optional().default([]),
 });
-
-// ── Mapa de status HTTP para erros conhecidos do callGraphSend ────────────────
 
 const SEND_ERROR_STATUS: Record<SendError["code"], number> = {
   sandbox_violation:   403,
@@ -83,15 +64,11 @@ const SEND_ERROR_STATUS: Record<SendError["code"], number> = {
   meta_unavailable:    503,
 };
 
-// ── Handler ───────────────────────────────────────────────────────────────────
-
 export async function POST(req: Request) {
-  // 1. Autenticação
   const caller = await resolveCaller(req);
   if (caller instanceof Response) return caller;
   const { organizationId } = caller;
 
-  // 2. Parse do body
   const body = bodySchema.safeParse(await req.json().catch(() => null));
   if (!body.success) {
     const msg = body.error.issues
@@ -103,7 +80,6 @@ export async function POST(req: Request) {
   const { conversationId, templateId, variables } = body.data;
   const db = getDb();
 
-  // 3. Busca conversa + contato (precisa do phone para o "to")
   const convRow = await db
     .select({
       id:             schema.conversation.id,
@@ -126,14 +102,9 @@ export async function POST(req: Request) {
     .limit(1)
     .then((r) => r[0] ?? null);
 
-  if (!convRow) {
-    return apiError(404, "not_found", "Conversa não encontrada");
-  }
-  if (convRow.isTest) {
-    return apiError(403, "sandbox_violation", "Conversa de teste: envio real proibido");
-  }
+  if (!convRow) return apiError(404, "not_found", "Conversa não encontrada");
+  if (convRow.isTest) return apiError(403, "sandbox_violation", "Conversa de teste: envio real proibido");
 
-  // 4. Busca o template
   const tplRow = await db
     .select({
       id:       schema.template.id,
@@ -152,41 +123,21 @@ export async function POST(req: Request) {
     .limit(1)
     .then((r) => r[0] ?? null);
 
-  if (!tplRow) {
-    return apiError(404, "not_found", "Template não encontrado");
-  }
-  if (tplRow.status !== "approved") {
-    return apiError(422, "invalid", "Só é possível enviar templates aprovados");
-  }
+  if (!tplRow) return apiError(404, "not_found", "Template não encontrado");
+  if (tplRow.status !== "approved") return apiError(422, "invalid", "Só é possível enviar templates aprovados");
 
-  // 5. Resolve credencial Meta com token já decriptado
   const creds = await getCredentialsByOrg(organizationId);
-  if (!creds) {
-    return apiError(409, "not_connected", "Nenhum número oficial conectado");
-  }
-  if (creds.status === "reconnect_required") {
-    return apiError(409, "reconnect_required", "O número oficial precisa ser reconectado");
-  }
+  if (!creds) return apiError(409, "not_connected", "Nenhum número oficial conectado");
+  if (creds.status === "reconnect_required") return apiError(409, "reconnect_required", "O número oficial precisa ser reconectado");
 
-  // 6. Monta o payload do template para a Graph API
   const varCount = countTemplateVariables(tplRow.body);
   const components =
     varCount > 0
-      ? [
-          {
-            type: "body",
-            parameters: Array.from({ length: varCount }, (_, i) => ({
-              type: "text",
-              text: (variables[i] ?? "").trim(),
-            })),
-          },
-        ]
+      ? [{ type: "body", parameters: Array.from({ length: varCount }, (_, i) => ({ type: "text", text: (variables[i] ?? "").trim() })) }]
       : undefined;
 
-  // 7. Resolve o texto final do template substituindo variáveis
   const resolvedText = resolveTemplateText(tplRow.body, variables);
 
-  // 8. Dispara via callGraphSend
   try {
     const messageId = await callGraphSend(creds, {
       messaging_product: "whatsapp",
@@ -199,19 +150,18 @@ export async function POST(req: Request) {
       },
     });
 
-    // 9. Salva a mensagem na conversa para aparecer na caixa de entrada
     await db.insert(schema.message).values({
-      id:              generateId("msg"),
+      id:           genId("msg"),
       organizationId,
       conversationId,
-      waMessageId:     messageId,
-      direction:       "out",
-      type:            "template",
-      text:            resolvedText,
-      status:          "sent",
-      aiGenerated:     false,
-      metaCategory:    "utility",
-      createdAt:       new Date(),
+      waMessageId:  messageId,
+      direction:    "out",
+      type:         "template",
+      text:         resolvedText,
+      status:       "sent",
+      aiGenerated:  false,
+      metaCategory: "utility",
+      createdAt:    new Date(),
     });
 
     return Response.json({ success: true, messageId });
@@ -223,9 +173,6 @@ export async function POST(req: Request) {
   }
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-/** Conta quantas variáveis {{N}} existem no body do template. */
 function countTemplateVariables(body: string): number {
   const matches = body.match(/\{\{\d+\}\}/g) ?? [];
   return matches.reduce((max, m) => {
@@ -234,7 +181,6 @@ function countTemplateVariables(body: string): number {
   }, 0);
 }
 
-/** Substitui {{1}}, {{2}}... pelo valor real para salvar como texto legível. */
 function resolveTemplateText(body: string, variables: string[]): string {
   return body.replace(/\{\{(\d+)\}\}/g, (_, n) => variables[Number(n) - 1] ?? "");
-}
+}   
