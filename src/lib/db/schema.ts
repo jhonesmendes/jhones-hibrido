@@ -265,7 +265,9 @@ export const agentStatus = pgTable("agent_status", {
  * em `src/server/queue/manager.ts`, Modo B (seleção pelo cliente) em
  * `src/server/queue/selection.ts`. Ver ROADMAP_queue_routing.md.
  */
-export const conversationQueue = pgTable("conversation_queue", {
+export const conversationQueue = pgTable(
+  "conversation_queue",
+  {
   id: text("id").primaryKey(),
   conversationId: text("conversation_id")
     .notNull()
@@ -293,7 +295,12 @@ export const conversationQueue = pgTable("conversation_queue", {
   selectionOptions: jsonb("selection_options"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
+  },
+  (t) => [
+    index("conversation_queue_conv_status_idx").on(t.conversationId, t.status),
+    index("conversation_queue_dept_status_idx").on(t.departmentId, t.status),
+  ]
+);
 
 /** Vínculo de membro a departamento, com role específico do departamento. */
 export const memberDepartment = pgTable(
@@ -599,6 +606,11 @@ export const message = pgTable(
       t.conversationId,
       t.createdAt
     ),
+    // Sem `organization_id` na frente: a prévia da lista de conversas
+    // (`listConversations`) busca a última mensagem só por conversation_id,
+    // e o índice acima não serve pra isso — virava seq scan na tabela
+    // inteira POR conversa (62s com 3k conversas / 300k mensagens).
+    index("message_conv_created_idx").on(t.conversationId, t.createdAt),
   ]
 );
 

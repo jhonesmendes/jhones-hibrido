@@ -358,6 +358,13 @@
       "when": 1788445975599,
       "tag": "0050_rapid_wolfsbane",
       "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1793040507113,
+      "tag": "0051_wealthy_catseye",
+      "breakpoints": true
     }
   ]
 }
