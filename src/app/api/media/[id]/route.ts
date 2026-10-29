@@ -16,7 +16,46 @@ type Params = { params: Promise<{ id: string }> };
 
 const CACHE = "private, max-age=3600";
 
-export const GET = withAuth(async (session, _req: Request, ctx: Params) => {
+/**
+ * `<audio>`/`<video>` pedem a mídia em fatias (`Range: bytes=…`) — sem
+ * responder 206, Safari/iOS se recusa a tocar e nos demais o seek não
+ * funciona.
+ */
+function serveBytes(req: Request, bytes: Buffer, mimeType: string): Response {
+  const total = bytes.length;
+  const baseHeaders = {
+    "Content-Type": mimeType,
+    "Cache-Control": CACHE,
+    "Accept-Ranges": "bytes",
+  };
+  const match = /^bytes=(\d*)-(\d*)$/.exec(req.headers.get("range") ?? "");
+  if (!match || (!match[1] && !match[2])) {
+    return new Response(new Uint8Array(bytes), {
+      headers: { ...baseHeaders, "Content-Length": String(total) },
+    });
+  }
+
+  // `bytes=-N` = últimos N bytes; `bytes=N-` = do N até o fim.
+  const start = match[1] ? Number(match[1]) : Math.max(0, total - Number(match[2]));
+  const end = match[1] && match[2] ? Math.min(Number(match[2]), total - 1) : total - 1;
+  if (start >= total || start > end) {
+    return new Response(null, {
+      status: 416,
+      headers: { ...baseHeaders, "Content-Range": `bytes */${total}` },
+    });
+  }
+
+  return new Response(new Uint8Array(bytes.subarray(start, end + 1)), {
+    status: 206,
+    headers: {
+      ...baseHeaders,
+      "Content-Length": String(end - start + 1),
+      "Content-Range": `bytes ${start}-${end}/${total}`,
+    },
+  });
+}
+
+export const GET = withAuth(async (session, req: Request, ctx: Params) => {
   const { id } = await ctx.params;
   const db = getDb();
 
@@ -47,12 +86,7 @@ export const GET = withAuth(async (session, _req: Request, ctx: Params) => {
     const media = mediaRows[0];
     if (!media) return apiError(404, "media_unavailable", "Mídia indisponível");
 
-    return new Response(Buffer.from(media.dataBase64, "base64"), {
-      headers: {
-        "Content-Type": media.mimeType,
-        "Cache-Control": CACHE,
-      },
-    });
+    return serveBytes(req, Buffer.from(media.dataBase64, "base64"), media.mimeType);
   }
 
   const res = await fetch(message.mediaUrl, {

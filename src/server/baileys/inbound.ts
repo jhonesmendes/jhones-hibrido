@@ -176,26 +176,45 @@ function extractMimeType(message: proto.IMessage | null | undefined): string | n
   );
 }
 
+const MEDIA_DOWNLOAD_ATTEMPTS = 2;
+
 /**
  * Baixa e descriptografa a mídia direto do CDN do WhatsApp (o Baileys já
  * traz a chave de descriptografia na própria mensagem). Autohospedado por
  * constituição (sem S3/R2): é salvo no Postgres como base64, mesmo padrão
  * já usado para o auth-state cifrado.
+ *
+ * Mídia ENCAMINHADA reaproveita a URL do CDN do envio original, que
+ * costuma já ter expirado (404/410) — sem o `ctx` com `reuploadRequest`, o
+ * Baileys nunca pede ao celular de origem pra reenviar e a mensagem caía
+ * no banco sem mídia (só o rótulo "Áudio", sem player). A 2ª tentativa
+ * cobre soluço de rede no CDN.
  */
 async function downloadMedia(
+  sock: WASocket,
   msg: WAMessage
 ): Promise<{ mimeType: string; dataBase64: string; filename: string | null } | null> {
-  try {
-    const buffer = await downloadMediaMessage(msg, "buffer", {});
-    return {
-      mimeType: extractMimeType(msg.message) ?? "application/octet-stream",
-      dataBase64: buffer.toString("base64"),
-      filename: msg.message?.documentMessage?.fileName ?? null,
-    };
-  } catch (err) {
-    console.error("[baileys] falha ao baixar mídia:", err);
-    return null;
+  for (let attempt = 1; attempt <= MEDIA_DOWNLOAD_ATTEMPTS; attempt++) {
+    try {
+      const buffer = await downloadMediaMessage(
+        msg,
+        "buffer",
+        {},
+        { logger: sock.logger, reuploadRequest: sock.updateMediaMessage }
+      );
+      return {
+        mimeType: extractMimeType(msg.message) ?? "application/octet-stream",
+        dataBase64: buffer.toString("base64"),
+        filename: msg.message?.documentMessage?.fileName ?? null,
+      };
+    } catch (err) {
+      console.error(
+        `[baileys] falha ao baixar mídia (tentativa ${attempt}/${MEDIA_DOWNLOAD_ATTEMPTS}):`,
+        err
+      );
+    }
   }
+  return null;
 }
 
 /** `messageTimestamp` é `number | Long | null` (protobufjs) — sem importar
@@ -244,7 +263,7 @@ export async function handleIncomingMessages(
     if (!type) continue; // tipo não suportado (reação, enquete, etc.)
     if (!msg.key.id) continue;
 
-    const media = MEDIA_TYPES.has(type) ? await downloadMedia(msg) : null;
+    const media = MEDIA_TYPES.has(type) ? await downloadMedia(sock, msg) : null;
     const text = extractText(msg.message);
     const fromMe = msg.key.fromMe ?? false;
     const quotedStanzaId = extractQuotedStanzaId(msg.message);
