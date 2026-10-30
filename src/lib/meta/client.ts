@@ -126,10 +126,17 @@ export async function getMetaMediaMeta(
   };
 }
 
-/** Passo 2: baixa os bytes da URL temporizada (exige o mesmo Bearer token). */
+/**
+ * Passo 2: baixa os bytes da URL temporizada (exige o mesmo Bearer token).
+ *
+ * O CDN da Meta (lookaside.fbsbx.com) pode responder 200 com uma PÁGINA de
+ * erro (HTML/JSON) em vez da mídia — ex.: cliente sem User-Agent. Sem
+ * checar o content-type, isso era gravado como "imagem" e ficava quebrado
+ * pra sempre; agora lança, e a mídia vai pra fila de recuperação.
+ */
 export async function downloadMetaMedia(url: string, token: string): Promise<Buffer> {
   const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: { Authorization: `Bearer ${token}`, "User-Agent": "VoceroCRM/1.0" },
     signal: AbortSignal.timeout(30000),
   }).catch((cause) => {
     throw new MetaApiError("Não foi possível baixar a mídia da Meta", {
@@ -142,8 +149,18 @@ export async function downloadMetaMedia(url: string, token: string): Promise<Buf
       status: res.status,
     });
   }
-  const arrayBuffer = await res.arrayBuffer();
-  return Buffer.from(arrayBuffer);
+  const contentType = (res.headers.get("content-type") ?? "").toLowerCase();
+  if (contentType.startsWith("text/html") || contentType.startsWith("application/json")) {
+    throw new MetaApiError(
+      `A Meta devolveu ${contentType.split(";")[0]} em vez da mídia`,
+      { status: 502 }
+    );
+  }
+  const buffer = Buffer.from(await res.arrayBuffer());
+  if (buffer.length === 0) {
+    throw new MetaApiError("A Meta devolveu a mídia vazia", { status: 502 });
+  }
+  return buffer;
 }
 
 /** Envio de mídia: primeiro upload (multipart) pro Graph, devolve o media id pra usar na mensagem. */

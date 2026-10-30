@@ -4,6 +4,7 @@ import type { WASocket, WAMessage } from "@whiskeysockets/baileys";
 const ingestInboundMessage = vi.fn();
 vi.mock("@/server/inbox/ingest", () => ({ ingestInboundMessage }));
 
+const { deserializeMediaSource } = await import("@/server/baileys/media");
 const { handleIncomingMessages, baileysMessageId, rawBaileysId } = await import(
   "@/server/baileys/inbound"
 );
@@ -195,5 +196,55 @@ describe("handleIncomingMessages", () => {
     ]);
     const arg = ingestInboundMessage.mock.calls[0]![0];
     expect(arg.from).toBe("5566999679169");
+  });
+});
+
+describe("handleIncomingMessages — mídia não se perde", () => {
+  beforeEach(() => {
+    ingestInboundMessage.mockReset();
+  });
+
+  it("download falhou na hora: mensagem entra mesmo assim, com a origem da mídia pra recuperação", async () => {
+    const mediaKey = Buffer.from("chave-secreta-da-midia");
+    await handleIncomingMessages("org_1", "uch_1", fakeSock, [
+      makeMsg({ message: { imageMessage: { mediaKey, mimetype: "image/jpeg" } } }),
+    ]);
+    expect(ingestInboundMessage).toHaveBeenCalledTimes(1);
+    const arg = ingestInboundMessage.mock.calls[0]![0];
+    expect(arg.type).toBe("image");
+    expect(arg.media).toBeNull();
+    expect(arg.pendingMedia).toMatchObject({ kind: "baileys", channelId: "uch_1" });
+    const restored = deserializeMediaSource(arg.pendingMedia.raw);
+    expect(restored.key.id).toBe("ABC123");
+    expect(Buffer.from(restored.message!.imageMessage!.mediaKey!).equals(mediaKey)).toBe(true);
+  });
+
+  it("texto não gera pendência de mídia", async () => {
+    await handleIncomingMessages("org_1", "uch_1", fakeSock, [makeMsg()]);
+    expect(ingestInboundMessage.mock.calls[0]![0].pendingMedia).toBeNull();
+  });
+
+  it("documento com legenda (documentWithCaptionMessage) é desembrulhado em vez de descartado", async () => {
+    await handleIncomingMessages("org_1", "uch_1", fakeSock, [
+      makeMsg({
+        message: {
+          documentWithCaptionMessage: {
+            message: { documentMessage: { caption: "Comprovante", fileName: "c.pdf" } },
+          },
+        },
+      }),
+    ]);
+    const arg = ingestInboundMessage.mock.calls[0]![0];
+    expect(arg.type).toBe("document");
+    expect(arg.text).toBe("Comprovante");
+  });
+
+  it("mensagem temporária (ephemeralMessage) é desembrulhada em vez de descartada", async () => {
+    await handleIncomingMessages("org_1", "uch_1", fakeSock, [
+      makeMsg({ message: { ephemeralMessage: { message: { conversation: "sumirá" } } } }),
+    ]);
+    const arg = ingestInboundMessage.mock.calls[0]![0];
+    expect(arg.type).toBe("text");
+    expect(arg.text).toBe("sumirá");
   });
 });

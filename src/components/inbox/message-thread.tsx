@@ -85,7 +85,35 @@ function MediaContent({
    * "parada" acima da mensagem nova até o usuário rolar manualmente. */
   onMediaLoad: () => void;
 }) {
-  if (!m.mediaUrl) {
+  // A mídia pode ainda estar em recuperação no servidor (download falhou na
+  // ingestão — ver media-recovery.ts): em vez de imagem/player quebrado,
+  // mostra o rótulo com "tentar de novo". Quando a recuperação termina, o
+  // `message.updated` traz o mimeType e a `key` no pai remonta o balão.
+  const [failed, setFailed] = useState(false);
+  const [retry, setRetry] = useState(0);
+  const onMediaError = () => setFailed(true);
+
+  if (m.mediaUrl && failed) {
+    return (
+      <span className="inline-flex flex-wrap items-center gap-1.5 text-text-3">
+        <Paperclip className="h-3.5 w-3.5" strokeWidth={1.7} />
+        {mediaLabel(m.type)} indisponível
+        <button
+          onClick={() => {
+            setFailed(false);
+            setRetry((r) => r + 1);
+          }}
+          className="underline underline-offset-2 hover:text-foreground"
+        >
+          tentar de novo
+        </button>
+        {m.text ? <span className="block w-full">{m.text}</span> : null}
+      </span>
+    );
+  }
+  const src = m.mediaUrl && retry > 0 ? `${m.mediaUrl}?r=${retry}` : m.mediaUrl;
+
+  if (!m.mediaUrl || !src) {
     return (
       <span className="inline-flex items-center gap-1.5 text-text-3">
         <Paperclip className="h-3.5 w-3.5" strokeWidth={1.7} />
@@ -104,10 +132,11 @@ function MediaContent({
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={m.mediaUrl}
+            src={src}
             alt={m.text ?? mediaLabel(m.type)}
             loading="lazy"
             onLoad={onMediaLoad}
+            onError={onMediaError}
             className="max-h-72 max-w-full rounded-md"
           />
           <span className="absolute inset-0 hidden items-center justify-center gap-2 bg-black/30 group-hover:flex">
@@ -136,7 +165,16 @@ function MediaContent({
   }
 
   if (m.type === "audio") {
-    return <audio controls preload="none" src={m.mediaUrl} className="max-w-full" />;
+    return (
+      <audio
+        controls
+        // Com retry o usuário já pediu explicitamente: carrega na hora.
+        preload={retry > 0 ? "auto" : "none"}
+        src={src}
+        onError={onMediaError}
+        className="max-w-full"
+      />
+    );
   }
 
   if (m.type === "video") {
@@ -146,8 +184,9 @@ function MediaContent({
           <video
             controls={false}
             preload="metadata"
-            src={m.mediaUrl}
+            src={src}
             onLoadedData={onMediaLoad}
+            onError={onMediaError}
             className="max-h-72 max-w-full rounded-md"
           />
           <span className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/30">
@@ -425,6 +464,7 @@ export function MessageThread({
                   </span>
                 ) : (
                   <MediaContent
+                    key={`${m.id}:${m.mimeType ?? ""}`}
                     m={m}
                     onOpenLightbox={() =>
                       setLightboxIndex(lightboxItems.findIndex((it) => it.id === m.id))

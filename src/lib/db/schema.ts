@@ -715,6 +715,33 @@ export const messageMedia = pgTable("message_media", {
 });
 
 /**
+ * Mídia recebida cujo download falhou na ingestão (CDN expirado, mídia
+ * encaminhada que exige reupload pelo celular, soluço de rede). Guarda a
+ * ORIGEM da mídia — não os bytes — pra recuperar depois, em vez de perder
+ * a mídia de vez: canal não oficial = o `WAMessage` cru do Baileys (traz a
+ * `mediaKey`); canal oficial = o `media id` da Meta (válido por 30 dias).
+ * Cifrado (AES-256-GCM): a `mediaKey` descriptografa a mídia. Some quando a
+ * recuperação dá certo (ver `server/inbox/media-recovery.ts`).
+ */
+export const messageMediaPending = pgTable("message_media_pending", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id")
+    .notNull()
+    .references(() => organization.id, { onDelete: "cascade" }),
+  messageId: text("message_id")
+    .notNull()
+    .unique()
+    .references(() => message.id, { onDelete: "cascade" }),
+  sourceCipher: text("source_cipher").notNull(),
+  sourceIv: text("source_iv").notNull(),
+  sourceTag: text("source_tag").notNull(),
+  attempts: integer("attempts").notNull().default(0),
+  lastError: text("last_error"),
+  lastAttemptAt: timestamp("last_attempt_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+/**
  * Perfil de agente IA — v0.1: N perfis reutilizáveis por organização (não
  * mais 1 único). Cada perfil pode ser o padrão de um departamento
  * (`department.agentProfileId`) e/ou de um atendente (`member.agentProfileId`),

@@ -1,8 +1,13 @@
 import type { WASocket, WAMessage, proto } from "@whiskeysockets/baileys";
-import { downloadMediaMessage } from "@whiskeysockets/baileys";
 import { ingestInboundMessage } from "@/server/inbox/ingest";
 import { refreshContactAvatar } from "@/server/baileys/avatar";
 import { ensureBrNinthDigit } from "@/lib/utils";
+import {
+  downloadBaileysMedia,
+  serializeMediaSource,
+  unwrapMessage,
+  type BaileysMedia,
+} from "@/server/baileys/media";
 
 const MEDIA_TYPES = new Set(["image", "audio", "video", "document", "sticker"]);
 
@@ -164,57 +169,28 @@ function extractQuotedStanzaId(message: proto.IMessage | null | undefined): stri
   );
 }
 
-function extractMimeType(message: proto.IMessage | null | undefined): string | null {
-  if (!message) return null;
-  return (
-    message.imageMessage?.mimetype ??
-    message.videoMessage?.mimetype ??
-    message.audioMessage?.mimetype ??
-    message.documentMessage?.mimetype ??
-    message.stickerMessage?.mimetype ??
-    null
-  );
-}
-
-const MEDIA_DOWNLOAD_ATTEMPTS = 2;
+/** Tentativa na hora, SEM reupload pelo celular (rápida) — se falhar, a
+ * mensagem entra assim mesmo e a recuperação com reupload segue em segundo
+ * plano (server/inbox/media-recovery.ts). */
+const INLINE_MEDIA_TIMEOUT_MS = 20_000;
 
 /**
- * Baixa e descriptografa a mídia direto do CDN do WhatsApp (o Baileys já
- * traz a chave de descriptografia na própria mensagem). Autohospedado por
- * constituição (sem S3/R2): é salvo no Postgres como base64, mesmo padrão
- * já usado para o auth-state cifrado.
- *
- * Mídia ENCAMINHADA reaproveita a URL do CDN do envio original, que
- * costuma já ter expirado (404/410) — sem o `ctx` com `reuploadRequest`, o
- * Baileys nunca pede ao celular de origem pra reenviar e a mensagem caía
- * no banco sem mídia (só o rótulo "Áudio", sem player). A 2ª tentativa
- * cobre soluço de rede no CDN.
+ * Autohospedado por constituição (sem S3/R2): a mídia é salva no Postgres
+ * como base64, mesmo padrão já usado para o auth-state cifrado.
  */
-async function downloadMedia(
-  sock: WASocket,
-  msg: WAMessage
-): Promise<{ mimeType: string; dataBase64: string; filename: string | null } | null> {
-  for (let attempt = 1; attempt <= MEDIA_DOWNLOAD_ATTEMPTS; attempt++) {
-    try {
-      const buffer = await downloadMediaMessage(
-        msg,
-        "buffer",
-        {},
-        { logger: sock.logger, reuploadRequest: sock.updateMediaMessage }
-      );
-      return {
-        mimeType: extractMimeType(msg.message) ?? "application/octet-stream",
-        dataBase64: buffer.toString("base64"),
-        filename: msg.message?.documentMessage?.fileName ?? null,
-      };
-    } catch (err) {
-      console.error(
-        `[baileys] falha ao baixar mídia (tentativa ${attempt}/${MEDIA_DOWNLOAD_ATTEMPTS}):`,
-        err
-      );
-    }
+async function downloadMedia(sock: WASocket, msg: WAMessage): Promise<BaileysMedia | null> {
+  try {
+    return await downloadBaileysMedia(sock, msg, {
+      reupload: false,
+      timeoutMs: INLINE_MEDIA_TIMEOUT_MS,
+    });
+  } catch (err) {
+    console.warn(
+      `[baileys] mídia ${msg.key.id} não baixou na hora — vai pra fila de recuperação:`,
+      err instanceof Error ? err.message : err
+    );
+    return null;
   }
-  return null;
 }
 
 /** `messageTimestamp` é `number | Long | null` (protobufjs) — sem importar
@@ -259,14 +235,16 @@ export async function handleIncomingMessages(
       continue;
     }
 
-    const type = extractType(msg.message);
+    const content = unwrapMessage(msg.message);
+    const type = extractType(content);
     if (!type) continue; // tipo não suportado (reação, enquete, etc.)
     if (!msg.key.id) continue;
 
-    const media = MEDIA_TYPES.has(type) ? await downloadMedia(sock, msg) : null;
-    const text = extractText(msg.message);
+    const isMedia = MEDIA_TYPES.has(type);
+    const media = isMedia ? await downloadMedia(sock, msg) : null;
+    const text = extractText(content);
     const fromMe = msg.key.fromMe ?? false;
-    const quotedStanzaId = extractQuotedStanzaId(msg.message);
+    const quotedStanzaId = extractQuotedStanzaId(content);
 
     // Prefixa com quem falou dentro do grupo — sem isso, o operador vê só
     // "mensagem" sem saber qual dos participantes escreveu.
@@ -290,6 +268,10 @@ export async function handleIncomingMessages(
       fromMe,
       mediaUrl: null,
       media,
+      pendingMedia:
+        isMedia && !media
+          ? { kind: "baileys", channelId, raw: serializeMediaSource(msg) }
+          : null,
       contactKind: isGroup ? "group" : "individual",
       replyToWaMessageId: quotedStanzaId ? baileysMessageId(quotedStanzaId) : null,
     });

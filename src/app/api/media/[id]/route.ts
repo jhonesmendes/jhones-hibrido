@@ -3,6 +3,7 @@ import { apiError, withAuth } from "@/lib/api";
 import { getDb, schema } from "@/lib/db";
 import { scoped } from "@/lib/db/tenant";
 import { LOCAL_MEDIA_MARKER } from "@/server/inbox/ingest";
+import { recoverPendingMedia } from "@/server/inbox/media-recovery";
 
 /**
  * Proxy autenticado de mídia: `mediaUrl` externa (canal oficial, CDN da
@@ -15,6 +16,7 @@ export const dynamic = "force-dynamic";
 type Params = { params: Promise<{ id: string }> };
 
 const CACHE = "private, max-age=3600";
+const ON_DEMAND_WAIT_MS = 15_000;
 
 /**
  * `<audio>`/`<video>` pedem a mídia em fatias (`Range: bytes=…`) — sem
@@ -78,12 +80,25 @@ export const GET = withAuth(async (session, req: Request, ctx: Params) => {
   }
 
   if (message.mediaUrl === LOCAL_MEDIA_MARKER) {
-    const mediaRows = await db
-      .select()
-      .from(schema.messageMedia)
-      .where(eq(schema.messageMedia.messageId, id))
-      .limit(1);
-    const media = mediaRows[0];
+    const loadMedia = async () =>
+      (
+        await db
+          .select()
+          .from(schema.messageMedia)
+          .where(eq(schema.messageMedia.messageId, id))
+          .limit(1)
+      )[0];
+    let media = await loadMedia();
+    if (!media) {
+      // Download falhou na ingestão: tenta recuperar agora. Se demorar, a
+      // recuperação segue em segundo plano e a mídia chega via SSE
+      // (`message.updated`) — o navegador não fica pendurado esperando.
+      const recovered = await Promise.race([
+        recoverPendingMedia(id),
+        new Promise<false>((resolve) => setTimeout(() => resolve(false), ON_DEMAND_WAIT_MS)),
+      ]);
+      if (recovered) media = await loadMedia();
+    }
     if (!media) return apiError(404, "media_unavailable", "Mídia indisponível");
 
     return serveBytes(req, Buffer.from(media.dataBase64, "base64"), media.mimeType);

@@ -25,6 +25,7 @@ const prefixes = {
   pipelineFollowup: "pfu",
   followupSend: "fus",
   messageMedia: "mm",
+  messageMediaPending: "mmp",
   memberPermission: "mp",
   memberChannel: "mc",
   inviteToken: "inv",

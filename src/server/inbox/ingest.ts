@@ -28,6 +28,7 @@ import {
 import { handleSelectionReply, sendSelectionGreeting } from "@/server/queue/selection";
 import { LOCAL_MEDIA_MARKER, MEDIA_TYPES, serializeMessage } from "@/server/inbox/message-format";
 import { logTrace } from "@/server/observability/trace";
+import { queueMediaRecovery, type PendingMediaSource } from "@/server/inbox/media-recovery";
 
 // Re-exportados por compatibilidade — outros módulos importam esses dois
 // símbolos daqui (`@/server/inbox/ingest`); a definição real vive em
@@ -366,34 +367,54 @@ export async function processMessagesValue(value: WebhookValue): Promise<void> {
       text: msg.text?.body ?? mediaField?.caption ?? null,
       timestamp: msg.timestamp,
       media,
+      pendingMedia:
+        mediaField && !media
+          ? {
+              kind: "official",
+              metaCredentialId: credentials.id,
+              mediaId: mediaField.id,
+              mimeType: mediaField.mime_type ?? null,
+              filename: mediaField.filename ?? null,
+            }
+          : null,
       replyToWaMessageId: msg.context?.id ?? null,
     });
   }
 }
+
+const OFFICIAL_MEDIA_ATTEMPTS = 2;
 
 /**
  * Baixa mídia do canal oficial (2 passos do Graph API: metadados → bytes) e
  * guarda localmente — igual ao WhatsApp Web, nunca depende de uma URL da
  * Meta ainda viva no momento em que o agente/usuário abre a conversa (essas
  * URLs expiram em minutos). Uma falha aqui não derruba a ingestão da
- * mensagem: ela entra sem mídia anexada, em vez de travar o webhook.
+ * mensagem: ela entra na hora e a mídia vai pra fila de recuperação
+ * (media-recovery.ts — o `media id` vale 30 dias), em vez de travar o
+ * webhook.
  */
 async function downloadOfficialMedia(
   field: WebhookMedia,
   token: string
 ): Promise<{ mimeType: string; dataBase64: string; filename: string | null } | null> {
-  try {
-    const meta = await getMetaMediaMeta(field.id, token);
-    const buffer = await downloadMetaMedia(meta.url, token);
-    return {
-      mimeType: field.mime_type ?? meta.mimeType,
-      dataBase64: buffer.toString("base64"),
-      filename: field.filename ?? null,
-    };
-  } catch (err) {
-    console.error("[webhook] falha ao baixar mídia oficial:", err);
-    return null;
+  for (let attempt = 1; attempt <= OFFICIAL_MEDIA_ATTEMPTS; attempt++) {
+    try {
+      // URL nova a cada tentativa: a anterior pode ter expirado.
+      const meta = await getMetaMediaMeta(field.id, token);
+      const buffer = await downloadMetaMedia(meta.url, token);
+      return {
+        mimeType: field.mime_type ?? meta.mimeType,
+        dataBase64: buffer.toString("base64"),
+        filename: field.filename ?? null,
+      };
+    } catch (err) {
+      console.error(
+        `[webhook] falha ao baixar mídia oficial ${field.id} (tentativa ${attempt}/${OFFICIAL_MEDIA_ATTEMPTS}):`,
+        err
+      );
+    }
   }
+  return null;
 }
 
 export async function ingestInboundMessage(input: {
@@ -423,6 +444,10 @@ export async function ingestInboundMessage(input: {
   mediaUrl?: string | null;
   /** Bytes de mídia já baixados (sem URL de terceiro persistente). */
   media?: { mimeType: string; dataBase64: string; filename?: string | null } | null;
+  /** Origem da mídia quando o download falhou na hora — a mensagem entra
+   * mesmo assim e a mídia vai pra fila de recuperação (media-recovery.ts),
+   * em vez de se perder. Ignorado se `media` veio. */
+  pendingMedia?: PendingMediaSource | null;
   /** Grupo do canal não oficial (a Cloud API oficial não suporta grupos). */
   contactKind?: "individual" | "group";
   /** `wa_message_id` da mensagem citada (resposta/quote) — oficial:
@@ -518,7 +543,9 @@ export async function ingestInboundMessage(input: {
       direction: fromMe ? "out" : "in",
       type: input.type,
       text: input.text,
-      mediaUrl: input.mediaUrl ?? (input.media ? LOCAL_MEDIA_MARKER : null),
+      mediaUrl:
+        input.mediaUrl ??
+        (input.media || input.pendingMedia ? LOCAL_MEDIA_MARKER : null),
       status: fromMe ? "sent" : "delivered",
       waTimestamp,
       replyToMessageId,
@@ -560,6 +587,10 @@ export async function ingestInboundMessage(input: {
         sizeBytes: Math.ceil((input.media.dataBase64.length * 3) / 4),
       })
       .onConflictDoNothing({ target: [schema.messageMedia.messageId] });
+  } else if (input.pendingMedia) {
+    await queueMediaRecovery(organizationId, message.id, input.pendingMedia).catch((err) =>
+      console.error("[ingest] falha ao enfileirar recuperação de mídia:", err)
+    );
   }
 
   // channel/metaCredentialId/unofficialChannelId NÃO são mais tocados aqui:
