@@ -41,7 +41,9 @@ function isInternalSignup(): boolean {
   return internalSignupContext().getStore() === true;
 }
 
-const RATE_LIMITED_PATHS = new Set(["/sign-in/email", "/sign-up/email"]);
+// `/change-password` entra porque verifica a senha atual — sem limite,
+// uma sessão sequestrada poderia testar senhas à vontade.
+const RATE_LIMITED_PATHS = new Set(["/sign-in/email", "/sign-up/email", "/change-password"]);
 
 // `next dev` cai para outra porta quando a padrão já está ocupada (aqui,
 // pelo próprio compose de produção do dono no host) — sem isso, o Better

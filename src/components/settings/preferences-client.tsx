@@ -5,6 +5,7 @@ import { Users } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { AppearanceClient } from "./appearance-client";
+import { PasswordClient } from "./password-client";
 
 const OPTIONS = [
   {
@@ -56,6 +57,8 @@ export function PreferencesClient() {
       </div>
 
       <AppearanceClient />
+
+      <PasswordClient />
 
       <Card>
         <CardHeader>
