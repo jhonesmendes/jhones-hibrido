@@ -1,9 +1,6 @@
-import { timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import { apiError } from "@/lib/api";
-import { getEnv } from "@/lib/env";
-import { getDb, schema } from "@/lib/db";
-import { verifyApiKey } from "@/server/integrations/api-keys";
+import { resolveInternalCaller } from "@/server/integrations/internal-auth";
 import { CampaignError, campaignErrorStatus, createCampaign } from "@/server/campaigns/create";
 import { CampaignSendError, startCampaign } from "@/server/campaigns/send";
 
@@ -22,36 +19,6 @@ export const dynamic = "force-dynamic";
  * automação (Constituição IX): quem integra precisa confirmar ciência do
  * risco de ban do WhatsApp Web na própria chamada.
  */
-async function resolveCaller(req: Request): Promise<{ organizationId: string } | Response> {
-  const header = req.headers.get("x-internal-key") ?? "";
-  if (!header) return apiError(401, "unauthorized", "Chave inválida");
-
-  const viaApiKey = await verifyApiKey(header);
-  if (viaApiKey) return { organizationId: viaApiKey.organizationId };
-
-  const env = getEnv();
-  if (env.INTERNAL_API_KEY) {
-    const expected = Buffer.from(env.INTERNAL_API_KEY);
-    const got = Buffer.from(header);
-    if (got.length === expected.length && timingSafeEqual(got, expected)) {
-      const organizationId = await getInstanceOrganizationId();
-      if (organizationId) return { organizationId };
-    }
-  }
-
-  return apiError(401, "unauthorized", "Chave inválida");
-}
-
-async function getInstanceOrganizationId(): Promise<string | null> {
-  const db = getDb();
-  const rows = await db
-    .select({ id: schema.organization.id })
-    .from(schema.organization)
-    .orderBy(schema.organization.createdAt)
-    .limit(1);
-  return rows[0]?.id ?? null;
-}
-
 const bodySchema = z.object({
   name: z.string().trim().min(1).max(80),
   /** Legenda da imagem (ou texto puro, se `mediaUrl` vier vazio) — aceita
@@ -73,7 +40,7 @@ const bodySchema = z.object({
 });
 
 export async function POST(req: Request) {
-  const caller = await resolveCaller(req);
+  const caller = await resolveInternalCaller(req);
   if (caller instanceof Response) return caller;
 
   const body = bodySchema.safeParse(await req.json().catch(() => null));

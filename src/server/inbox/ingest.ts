@@ -17,6 +17,7 @@ import { downloadMetaMedia, getMetaMediaMeta } from "@/lib/meta/client";
 import type { WebhookMedia, WebhookValue } from "@/server/inbox/webhook";
 import { applyStatusUpdate } from "@/server/inbox/status";
 import { saveMessageMedia } from "@/server/media/store";
+import { isInboundWebhookActive, queueInboundEvent } from "@/server/n8n/inbound-events";
 import { onLeadActivity } from "@/server/inbox/lead-activity";
 import { maybeRunAgentTurn } from "@/server/ai/trigger";
 import { onInboundMedia } from "@/server/pipeline/followup-document";
@@ -693,7 +694,19 @@ export async function ingestInboundMessage(input: {
     // responde primeiro é o roteamento (Modo A) ou a seleção do Modo B
     // (Sprint Q3); ver ROADMAP_queue_routing.md, gap #4.
     const waitingInQueue = queueEnabled && !conversation.departmentId;
-    if (contact.kind !== "group" && !waitingInQueue) await maybeRunAgentTurn(conversation.id);
+    // Instância operada por automação: quem responde é o workflow do n8n, e
+    // o agente de IA fica calado para o cliente não receber duas respostas.
+    const automated =
+      !conversation.isTest &&
+      contact.kind !== "group" &&
+      (await isInboundWebhookActive(organizationId));
+    if (automated) {
+      await queueInboundEvent(organizationId, message.id).catch((err) =>
+        console.error("[n8n] falha ao enfileirar o evento:", err)
+      );
+    } else if (contact.kind !== "group" && !waitingInQueue) {
+      await maybeRunAgentTurn(conversation.id);
+    }
   }
 }
 

@@ -35,6 +35,10 @@ export async function register(): Promise<void> {
       "@/server/media/maintenance"
     );
     startMediaMaintenanceScheduler();
+    const { startInboundDeliveryScheduler } = await import(
+      "@/server/n8n/inbound-events"
+    );
+    startInboundDeliveryScheduler();
     // Só a instância dedicada ao painel central envia o relatório — nas
     // instâncias de cliente normais `ADMIN_PANEL_HOST` nunca é configurado.
     if (process.env.ADMIN_PANEL_HOST) {

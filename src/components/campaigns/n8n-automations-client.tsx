@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { N8nInboundCard } from "@/components/campaigns/n8n-inbound-card";
 
 type N8nWorkflow = { id: string; name: string; active: boolean; updatedAt: string | null };
 type N8nExecution = {
@@ -162,6 +163,8 @@ export function N8nAutomationsClient() {
           </button>
         )}
       </div>
+
+      {canConfigure && <N8nInboundCard />}
 
       {fetchError && (
         <div className="mb-4 flex items-start gap-2 rounded-md border border-[#ecd4d2] bg-[#faf1f0] p-3 text-sm text-[#a2504c]">

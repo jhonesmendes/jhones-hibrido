@@ -1318,9 +1318,10 @@ export const aiConfig = pgTable("ai_config", {
 
 /**
  * Servidor N8N do próprio operador/agência (Constituição II v2.2.0) —
- * opcional, um por organização, auto-hospedado. Usado só para listar/
- * executar workflows e ver histórico de execuções na aba Automações de
- * Campanhas — nunca é pré-requisito de uso da instância.
+ * opcional, um por organização, auto-hospedado. Lista/executa workflows e
+ * mostra o histórico na aba Automações de Campanhas e, se `inboundWebhookUrl`
+ * estiver definido, recebe as mensagens recebidas — nunca é pré-requisito de
+ * uso da instância.
  */
 export const n8nConfig = pgTable("n8n_config", {
   id: text("id").primaryKey(),
@@ -1333,9 +1334,41 @@ export const n8nConfig = pgTable("n8n_config", {
   apiKeyIv: text("api_key_iv").notNull(),
   apiKeyTag: text("api_key_tag").notNull(),
   apiKeyLast4: text("api_key_last4").notNull(),
+  /** Webhook do n8n que recebe cada mensagem recebida (instâncias operadas
+   * por automação). Nulo = desligado: o produto segue normal, com o agente
+   * de IA e a fila. */
+  inboundWebhookUrl: text("inbound_webhook_url"),
+  /** Enviado em `x-vocero-token` (Header Auth do node Webhook). Opcional. */
+  inboundTokenCipher: text("inbound_token_cipher"),
+  inboundTokenIv: text("inbound_token_iv"),
+  inboundTokenTag: text("inbound_token_tag"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
+
+/**
+ * Mensagem recebida aguardando entrega ao webhook do n8n — sobrevive a
+ * reinício do container e a n8n fora do ar. Entregue = linha apagada; o que
+ * esgota as tentativas fica aqui com `lastError` para diagnóstico.
+ */
+export const n8nInboundEvent = pgTable(
+  "n8n_inbound_event",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    messageId: text("message_id")
+      .notNull()
+      .unique()
+      .references(() => message.id, { onDelete: "cascade" }),
+    attempts: integer("attempts").notNull().default(0),
+    lastError: text("last_error"),
+    lastAttemptAt: timestamp("last_attempt_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("n8n_inbound_event_attempts_idx").on(t.attempts, t.lastAttemptAt)]
+);
 
 /**
  * Servidor SMTP do próprio operador (Constituição II v2.1.0) — opcional, um

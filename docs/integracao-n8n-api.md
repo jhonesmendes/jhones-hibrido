@@ -1,18 +1,104 @@
 # Integração via API — como o N8N (ou qualquer sistema externo) conversa com o Vocero
 
-> Preparado em 2026-09-22, reflete o estado real do código nesta data.
-> Cobre a direção **N8N/externo → Vocero** (automação chamando o CRM para
-> disparar mensagem/campanha). Para a direção contrária — o Vocero
-> executando workflows de uma instância N8N (aba Automações em
-> Campanhas) — ver `src/lib/docs/content.ts`, seção `automacoes-n8n`
-> (Documentação → Automações N8N dentro do próprio app); é um recurso
-> separado e não é o assunto deste documento.
+> Atualizado em 2026-11-04, reflete o estado real do código nesta data.
+> Cobre a instância operada por automação (o n8n responde, o Vocero recebe
+> e grava) e as rotas de disparo. A execução manual de workflows pela aba
+> Automações em Campanhas está em `src/lib/docs/content.ts`, seção
+> `automacoes-n8n`.
+
+## 0. Instância operada pelo n8n
+
+```
+Cliente → WhatsApp → Vocero (grava) → webhook do n8n
+                                         ↓ decide
+Cliente ← WhatsApp ← Vocero (grava) ← POST /api/internal/messages
+```
+
+### Configurar
+
+1. No n8n: workflow com node **Webhook**, método POST, autenticação Header
+   Auth (`x-vocero-token`) e o workflow **ativo**. Use a URL de produção.
+2. No Vocero: **Campanhas → Automações N8N → Receber mensagens no n8n**: cole
+   a URL e o token, salve e clique **Enviar teste** (chega `{ "event": "test" }`).
+3. No Vocero: **Configurações → Integrações**: crie uma chave e use-a no header
+   `x-internal-key` dos nodes HTTP Request.
+
+Com o webhook ligado, o agente de IA do Vocero não responde (evita resposta
+dupla). Fila de atendimento e grupos não mudam: mensagem de grupo não vai ao n8n.
+
+### Evento recebido pelo n8n
+
+```json
+{
+  "event": "message.received",
+  "eventId": "msg_...",
+  "occurredAt": "2026-11-04T12:00:00.000Z",
+  "conversationId": "cv_...",
+  "channel": "official",
+  "contact": { "id": "ct_...", "phone": "5566999990000", "name": "Maria" },
+  "message": {
+    "id": "msg_...",
+    "waMessageId": "wamid...",
+    "type": "text",
+    "text": "quero um orçamento",
+    "replyToMessageId": null,
+    "media": null
+  }
+}
+```
+
+Em mensagem com mídia, `message.media` traz `url`, `available`, `mimeType`,
+`filename` e `sizeBytes`. Baixe de `url` com o header `x-internal-key`.
+`available: false` significa download ainda em recuperação: a URL responde 404
+até a mídia chegar.
+
+Entrega: qualquer resposta 2xx confirma. Sem ela, tenta de novo após 30s, 2min,
+10min, 1h e 6h, sobrevivendo a reinício. Pode haver entrega repetida: deduplique
+por `eventId` se o workflow não puder repetir. A tela mostra pendências e o
+último erro.
+
+### `POST /api/internal/messages`
+
+Envia **e grava no CRM**: cria contato e conversa se preciso, respeita a janela
+de 24h e o canal da conversa. Informe `conversationId` **ou** `to`, e exatamente
+um entre `text`, `template` e `media`.
+
+```json
+{ "conversationId": "cv_...", "text": "Olá Maria, segue o orçamento" }
+```
+
+```json
+{ "to": "5566999990000", "name": "Maria", "template": { "name": "boas_vindas", "language": "pt_BR", "variables": ["Maria"] } }
+```
+
+```json
+{ "conversationId": "cv_...", "media": { "dataBase64": "...", "mimeType": "application/pdf", "filename": "orcamento.pdf", "caption": "Orçamento" } }
+```
+
+Campo opcional: `replyToMessageId`. Mídia: até 16MB.
+
+Sucesso `201`: `{ "success": true, "messageId", "conversationId", "contactId" }`.
+
+| HTTP | `code` | Quando |
+|---|---|---|
+| 401 | `unauthorized` | Chave ausente/inválida |
+| 422 | `invalid_body` | Corpo fora do schema |
+| 422 | `invalid_phone` | `to` sem DDD ou inválido |
+| 404 | `not_found` | Conversa não existe |
+| 404 | `template_not_found` | Sem modelo aprovado com esse nome |
+| 422 | `invalid` | Faltou variável do modelo ou arquivo inválido |
+| 422 | `window_closed` | Janela de 24h fechada: use `template` |
+| 409 | `not_connected` / `reconnect_required` | Canal desconectado |
+| 422 / 503 | `meta_error` / `meta_unavailable` | Erro ou indisponibilidade da Meta |
+
+`to` com a janela fechada devolve `window_closed`, mas o contato e a conversa
+ficam criados.
 
 ## 1. Visão geral
 
-O Vocero expõe duas rotas HTTP **sem sessão de usuário**, autenticadas só
-por uma chave de API, pensadas para automações externas (N8N, ERP,
-qualquer sistema por token):
+Além de `/api/internal/messages` (seção 0), o Vocero expõe estas rotas HTTP
+**sem sessão de usuário**, autenticadas só por uma chave de API, pensadas para
+automações externas (N8N, ERP, qualquer sistema por token):
 
 | Rota | Para quê |
 |---|---|
@@ -189,8 +275,8 @@ curl -X POST https://SEU-DOMINIO/api/internal/campaigns \
 - `send-message` é **deliberadamente burro** (passthrough): nada do que
   passa por ele aparece na Caixa de Entrada nem gera histórico de
   conversa no CRM — só existe o log de erro/sucesso da própria chamada.
-  Se uma integração precisar que a mensagem apareça no histórico do
-  contato, essa rota **não** serve hoje.
+  Se a mensagem precisa aparecer no histórico do contato, use
+  `/api/internal/messages`.
 - Não há limite de taxa (rate limit) próprio nessas rotas além do que a
   própria Meta/WhatsApp Web aplicam — um workflow de N8N mal configurado
   em loop pode gerar volume alto sem o Vocero barrar.

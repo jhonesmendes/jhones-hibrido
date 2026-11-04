@@ -35,7 +35,7 @@ externas: o trabalho em segundo plano (agente, Laboratório) é in-process.
 | O canal WhatsApp oficial (Graph API) | `src/lib/meta/` (cliente único) + `src/server/whatsapp/` |
 | O canal WhatsApp não oficial (motor Baileys nativo) | `src/server/baileys/` (conexão direta ao protocolo, sem gateway de terceiros) |
 | Campanhas (disparo em massa, oficial e não oficial) | `src/server/campaigns/` + `src/lib/campaigns/` (roadmap em andamento) |
-| Automações N8N (listar/executar workflows do operador) | `src/server/n8n/` (cliente REST + config por org) · UI na aba Automações de Campanhas |
+| Automações N8N (listar/executar workflows do operador; entrega de mensagens recebidas ao webhook do n8n) | `src/server/n8n/` (cliente REST + config por org + `inbound-events.ts`) · UI na aba Automações de Campanhas · API de volta em `src/app/api/internal/` (`docs/integracao-n8n-api.md`) |
 | Campos/tabelas | `src/lib/db/schema.ts` → `pnpm db:generate` → migração nova em `drizzle/` |
 | A ingestão/envio de mensagens | `src/server/inbox/` (ingest idempotente, send com guard de sandbox, janela de 24h) |
 | Armazenamento de mídia (arquivo em `MEDIA_DIR`, retenção, migração do legado) | `src/server/media/` (`saveMessageMedia`/`readMessageMediaBytes` — nunca gravar/ler `message_media.data_base64` direto) |

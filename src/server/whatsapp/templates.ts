@@ -617,7 +617,7 @@ export async function sendTemplate(input: {
   const variables = input.variables ?? [];
   if (
     variableCount > 0 &&
-    variables.slice(0, variableCount).some((v) => !v?.trim())
+    Array.from({ length: variableCount }, (_, i) => variables[i]).some((v) => !v?.trim())
   ) {
     throw new TemplateError(
       "invalid",

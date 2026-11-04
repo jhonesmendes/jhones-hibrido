@@ -32,6 +32,7 @@ const prefixes = {
   smtpConfig: "smtp",
   aiConfig: "aic",
   n8nConfig: "n8n",
+  n8nInboundEvent: "nie",
   passwordResetToken: "prt",
   auditLog: "aud",
   pushSubscription: "push",

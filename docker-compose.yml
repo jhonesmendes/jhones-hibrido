@@ -34,7 +34,9 @@ services:
       LICENSE_CONTROL_SECRET: ${LICENSE_CONTROL_SECRET:-}
       OPERATOR_WHATSAPP: ${OPERATOR_WHATSAPP:-}
       OPERATOR_EMAIL: ${OPERATOR_EMAIL:-}
-      INTERNAL_API_KEY: vocero_internal_2024
+      # Chave legada da API interna. Instância nova: defina um valor próprio
+      # na stack (ou use só as chaves de Configurações → Integrações).
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-vocero_internal_2024}
 
     volumes:
       # Backup do banco (pg_dump) — disco local da própria instância,

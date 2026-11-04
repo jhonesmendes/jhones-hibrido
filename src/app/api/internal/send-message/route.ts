@@ -1,12 +1,9 @@
-import { timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import { apiError } from "@/lib/api";
-import { getEnv } from "@/lib/env";
-import { getDb, schema } from "@/lib/db";
 import { getCredentialsByOrg } from "@/server/whatsapp/credentials";
 import { normalizeRecipient } from "@/lib/meta/client";
 import { callGraphSend, SendError } from "@/server/inbox/send";
-import { verifyApiKey } from "@/server/integrations/api-keys";
+import { resolveInternalCaller } from "@/server/integrations/internal-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -29,37 +26,6 @@ export const dynamic = "force-dynamic";
  * dentro de uma janela de conversa válida ou com conteúdo permitido fora
  * dela, senão a Meta recusa o envio do lado dela.
  */
-async function resolveCaller(req: Request): Promise<{ organizationId: string } | Response> {
-  const header = req.headers.get("x-internal-key") ?? "";
-  if (!header) return apiError(401, "unauthorized", "Chave inválida");
-
-  const viaApiKey = await verifyApiKey(header);
-  if (viaApiKey) return { organizationId: viaApiKey.organizationId };
-
-  const env = getEnv();
-  if (env.INTERNAL_API_KEY) {
-    const expected = Buffer.from(env.INTERNAL_API_KEY);
-    const got = Buffer.from(header);
-    if (got.length === expected.length && timingSafeEqual(got, expected)) {
-      const organizationId = await getInstanceOrganizationId();
-      if (organizationId) return { organizationId };
-    }
-  }
-
-  return apiError(401, "unauthorized", "Chave inválida");
-}
-
-/** A org desta instância — sempre a mais antiga (só existe 1 de verdade). */
-async function getInstanceOrganizationId(): Promise<string | null> {
-  const db = getDb();
-  const rows = await db
-    .select({ id: schema.organization.id })
-    .from(schema.organization)
-    .orderBy(schema.organization.createdAt)
-    .limit(1);
-  return rows[0]?.id ?? null;
-}
-
 const SEND_ERROR_STATUS: Record<SendError["code"], number> = {
   sandbox_violation: 403,
   not_connected: 409,
@@ -76,7 +42,7 @@ const bodySchema = z.object({
 });
 
 export async function POST(req: Request) {
-  const caller = await resolveCaller(req);
+  const caller = await resolveInternalCaller(req);
   if (caller instanceof Response) return caller;
 
   const body = bodySchema.safeParse(await req.json().catch(() => null));
