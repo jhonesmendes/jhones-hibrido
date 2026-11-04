@@ -22,7 +22,12 @@ function hasServableMedia(m: typeof schema.message.$inferSelect): boolean {
 
 export function serializeMessage(
   m: typeof schema.message.$inferSelect,
-  media?: { filename: string | null; sizeBytes: number | null; mimeType: string | null } | null,
+  media?: {
+    filename: string | null;
+    sizeBytes: number | null;
+    mimeType: string | null;
+    purgedAt?: Date | null;
+  } | null,
   /** Assinatura no painel interno (quem mandou) — nunca vai pro WhatsApp. */
   senderName?: string | null
 ) {
@@ -33,10 +38,13 @@ export function serializeMessage(
     type: m.type,
     text: m.text,
     // Sempre a rota do proxy: a URL real do gateway nunca vai ao navegador.
-    mediaUrl: hasServableMedia(m) ? `/api/media/${m.id}` : null,
+    // Mídia apagada pela retenção: sem URL (some do lightbox/download) e
+    // `mediaExpired` diz à UI por quê.
+    mediaUrl: hasServableMedia(m) && !media?.purgedAt ? `/api/media/${m.id}` : null,
     filename: media?.filename ?? null,
     sizeBytes: media?.sizeBytes ?? null,
     mimeType: media?.mimeType ?? null,
+    mediaExpired: Boolean(media?.purgedAt),
     status: m.status,
     error: m.error,
     aiGenerated: m.aiGenerated,

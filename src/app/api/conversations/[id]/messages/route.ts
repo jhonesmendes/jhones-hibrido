@@ -39,6 +39,7 @@ export const GET = withAuth(async (session, req: Request, ctx: Params) => {
           filename: row.filename,
           sizeBytes: row.sizeBytes,
           mimeType: row.mimeType,
+          purgedAt: row.purgedAt,
         },
         row.senderName
       )

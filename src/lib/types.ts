@@ -39,6 +39,8 @@ export type MessageDto = {
   filename: string | null;
   sizeBytes: number | null;
   mimeType: string | null;
+  /** Bytes apagados pela retenção de mídia (Configurações → Armazenamento). */
+  mediaExpired: boolean;
   status: "pending" | "sent" | "delivered" | "read" | "failed";
   /** Motivo da falha (vindo do status webhook da Meta) — null exceto quando status = "failed". */
   error: string | null;

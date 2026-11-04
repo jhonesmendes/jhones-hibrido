@@ -269,6 +269,7 @@ export async function listMessages(
       filename: schema.messageMedia.filename,
       sizeBytes: schema.messageMedia.sizeBytes,
       mimeType: schema.messageMedia.mimeType,
+      purgedAt: schema.messageMedia.purgedAt,
       // Assinatura no painel interno (quem mandou) — nunca vai pro
       // WhatsApp, só existe pra quem está visualizando a conversa aqui.
       senderName: schema.user.name,

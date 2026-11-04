@@ -38,6 +38,7 @@ externas: o trabalho em segundo plano (agente, Laboratório) é in-process.
 | Automações N8N (listar/executar workflows do operador) | `src/server/n8n/` (cliente REST + config por org) · UI na aba Automações de Campanhas |
 | Campos/tabelas | `src/lib/db/schema.ts` → `pnpm db:generate` → migração nova em `drizzle/` |
 | A ingestão/envio de mensagens | `src/server/inbox/` (ingest idempotente, send com guard de sandbox, janela de 24h) |
+| Armazenamento de mídia (arquivo em `MEDIA_DIR`, retenção, migração do legado) | `src/server/media/` (`saveMessageMedia`/`readMessageMediaBytes` — nunca gravar/ler `message_media.data_base64` direto) |
 | UI | `src/components/` + `src/app/(app)/` |
 
 Os mocks do ambiente de testes vivem em `src/app/api/dev/` (wa-mock +

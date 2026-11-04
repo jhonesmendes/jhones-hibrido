@@ -16,6 +16,7 @@ import {
 import { downloadMetaMedia, getMetaMediaMeta } from "@/lib/meta/client";
 import type { WebhookMedia, WebhookValue } from "@/server/inbox/webhook";
 import { applyStatusUpdate } from "@/server/inbox/status";
+import { saveMessageMedia } from "@/server/media/store";
 import { onLeadActivity } from "@/server/inbox/lead-activity";
 import { maybeRunAgentTurn } from "@/server/ai/trigger";
 import { onInboundMedia } from "@/server/pipeline/followup-document";
@@ -575,18 +576,13 @@ export async function ingestInboundMessage(input: {
   });
 
   if (input.media) {
-    await db
-      .insert(schema.messageMedia)
-      .values({
-        id: newId("messageMedia"),
-        organizationId,
-        messageId: message.id,
-        mimeType: input.media.mimeType,
-        dataBase64: input.media.dataBase64,
-        filename: input.media.filename ?? null,
-        sizeBytes: Math.ceil((input.media.dataBase64.length * 3) / 4),
-      })
-      .onConflictDoNothing({ target: [schema.messageMedia.messageId] });
+    await saveMessageMedia({
+      organizationId,
+      messageId: message.id,
+      mimeType: input.media.mimeType,
+      bytes: Buffer.from(input.media.dataBase64, "base64"),
+      filename: input.media.filename ?? null,
+    });
   } else if (input.pendingMedia) {
     await queueMediaRecovery(organizationId, message.id, input.pendingMedia).catch((err) =>
       console.error("[ingest] falha ao enfileirar recuperação de mídia:", err)

@@ -37,6 +37,9 @@ RUN addgroup -S vocero && adduser -S vocero -G vocero
 # BACKUP_DIR (default /app/backups) — monte um volume aqui em produção,
 # senão os backups somem a cada redeploy.
 RUN mkdir -p /app/backups && chown vocero:vocero /app/backups
+# MEDIA_DIR (default /app/media) — mídia das mensagens em arquivo; também
+# precisa de volume persistente.
+RUN mkdir -p /app/media && chown vocero:vocero /app/media
 
 COPY --from=builder --chown=vocero:vocero /app/.next/standalone ./
 COPY --from=builder --chown=vocero:vocero /app/.next/static ./.next/static

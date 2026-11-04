@@ -707,11 +707,37 @@ export const messageMedia = pgTable("message_media", {
     .unique()
     .references(() => message.id, { onDelete: "cascade" }),
   mimeType: text("mime_type").notNull(),
-  dataBase64: text("data_base64").notNull(),
+  /** Legado: bytes em base64 no próprio banco. Mídia nova vai para arquivo
+   * (`storageKey`); este campo só é preenchido quando gravar no disco
+   * falha (fallback — mídia nunca se perde) ou em linhas ainda não
+   * migradas pelo `src/server/media/maintenance.ts`. */
+  dataBase64: text("data_base64"),
+  /** Caminho relativo a `MEDIA_DIR` (`<org>/<yyyy-mm>/<id>`) — ver
+   * `src/server/media/store.ts`. */
+  storageKey: text("storage_key"),
+  /** Apagada pela política de retenção (`media_config.retentionDays`): a
+   * linha fica (nome/tamanho/tipo continuam visíveis), os bytes não. */
+  purgedAt: timestamp("purged_at"),
   /** Nome original (documentos) — usado no card do documento e ao encaminhar/baixar. */
   filename: text("filename"),
   sizeBytes: integer("size_bytes"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (t) => [
+  // Retenção: "mídias desta org mais antigas que X".
+  index("message_media_org_created_idx").on(t.organizationId, t.createdAt),
+]);
+
+/**
+ * Política de armazenamento de mídia por organização. `retentionDays` nulo
+ * = guarda para sempre; com valor, mídias mais antigas são apagadas do
+ * disco (o texto e o registro da mensagem continuam).
+ */
+export const mediaConfig = pgTable("media_config", {
+  organizationId: text("organization_id")
+    .primaryKey()
+    .references(() => organization.id, { onDelete: "cascade" }),
+  retentionDays: integer("retention_days"),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
 /**

@@ -40,6 +40,10 @@ services:
       # Backup do banco (pg_dump) — disco local da própria instância,
       # persiste entre redeploys (Constituição II: nada de S3/R2).
       - vocero_backups:/app/backups
+      # Mídia das mensagens (fotos, áudios, documentos) — arquivos fora do
+      # Postgres. Sem `name:` fixo: o Compose prefixa com o nome da stack,
+      # então cada instância no mesmo host tem o seu volume.
+      - vocero_media:/app/media
 
     depends_on:
       postgres:
@@ -75,6 +79,7 @@ volumes:
     name: ${POSTGRES_VOLUME}
   vocero_backups:
     name: ${BACKUPS_VOLUME:-vocero_backups}
+  vocero_media:
 
 networks:
   vocero-net:

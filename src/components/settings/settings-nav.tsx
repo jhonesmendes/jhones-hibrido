@@ -12,6 +12,7 @@ const TABS = [
   { href: "/settings/templates", label: "Modelos", hideFromAgent: true },
   { href: "/settings/team", label: "Equipe" },
   { href: "/settings/email", label: "Email", hideFromAgent: true },
+  { href: "/settings/storage", label: "Armazenamento", hideFromAgent: true },
   { href: "/settings/license", label: "Licença", hideFromAgent: true },
   { href: "/settings/integrations", label: "Integrações", hideFromAgent: true },
   { href: "/settings/preferences", label: "Preferências" },

@@ -118,6 +118,7 @@ function MediaContent({
       <span className="inline-flex items-center gap-1.5 text-text-3">
         <Paperclip className="h-3.5 w-3.5" strokeWidth={1.7} />
         {mediaLabel(m.type)}
+        {m.mediaExpired ? " expirada (apagada pela retenção de mídia)" : ""}
         {m.text ? ` — ${m.text}` : ""}
       </span>
     );

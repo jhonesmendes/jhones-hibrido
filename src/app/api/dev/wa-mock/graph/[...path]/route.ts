@@ -2,6 +2,7 @@ import { mockGuard } from "@/lib/dev-guard";
 import {
   getWaMockState,
   nextN,
+  putMockMedia,
   type MockTemplate,
 } from "@/server/dev/wa-mock-state";
 
@@ -85,6 +86,28 @@ export async function GET(req: Request, ctx: Params) {
     });
   }
 
+  // GET __media/{mediaId} → bytes (a "URL temporizada" do CDN da Meta)
+  if (path.length === 2 && path[0] === "__media") {
+    const media = getWaMockState().media.get(path[1]!);
+    if (!media) return new Response("not found", { status: 404 });
+    return new Response(new Uint8Array(media.bytes), {
+      headers: { "content-type": media.mimeType },
+    });
+  }
+
+  // GET {mediaId} → metadados + URL de download (passo 1 da mídia recebida)
+  if (path.length === 1 && path[0]!.startsWith("mock-media-")) {
+    const media = getWaMockState().media.get(path[0]!);
+    if (!media) return Response.json({ error: { message: "media not found", code: 100 } }, { status: 404 });
+    const base = new URL(req.url);
+    return Response.json({
+      id: path[0],
+      url: `${base.origin}${base.pathname.replace(/\/[^/]+$/, "")}/__media/${path[0]}`,
+      mime_type: media.mimeType,
+      file_size: media.bytes.length,
+    });
+  }
+
   // GET {phoneNumberId}?fields=... → validação do wizard
   if (path.length === 1) {
     return Response.json({
@@ -103,6 +126,20 @@ export async function POST(req: Request, ctx: Params) {
   const path = normalizePath((await ctx.params).path);
   const token = bearerToken(req);
   if (token.endsWith("-invalid")) return invalidTokenResponse();
+
+  // POST {phoneNumberId}/media (multipart) → upload de mídia do envio
+  if (path.length === 2 && path[1] === "media") {
+    const form = await req.formData().catch(() => null);
+    const file = form?.get("file");
+    if (!(file instanceof Blob)) {
+      return Response.json({ error: { message: "file ausente", code: 100 } }, { status: 400 });
+    }
+    const id = putMockMedia({
+      bytes: Buffer.from(await file.arrayBuffer()),
+      mimeType: file.type || "application/octet-stream",
+    });
+    return Response.json({ id });
+  }
 
   const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
 

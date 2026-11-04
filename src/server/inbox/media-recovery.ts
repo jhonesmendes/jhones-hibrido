@@ -6,6 +6,7 @@ import { downloadMetaMedia, getMetaMediaMeta } from "@/lib/meta/client";
 import { publish } from "@/server/events/bus";
 import { serializeMessage } from "@/server/inbox/message-format";
 import { getCredentialsById } from "@/server/whatsapp/credentials";
+import { saveMessageMedia } from "@/server/media/store";
 import { deserializeMediaSource, downloadBaileysMedia } from "@/server/baileys/media";
 
 /**
@@ -170,19 +171,13 @@ async function attemptRecovery(messageId: string, force: boolean): Promise<boole
     return false;
   }
 
-  const sizeBytes = Math.ceil((media.dataBase64.length * 3) / 4);
-  await db
-    .insert(schema.messageMedia)
-    .values({
-      id: newId("messageMedia"),
-      organizationId: pending.organizationId,
-      messageId,
-      mimeType: media.mimeType,
-      dataBase64: media.dataBase64,
-      filename: media.filename,
-      sizeBytes,
-    })
-    .onConflictDoNothing({ target: [schema.messageMedia.messageId] });
+  const { sizeBytes } = await saveMessageMedia({
+    organizationId: pending.organizationId,
+    messageId,
+    mimeType: media.mimeType,
+    bytes: Buffer.from(media.dataBase64, "base64"),
+    filename: media.filename,
+  });
   await db.delete(schema.messageMediaPending).where(eq(schema.messageMediaPending.id, pending.id));
 
   const messageRows = await db

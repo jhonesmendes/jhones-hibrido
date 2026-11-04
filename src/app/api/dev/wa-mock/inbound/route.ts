@@ -2,6 +2,7 @@ import { z } from "zod";
 import { mockGuard } from "@/lib/dev-guard";
 import { apiError, parseBody } from "@/lib/api";
 import { getCredentialsByPhoneNumberId } from "@/server/whatsapp/credentials";
+import { putMockMedia } from "@/server/dev/wa-mock-state";
 import {
   buildInboundPayload,
   deliverToWebhook,
@@ -17,6 +18,9 @@ const schema = z.object({
   text: z.string().optional(),
   waMessageId: z.string().optional(),
   timestamp: z.number().optional(),
+  /** Mídia simulada (type image/audio/video/document): bytes em base64. */
+  mediaBase64: z.string().optional(),
+  mimeType: z.string().optional(),
 });
 
 export async function POST(req: Request) {
@@ -27,8 +31,16 @@ export async function POST(req: Request) {
   if (!body.ok) return body.response;
 
   const creds = await getCredentialsByPhoneNumberId(body.data.phoneNumberId);
+  const { mediaBase64, ...rest } = body.data;
+  const mediaId = mediaBase64
+    ? putMockMedia({
+        bytes: Buffer.from(mediaBase64, "base64"),
+        mimeType: rest.mimeType ?? "application/octet-stream",
+      })
+    : undefined;
   const payload = buildInboundPayload({
-    ...body.data,
+    ...rest,
+    mediaId,
     wabaId: creds?.wabaId ?? "WABA-MOCK",
   });
   const res = await deliverToWebhook(payload);

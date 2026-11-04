@@ -17,6 +17,7 @@ import {
   type Credentials,
 } from "@/server/whatsapp/credentials";
 import { isWindowOpen } from "@/server/inbox/window";
+import { saveMessageMedia } from "@/server/media/store";
 import { LOCAL_MEDIA_MARKER, serializeMessage } from "@/server/inbox/message-format";
 import {
   BaileysSendError,
@@ -424,14 +425,12 @@ export async function sendMedia(input: {
     .returning();
   const message = inserted[0]!;
 
-  await db.insert(schema.messageMedia).values({
-    id: newId("messageMedia"),
+  await saveMessageMedia({
     organizationId: input.organizationId,
     messageId: message.id,
     mimeType: input.mimeType,
-    dataBase64: input.buffer.toString("base64"),
+    bytes: input.buffer,
     filename: input.filename ?? null,
-    sizeBytes: input.buffer.length,
   });
 
   await db
@@ -550,14 +549,12 @@ async function sendMediaViaUnofficial(
   const message = inserted[0];
 
   if (message) {
-    await db.insert(schema.messageMedia).values({
-      id: newId("messageMedia"),
+    await saveMessageMedia({
       organizationId: input.organizationId,
       messageId: message.id,
       mimeType: input.mimeType,
-      dataBase64: input.buffer.toString("base64"),
+      bytes: input.buffer,
       filename: input.filename ?? null,
-      sizeBytes: input.buffer.length,
     });
   }
 

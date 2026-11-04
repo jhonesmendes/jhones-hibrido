@@ -4,12 +4,13 @@ import { getDb, schema } from "@/lib/db";
 import { scoped } from "@/lib/db/tenant";
 import { LOCAL_MEDIA_MARKER } from "@/server/inbox/ingest";
 import { recoverPendingMedia } from "@/server/inbox/media-recovery";
+import { readMessageMediaBytes } from "@/server/media/store";
 
 /**
  * Proxy autenticado de mídia: `mediaUrl` externa (canal oficial, CDN da
  * Meta) é buscada sob demanda; o canal não oficial baixa e guarda os bytes
- * localmente na ingestão (ver `message_media`, autohospedado — sem S3/R2),
- * então aqui só serve o que já está no Postgres.
+ * localmente na ingestão (ver `message_media` + `src/server/media/store.ts`,
+ * autohospedado — sem S3/R2), então aqui só serve o que já está guardado.
  */
 export const dynamic = "force-dynamic";
 
@@ -100,8 +101,13 @@ export const GET = withAuth(async (session, req: Request, ctx: Params) => {
       if (recovered) media = await loadMedia();
     }
     if (!media) return apiError(404, "media_unavailable", "Mídia indisponível");
+    if (media.purgedAt) {
+      return apiError(410, "media_expired", "Mídia apagada pela política de retenção");
+    }
+    const bytes = await readMessageMediaBytes(media);
+    if (!bytes) return apiError(404, "media_unavailable", "Mídia indisponível");
 
-    return serveBytes(req, Buffer.from(media.dataBase64, "base64"), media.mimeType);
+    return serveBytes(req, bytes, media.mimeType);
   }
 
   const res = await fetch(message.mediaUrl, {

@@ -35,6 +35,9 @@ export function buildInboundPayload(input: {
   text?: string;
   waMessageId?: string;
   timestamp?: number;
+  /** Mídia já guardada no mock (`putMockMedia`) — para type image/audio/… */
+  mediaId?: string;
+  mimeType?: string;
 }) {
   const type = input.type ?? "text";
   const message: Record<string, unknown> = {
@@ -44,6 +47,9 @@ export function buildInboundPayload(input: {
     type,
   };
   if (type === "text") message.text = { body: input.text ?? "oi" };
+  else if (input.mediaId) {
+    message[type] = { id: input.mediaId, mime_type: input.mimeType, caption: input.text };
+  }
 
   return {
     object: "whatsapp_business_account",

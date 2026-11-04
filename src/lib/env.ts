@@ -51,6 +51,9 @@ const envSchema = z.object({
   // pra um volume persistente (sobrevive a redeploy), senão os backups
   // somem no próximo deploy.
   BACKUP_DIR: z.string().default("/app/backups"),
+  // Mídia de mensagens (fotos, áudios, documentos) — arquivos em disco
+  // local da instância, fora do Postgres. Precisa ser um volume persistente.
+  MEDIA_DIR: z.string().default("/app/media"),
   // API interna de envio (ex.: automações N8N) — opcional: sem ela, a rota
   // fica travada (falha fechada), o resto do produto continua normal.
   INTERNAL_API_KEY: z.string().optional(),

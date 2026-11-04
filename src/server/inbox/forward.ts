@@ -9,6 +9,7 @@ import {
 } from "@/server/inbox/ingest";
 import { getMostRecentConversationForContact } from "@/server/inbox/queries";
 import { sendMedia, sendText, SendError } from "@/server/inbox/send";
+import { readMessageMediaBytes } from "@/server/media/store";
 
 export type ForwardResult = { contactId: string; ok: boolean; error?: string };
 
@@ -45,6 +46,11 @@ export async function forwardMessage(
     .limit(1);
   const row = rows[0];
   if (!row) throw new SendError("meta_error", "Mensagem não encontrada");
+  // Lido uma vez só, fora do laço — os mesmos bytes vão para todo destino.
+  const mediaBytes = row.media ? await readMessageMediaBytes(row.media) : null;
+  if (row.media && !mediaBytes) {
+    throw new SendError("meta_error", "A mídia desta mensagem não está mais disponível");
+  }
 
   const results: ForwardResult[] = [];
   for (const contactId of input.targetContactIds) {
@@ -76,11 +82,11 @@ export async function forwardMessage(
       }
       await requireChannelAccess(session, conversation.channel, "send");
 
-      if (row.media) {
+      if (row.media && mediaBytes) {
         await sendMedia({
           conversationId: conversation.id,
           organizationId: session.organizationId,
-          buffer: Buffer.from(row.media.dataBase64, "base64"),
+          buffer: mediaBytes,
           mimeType: row.media.mimeType,
           filename: row.media.filename,
           caption: input.caption?.trim() || row.message.text || undefined,
