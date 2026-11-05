@@ -1,0 +1,95 @@
+{
+  "name": "Fibra Forte — Alerta de erro dos workflows",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "f4393a4f-4449-59ba-8336-d6d2d50db916",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT COALESCE(jsonb_object_agg(chave, valor), '{}'::jsonb) AS config FROM bot_fluxo_config WHERE fluxo = 'motorista_mdfe' AND chave IN ('vocero_url','contato_alerta');",
+        "options": {}
+      },
+      "id": "3ae67248-179a-5c35-a91a-da62151447d2",
+      "name": "Ler config",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        440,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_PG",
+          "name": "Postgres vocero_sankhya"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.config?.vocero_url || 'https://sankhya.vocero.com.br' }}/api/internal/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ to: $json.config?.contato_alerta || '5566999679169', text: '⚠️ Workflow com erro: ' + ($('Error Trigger').first().json.workflow?.name || '-') + '\\nNó: ' + ($('Error Trigger').first().json.execution?.lastNodeExecuted || '-') + '\\nErro: ' + String($('Error Trigger').first().json.execution?.error?.message || '-').slice(0, 500) + '\\nExecução: ' + ($('Error Trigger').first().json.execution?.url || '-') }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "aef6eb6c-3caa-59fc-a2fb-b0e86d4ff8d4",
+      "name": "Enviar alerta",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        300
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_VOCERO",
+          "name": "Vocero x-internal-key (Bot MDF-e)"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Ler config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ler config": {
+      "main": [
+        [
+          {
+            "node": "Enviar alerta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false,
+  "pinData": {}
+}

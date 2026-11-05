@@ -120,6 +120,13 @@ Sucesso `200`: `{ "success": true, "conversationId", "departmentId", "department
 | 404 | `not_found` | Conversa não existe |
 | 404 | `department_not_found` | Sem departamento ativo com esse id/nome |
 
+### `POST /api/internal/conversations/{id}/note`
+
+Grava uma nota nas observações do contato, sem mexer no atendimento:
+`{ "note": "Protocolo 123" }` (até 1000 caracteres). Passando de 4000 caracteres
+no total, sai o trecho mais antigo. Sucesso `200`: `{ "success": true }`. Erros:
+`401 unauthorized`, `422 invalid_body`, `404 not_found`.
+
 O transbordo não desliga o evento: as próximas mensagens continuam chegando ao
 workflow, que decide o que fazer com elas.
 

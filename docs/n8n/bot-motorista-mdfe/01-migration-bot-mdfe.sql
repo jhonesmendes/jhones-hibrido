@@ -1,4 +1,4 @@
--- Bot MDF-e motorista — migration v1.4
+-- Bot MDF-e motorista — migration v1.5
 -- Banco: vocero_sankhya (Postgres 16)
 -- Rodar: docker exec -i sankhya_vocero-postgres-1 psql -v ON_ERROR_STOP=1 -U postgres -d vocero_sankhya < 01-migration-bot-mdfe.sql
 -- Re-executável. Não sobrescreve textos já editados.
@@ -87,10 +87,13 @@ INSERT INTO bot_fluxo_config (fluxo, chave, valor) VALUES
 ('motorista_mdfe','timeout_sessao_min','60'),
 ('motorista_mdfe','departamento_transbordo','Geral Fibra Forte'),
 ('motorista_mdfe','api_mdfe_base_url','https://cnh.fibraforte.agr.br'),
-('motorista_mdfe','vocero_url','https://sankhya.vocero.com.br')
+('motorista_mdfe','vocero_url','https://sankhya.vocero.com.br'),
+('motorista_mdfe','contato_alerta','5566999679169'),
+('motorista_mdfe','max_respostas_invalidas','3'),
+('motorista_mdfe','alerta_intervalo_seg','60')
 ON CONFLICT (fluxo, chave) DO NOTHING;
 
 COMMIT;
 
--- Conferência (24 linhas)
+-- Conferência (27 linhas)
 -- SELECT chave, valor FROM bot_fluxo_config WHERE fluxo = 'motorista_mdfe' ORDER BY chave;

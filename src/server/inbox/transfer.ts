@@ -23,6 +23,29 @@ export function appendContactNote(existing: string | null, note: string, at: Dat
   return merged.length > MAX_CONTACT_NOTES_LENGTH ? merged.slice(-MAX_CONTACT_NOTES_LENGTH) : merged;
 }
 
+async function appendNoteToContact(
+  organizationId: string,
+  contact: { id: string; notes: string | null },
+  note: string,
+  now: Date
+): Promise<void> {
+  await getDb()
+    .update(schema.contact)
+    .set({ notes: appendContactNote(contact.notes, note, now), updatedAt: now })
+    .where(and(eq(schema.contact.organizationId, organizationId), eq(schema.contact.id, contact.id)));
+}
+
+/** Grava a nota da automação nas observações do contato da conversa. */
+export async function addConversationNote(
+  organizationId: string,
+  conversationId: string,
+  note: string
+): Promise<void> {
+  const row = await getConversation(organizationId, conversationId);
+  if (!row) throw new TransferError("not_found", "Conversa não encontrada");
+  await appendNoteToContact(organizationId, row.contact, note, new Date());
+}
+
 /**
  * Passa a conversa de uma automação para um departamento humano.
  *
@@ -87,10 +110,7 @@ export async function transferConversationToDepartment(input: {
     );
 
   if (input.note) {
-    await db
-      .update(schema.contact)
-      .set({ notes: appendContactNote(contact.notes, input.note, now), updatedAt: now })
-      .where(and(eq(schema.contact.organizationId, organizationId), eq(schema.contact.id, contact.id)));
+    await appendNoteToContact(organizationId, contact, input.note, now);
   }
 
   if (queued && !(await findActiveQueueEntry(conversationId, target.id))) {

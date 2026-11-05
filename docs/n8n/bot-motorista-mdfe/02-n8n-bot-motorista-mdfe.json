@@ -1,5 +1,5 @@
 {
-  "name": "Fibra Forte — Bot Motorista MDF-e (v1.4)",
+  "name": "Fibra Forte — Bot Motorista MDF-e (v1.5)",
   "nodes": [
     {
       "parameters": {
@@ -136,7 +136,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const cfgMsg = (cfg, k) => String(cfg[k] ?? '').replace(/\\\\n/g, '\\n');\nconst juntar = (...partes) => partes.map(p => String(p ?? '').trim()).filter(Boolean).join('\\n\\n');\n\nconst body = $('Webhook Vocero').first().json.body || {};\nconst m = body.message || {};\nconst s = $('Carregar sessão').first().json;\nconst cfg = s.config || {};\nlet ctx = s.contexto || {};\nlet estado = s.estado || 'INICIO';\nlet tentativas = s.tentativas || 0;\nconst msgs = [];\nlet chamar = 'nenhuma';\nlet transbordo = false;\nlet nota = null;\n\n// Telefone do remetente — a API aceita qualquer formato; mandamos 55+DDD+9+número\nlet tel = String(body.contact?.phone || '').replace(/\\D/g, '');\nif (tel.length === 12 && tel.startsWith('55')) tel = tel.slice(0, 4) + '9' + tel.slice(4);\n\nconst timeoutMin = Number(cfg.timeout_sessao_min || 60);\nconst idadeMin = (Date.now() - new Date(s.updated_at).getTime()) / 60000;\nif (s.nova !== true && idadeMin > timeoutMin) estado = 'INICIO';\nif (['FIM', 'HUMANO'].includes(estado)) estado = 'INICIO';\n\nconst texto = String(m.text || '').trim().toLowerCase();\nconst opcao = texto.replace(/^0+(?=\\d)/, '');\nconst midia = m.media || null;\nconst mime = String(midia?.mimeType || '').toLowerCase();\n// Mídia ainda em recuperação (available: false) entra na janela: é baixada depois.\nconst isArquivo = ['image', 'document'].includes(m.type) && !!midia && (midia.available === false ||\n  /^(image\\/(jpeg|png|webp|tiff)|application\\/pdf)$/.test(mime));\n\nif (estado !== 'INICIO' && ['menu', '0'].includes(texto)) estado = 'VOLTAR_MENU';\n\nif (estado === 'INICIO') {\n  ctx = {}; tentativas = 0;\n  msgs.push(cfgMsg(cfg, 'msg_saudacao'), cfgMsg(cfg, 'msg_menu'));\n  estado = 'MENU';\n} else if (estado === 'VOLTAR_MENU') {\n  ctx = {}; tentativas = 0;\n  msgs.push(cfgMsg(cfg, 'msg_menu'));\n  estado = 'MENU';\n} else if (estado === 'MENU') {\n  if (opcao === '1') {\n    ctx = { arquivos: [] }; tentativas = 0;\n    msgs.push(cfgMsg(cfg, 'msg_pedir_damdfe'));\n    estado = 'AGUARDANDO_DAMDFE';\n  } else if (opcao === '2') {\n    msgs.push(cfgMsg(cfg, 'msg_pedir_localizacao'));\n    estado = 'CARGAS_AGUARDANDO_LOCAL';\n  } else {\n    msgs.push(cfgMsg(cfg, 'msg_opcao_invalida'), cfgMsg(cfg, 'msg_menu'));\n  }\n} else if (estado === 'AGUARDANDO_DAMDFE') {\n  if (isArquivo) chamar = 'aguardar_arquivos';\n  else msgs.push(cfgMsg(cfg, 'msg_pedir_arquivo'));\n} else if (estado === 'VALIDANDO') {\n  msgs.push(cfgMsg(cfg, 'msg_aguarde'));\n} else if (estado === 'CARGAS_AGUARDANDO_LOCAL') {\n  // Fluxo 2 ainda não definido: guarda a localização e passa para o atendente\n  ctx.localizacao = m.type === 'location' && m.location ? m.location : { texto: m.text || '' };\n  msgs.push(cfgMsg(cfg, 'msg_cargas_recebido'));\n  transbordo = true;\n  nota = 'Bot MDF-e: motorista pediu cargas na região. Localização: ' + JSON.stringify(ctx.localizacao);\n  estado = 'HUMANO';\n}\n\nreturn [{ json: {\n  sessaoId: s.id,\n  conversationId: body.conversationId,\n  messageId: m.id,\n  telefone: tel,\n  estado, contexto: ctx, tentativas,\n  texto: juntar(...msgs),\n  transbordo, nota, chamar,\n  registro: null,\n  config: cfg,\n} }];\n"
+        "jsCode": "// Alerta para o contato de `contato_alerta`. No máximo um por motivo a cada\n// `alerta_intervalo_seg`; os demais só entram na contagem do próximo.\nfunction montarAlerta(cfg, motivo, texto) {\n  if (!String(cfg.contato_alerta || '').trim()) return null;\n  const st = $getWorkflowStaticData('global');\n  const chaveAt = 'alertaAt_' + motivo, chaveOcultos = 'alertaOcultos_' + motivo;\n  if (Date.now() - Number(st[chaveAt] || 0) < Number(cfg.alerta_intervalo_seg ?? 60) * 1000) {\n    st[chaveOcultos] = Number(st[chaveOcultos] || 0) + 1;\n    return null;\n  }\n  const ocultos = Number(st[chaveOcultos] || 0);\n  st[chaveAt] = Date.now();\n  st[chaveOcultos] = 0;\n  return ocultos ? `${texto}\\n(+${ocultos} parecido(s) nos últimos minutos)` : texto;\n}\n\nconst cfgMsg = (cfg, k) => String(cfg[k] ?? '').replace(/\\\\n/g, '\\n');\nconst juntar = (...partes) => partes.map(p => String(p ?? '').trim()).filter(Boolean).join('\\n\\n');\n\nconst body = $('Webhook Vocero').first().json.body || {};\nconst m = body.message || {};\nconst s = $('Carregar sessão').first().json;\nconst cfg = s.config || {};\nlet ctx = s.contexto || {};\nlet estado = s.estado || 'INICIO';\nlet tentativas = s.tentativas || 0;\nconst msgs = [];\nlet chamar = 'nenhuma';\nlet transbordo = false;\nlet nota = null;\nlet alerta = null;\n\n// Resposta fora do esperado: no limite, passa para o atendente e o bot se cala.\n// Sem isso, ele conversa sem parar com qualquer resposta automática.\nconst invalida = (...textos) => {\n  ctx.invalidas = Number(ctx.invalidas || 0) + 1;\n  if (ctx.invalidas >= Number(cfg.max_respostas_invalidas || 3)) {\n    ctx.invalidas = 0;\n    msgs.push(cfgMsg(cfg, 'msg_transbordo'));\n    transbordo = true;\n    nota = 'Bot MDF-e: limite de respostas inválidas; o bot parou de responder nesta conversa.';\n    alerta = montarAlerta(cfg, 'invalidas', `⚠️ Bot MDF-e: limite de respostas inválidas\\nContato: ${tel}`);\n    estado = 'SILENCIO';\n  } else msgs.push(...textos);\n};\n\n// Telefone do remetente — a API aceita qualquer formato; mandamos 55+DDD+9+número\nlet tel = String(body.contact?.phone || '').replace(/\\D/g, '');\nif (tel.length === 12 && tel.startsWith('55')) tel = tel.slice(0, 4) + '9' + tel.slice(4);\n\nconst timeoutMin = Number(cfg.timeout_sessao_min || 60);\nconst idadeMin = (Date.now() - new Date(s.updated_at).getTime()) / 60000;\nif (s.nova !== true && idadeMin > timeoutMin) estado = 'INICIO';\nif (['FIM', 'HUMANO'].includes(estado)) estado = 'INICIO';\n\nconst texto = String(m.text || '').trim().toLowerCase();\nconst opcao = texto.replace(/^0+(?=\\d)/, '');\nconst midia = m.media || null;\nconst mime = String(midia?.mimeType || '').toLowerCase();\n// Mídia ainda em recuperação (available: false) entra na janela: é baixada depois.\nconst isArquivo = ['image', 'document'].includes(m.type) && !!midia && (midia.available === false ||\n  /^(image\\/(jpeg|png|webp|tiff)|application\\/pdf)$/.test(mime));\n\nif (estado !== 'INICIO' && ['menu', '0'].includes(texto)) estado = 'VOLTAR_MENU';\n\nif (estado === 'INICIO') {\n  ctx = {}; tentativas = 0;\n  msgs.push(cfgMsg(cfg, 'msg_saudacao'), cfgMsg(cfg, 'msg_menu'));\n  estado = 'MENU';\n} else if (estado === 'VOLTAR_MENU') {\n  ctx = {}; tentativas = 0;\n  msgs.push(cfgMsg(cfg, 'msg_menu'));\n  estado = 'MENU';\n} else if (estado === 'MENU') {\n  if (opcao === '1') {\n    ctx = { arquivos: [] }; tentativas = 0;\n    msgs.push(cfgMsg(cfg, 'msg_pedir_damdfe'));\n    estado = 'AGUARDANDO_DAMDFE';\n  } else if (opcao === '2') {\n    msgs.push(cfgMsg(cfg, 'msg_pedir_localizacao'));\n    estado = 'CARGAS_AGUARDANDO_LOCAL';\n  } else {\n    invalida(cfgMsg(cfg, 'msg_opcao_invalida'), cfgMsg(cfg, 'msg_menu'));\n  }\n} else if (estado === 'AGUARDANDO_DAMDFE') {\n  if (isArquivo) chamar = 'aguardar_arquivos';\n  else invalida(cfgMsg(cfg, 'msg_pedir_arquivo'));\n} else if (estado === 'VALIDANDO') {\n  msgs.push(cfgMsg(cfg, 'msg_aguarde'));\n} else if (estado === 'CARGAS_AGUARDANDO_LOCAL') {\n  // Fluxo 2 ainda não definido: guarda a localização e passa para o atendente\n  ctx.localizacao = m.type === 'location' && m.location ? m.location : { texto: m.text || '' };\n  msgs.push(cfgMsg(cfg, 'msg_cargas_recebido'));\n  transbordo = true;\n  nota = 'Bot MDF-e: motorista pediu cargas na região. Localização: ' + JSON.stringify(ctx.localizacao);\n  estado = 'HUMANO';\n}\n\nreturn [{ json: {\n  sessaoId: s.id,\n  conversationId: body.conversationId,\n  messageId: m.id,\n  telefone: tel,\n  estado, contexto: ctx, tentativas,\n  texto: juntar(...msgs),\n  transbordo, nota, chamar, alerta, notaRetorno: null,\n  registro: null,\n  config: cfg,\n} }];\n"
       },
       "id": "7bada503-ed67-5905-a9ef-fe90c46ef267",
       "name": "Decidir",
@@ -358,7 +358,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const cfg = $('Decidir').first().json.config;\nconst baseUrl = String(cfg.api_mdfe_base_url || '').replace(/\\/+$/, '');\nconst st = $getWorkflowStaticData('global');\nconst req = opts => this.helpers.httpRequest({ returnFullResponse: true, ignoreHttpStatusErrors: true,\n  json: false, timeout: 30000, ...opts });\nconst parse = b => { if (b == null) return null; if (typeof b === 'string') { try { return JSON.parse(b); } catch { return { raw: b.slice(0, 500) }; } } return b; };\nconst agora = () => Date.now();\nconst guardar = (j, comRefresh) => {\n  st.mdfeAccess = j.access_token; st.mdfeAccessExp = agora() + 29 * 60 * 1000;\n  if (comRefresh && j.refresh_token) { st.mdfeRefresh = j.refresh_token; st.mdfeRefreshExp = agora() + 7 * 24 * 3600 * 1000 - 3600 * 1000; }\n};\nasync function login() {\n  const user = $env.MDFE_API_USER, pass = $env.MDFE_API_PASS;\n  if (!user || !pass) throw new Error('sem_credencial');\n  const r = await req({ method: 'POST', url: baseUrl + '/auth/login',\n    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },\n    body: 'username=' + encodeURIComponent(user) + '&password=' + encodeURIComponent(pass) });\n  if (r.statusCode === 401) throw new Error('login_401');\n  if (r.statusCode !== 200) throw new Error('login_http_' + r.statusCode);\n  guardar(parse(r.body), true);\n}\nasync function refresh() {\n  if (!st.mdfeRefresh || (st.mdfeRefreshExp || 0) < agora()) return false;\n  const r = await req({ method: 'POST', url: baseUrl + '/auth/refresh',\n    headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ refresh_token: st.mdfeRefresh }) });\n  if (r.statusCode !== 200) return false;\n  guardar(parse(r.body), false);\n  return true;\n}\nasync function garantirToken() {\n  if (st.mdfeAccess && (st.mdfeAccessExp || 0) > agora() + 60000) return;\n  if (await refresh()) return;\n  await login();\n}\n\nconst d = $('Decidir').first().json;\nconst ids = $('Listar arquivos').all().map(i => i.json.messageId);\nconst baixados = $input.all();\nconst IMG = /^image\\/(jpeg|png|webp|tiff)$/;\nconst ext = { 'application/pdf': '.pdf', 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp', 'image/tiff': '.tif' };\nconst midias = [];\nfor (let i = 0; i < baixados.length; i++) {\n  const bin = baixados[i].binary?.data;\n  if (!bin) continue;\n  const mime = String(bin.mimeType || '').split(';')[0].trim().toLowerCase();\n  if (mime !== 'application/pdf' && !IMG.test(mime)) continue;\n  const fileName = String(bin.fileName && /\\.\\w+$/.test(bin.fileName) ? bin.fileName : 'damdfe_' + ids[i] + ext[mime]).replace(/[\"\\r\\n]/g, '');\n  midias.push({ id: ids[i], mime, bin: { ...bin, mimeType: mime, fileName } });\n}\n// Regra da API: 1 PDF ou de 1 a 3 imagens, sem misturar\nconst pdf = midias.find(m => m.mime === 'application/pdf');\nconst sel = pdf ? [pdf] : midias.slice(0, 3);\nconst out = { arquivosIds: sel.map(m => m.id), http: null, resposta: null, falha: null, baseUrl, telefone: d.telefone, qtd: sel.length };\nif (sel.length === 0) { out.falha = 'sem_midia'; return [{ json: out }]; }\ntry {\n  await garantirToken();\n} catch (e) {\n  out.falha = String((e && e.message) || e).slice(0, 200);\n  return [{ json: out }];\n}\n// Os bytes não passam por aqui: o nó Code só repassa as referências dos arquivos.\nconst binary = {};\nsel.forEach((m, i) => { binary['f' + i] = m.bin; });\nreturn [{ json: { ...out, token: st.mdfeAccess }, binary }];\n"
+        "jsCode": "const cfg = $('Decidir').first().json.config;\nconst baseUrl = String(cfg.api_mdfe_base_url || '').replace(/\\/+$/, '');\nconst st = $getWorkflowStaticData('global');\nconst req = opts => this.helpers.httpRequest({ returnFullResponse: true, ignoreHttpStatusErrors: true,\n  json: false, timeout: 30000, ...opts });\nconst parse = b => { if (b == null) return null; if (typeof b === 'string') { try { return JSON.parse(b); } catch { return { raw: b.slice(0, 500) }; } } return b; };\nconst agora = () => Date.now();\nconst guardar = (j, comRefresh) => {\n  st.mdfeAccess = j.access_token; st.mdfeAccessExp = agora() + 29 * 60 * 1000;\n  if (comRefresh && j.refresh_token) { st.mdfeRefresh = j.refresh_token; st.mdfeRefreshExp = agora() + 7 * 24 * 3600 * 1000 - 3600 * 1000; }\n};\nasync function login() {\n  const user = $env.MDFE_API_USER, pass = $env.MDFE_API_PASS;\n  if (!user || !pass) throw new Error('sem_credencial');\n  const r = await req({ method: 'POST', url: baseUrl + '/auth/login',\n    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },\n    body: 'username=' + encodeURIComponent(user) + '&password=' + encodeURIComponent(pass) });\n  if (r.statusCode !== 200) {\n    const erro = new Error(r.statusCode === 401 ? 'login_401' : 'login_http_' + r.statusCode);\n    erro.detalhe = parse(r.body)?.detail ?? null;\n    throw erro;\n  }\n  guardar(parse(r.body), true);\n}\nasync function refresh() {\n  if (!st.mdfeRefresh || (st.mdfeRefreshExp || 0) < agora()) return false;\n  const r = await req({ method: 'POST', url: baseUrl + '/auth/refresh',\n    headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ refresh_token: st.mdfeRefresh }) });\n  if (r.statusCode !== 200) return false;\n  guardar(parse(r.body), false);\n  return true;\n}\nasync function garantirToken() {\n  if (st.mdfeAccess && (st.mdfeAccessExp || 0) > agora() + 60000) return;\n  if (await refresh()) return;\n  await login();\n}\n\nconst d = $('Decidir').first().json;\nconst ids = $('Listar arquivos').all().map(i => i.json.messageId);\nconst baixados = $input.all();\nconst IMG = /^image\\/(jpeg|png|webp|tiff)$/;\nconst ext = { 'application/pdf': '.pdf', 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp', 'image/tiff': '.tif' };\nconst midias = [];\nfor (let i = 0; i < baixados.length; i++) {\n  const bin = baixados[i].binary?.data;\n  if (!bin) continue;\n  const mime = String(bin.mimeType || '').split(';')[0].trim().toLowerCase();\n  if (mime !== 'application/pdf' && !IMG.test(mime)) continue;\n  const fileName = String(bin.fileName && /\\.\\w+$/.test(bin.fileName) ? bin.fileName : 'damdfe_' + ids[i] + ext[mime]).replace(/[\"\\r\\n]/g, '');\n  midias.push({ id: ids[i], mime, bin: { ...bin, mimeType: mime, fileName } });\n}\n// Regra da API: 1 PDF ou de 1 a 3 imagens, sem misturar\nconst pdf = midias.find(m => m.mime === 'application/pdf');\nconst sel = pdf ? [pdf] : midias.slice(0, 3);\nconst out = { arquivosIds: sel.map(m => m.id), http: null, resposta: null, falha: null, baseUrl, telefone: d.telefone, qtd: sel.length };\nif (sel.length === 0) { out.falha = 'sem_midia'; return [{ json: out }]; }\ntry {\n  await garantirToken();\n} catch (e) {\n  out.falha = String((e && e.message) || e).slice(0, 200);\n  out.falhaDetalhe = e?.detalhe ?? null;\n  return [{ json: out }];\n}\n// Os bytes não passam por aqui: o nó Code só repassa as referências dos arquivos.\nconst binary = {};\nsel.forEach((m, i) => { binary['f' + i] = m.bin; });\nreturn [{ json: { ...out, token: st.mdfeAccess }, binary }];\n"
       },
       "id": "6d700863-4220-5f8b-bbd8-8d71d2a256da",
       "name": "Preparar envio",
@@ -645,7 +645,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const cfg = $('Decidir').first().json.config;\nconst baseUrl = String(cfg.api_mdfe_base_url || '').replace(/\\/+$/, '');\nconst st = $getWorkflowStaticData('global');\nconst req = opts => this.helpers.httpRequest({ returnFullResponse: true, ignoreHttpStatusErrors: true,\n  json: false, timeout: 30000, ...opts });\nconst parse = b => { if (b == null) return null; if (typeof b === 'string') { try { return JSON.parse(b); } catch { return { raw: b.slice(0, 500) }; } } return b; };\nconst agora = () => Date.now();\nconst guardar = (j, comRefresh) => {\n  st.mdfeAccess = j.access_token; st.mdfeAccessExp = agora() + 29 * 60 * 1000;\n  if (comRefresh && j.refresh_token) { st.mdfeRefresh = j.refresh_token; st.mdfeRefreshExp = agora() + 7 * 24 * 3600 * 1000 - 3600 * 1000; }\n};\nasync function login() {\n  const user = $env.MDFE_API_USER, pass = $env.MDFE_API_PASS;\n  if (!user || !pass) throw new Error('sem_credencial');\n  const r = await req({ method: 'POST', url: baseUrl + '/auth/login',\n    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },\n    body: 'username=' + encodeURIComponent(user) + '&password=' + encodeURIComponent(pass) });\n  if (r.statusCode === 401) throw new Error('login_401');\n  if (r.statusCode !== 200) throw new Error('login_http_' + r.statusCode);\n  guardar(parse(r.body), true);\n}\nasync function refresh() {\n  if (!st.mdfeRefresh || (st.mdfeRefreshExp || 0) < agora()) return false;\n  const r = await req({ method: 'POST', url: baseUrl + '/auth/refresh',\n    headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ refresh_token: st.mdfeRefresh }) });\n  if (r.statusCode !== 200) return false;\n  guardar(parse(r.body), false);\n  return true;\n}\nasync function garantirToken() {\n  if (st.mdfeAccess && (st.mdfeAccessExp || 0) > agora() + 60000) return;\n  if (await refresh()) return;\n  await login();\n}\n\nconst prep = $('Preparar envio').first();\nconst r = $input.first().json;\nconst status = r.statusCode;\nconst out = { arquivosIds: prep.json.arquivosIds, http: status ?? null, resposta: parse(r.body), falha: null };\nif (!status) return [{ json: { ...out, resposta: null, falha: 'rede: ' + String(r.error?.message || r.error || 'sem resposta').slice(0, 180) } }];\n\nconst repetir = token => [{ json: { ...prep.json, token, repetir: true }, binary: prep.binary }];\n// Até 2 repetições por envio ($runIndex conta as passagens por este nó)\nif ($runIndex < 2) {\n  if (status === 401) {\n    try {\n      st.mdfeAccessExp = 0;\n      if (!(await refresh())) await login();\n      return repetir(st.mdfeAccess);\n    } catch (e) {\n      return [{ json: { ...out, falha: String((e && e.message) || e).slice(0, 200) } }];\n    }\n  }\n  if (status === 429 || status === 503) {\n    const ra = Number((r.headers || {})['retry-after']) || 30;\n    await new Promise(ok => setTimeout(ok, Math.min(ra, 60) * 1000));\n    return repetir(prep.json.token);\n  }\n}\nreturn [{ json: out }];\n"
+        "jsCode": "const cfg = $('Decidir').first().json.config;\nconst baseUrl = String(cfg.api_mdfe_base_url || '').replace(/\\/+$/, '');\nconst st = $getWorkflowStaticData('global');\nconst req = opts => this.helpers.httpRequest({ returnFullResponse: true, ignoreHttpStatusErrors: true,\n  json: false, timeout: 30000, ...opts });\nconst parse = b => { if (b == null) return null; if (typeof b === 'string') { try { return JSON.parse(b); } catch { return { raw: b.slice(0, 500) }; } } return b; };\nconst agora = () => Date.now();\nconst guardar = (j, comRefresh) => {\n  st.mdfeAccess = j.access_token; st.mdfeAccessExp = agora() + 29 * 60 * 1000;\n  if (comRefresh && j.refresh_token) { st.mdfeRefresh = j.refresh_token; st.mdfeRefreshExp = agora() + 7 * 24 * 3600 * 1000 - 3600 * 1000; }\n};\nasync function login() {\n  const user = $env.MDFE_API_USER, pass = $env.MDFE_API_PASS;\n  if (!user || !pass) throw new Error('sem_credencial');\n  const r = await req({ method: 'POST', url: baseUrl + '/auth/login',\n    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },\n    body: 'username=' + encodeURIComponent(user) + '&password=' + encodeURIComponent(pass) });\n  if (r.statusCode !== 200) {\n    const erro = new Error(r.statusCode === 401 ? 'login_401' : 'login_http_' + r.statusCode);\n    erro.detalhe = parse(r.body)?.detail ?? null;\n    throw erro;\n  }\n  guardar(parse(r.body), true);\n}\nasync function refresh() {\n  if (!st.mdfeRefresh || (st.mdfeRefreshExp || 0) < agora()) return false;\n  const r = await req({ method: 'POST', url: baseUrl + '/auth/refresh',\n    headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ refresh_token: st.mdfeRefresh }) });\n  if (r.statusCode !== 200) return false;\n  guardar(parse(r.body), false);\n  return true;\n}\nasync function garantirToken() {\n  if (st.mdfeAccess && (st.mdfeAccessExp || 0) > agora() + 60000) return;\n  if (await refresh()) return;\n  await login();\n}\n\nconst prep = $('Preparar envio').first();\nconst r = $input.first().json;\nconst status = r.statusCode;\nconst out = { arquivosIds: prep.json.arquivosIds, http: status ?? null, resposta: parse(r.body), falha: null };\nif (!status) return [{ json: { ...out, resposta: null, falha: 'rede: ' + String(r.error?.message || r.error || 'sem resposta').slice(0, 180) } }];\n\nconst repetir = token => [{ json: { ...prep.json, token, repetir: true }, binary: prep.binary }];\n// Até 2 repetições por envio ($runIndex conta as passagens por este nó)\nif ($runIndex < 2) {\n  if (status === 401) {\n    try {\n      st.mdfeAccessExp = 0;\n      if (!(await refresh())) await login();\n      return repetir(st.mdfeAccess);\n    } catch (e) {\n      return [{ json: { ...out, resposta: null, falha: String((e && e.message) || e).slice(0, 200), falhaDetalhe: e?.detalhe ?? null } }];\n    }\n  }\n  if (status === 429 || status === 503) {\n    const ra = Number((r.headers || {})['retry-after']) || 30;\n    await new Promise(ok => setTimeout(ok, Math.min(ra, 60) * 1000));\n    return repetir(prep.json.token);\n  }\n}\nreturn [{ json: out }];\n"
       },
       "id": "6c31816e-aa60-556a-9557-8f92765325fd",
       "name": "Avaliar resposta",
@@ -690,7 +690,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const cfgMsg = (cfg, k) => String(cfg[k] ?? '').replace(/\\\\n/g, '\\n');\nconst juntar = (...partes) => partes.map(p => String(p ?? '').trim()).filter(Boolean).join('\\n\\n');\n\nconst d = $('Decidir').first().json;\nconst sessao = $('Marcar validando').first().json;\nconst api = $input.first().json;\nconst cfg = d.config;\nconst ctx = { ...(sessao.contexto || {}), arquivos: [] };\nlet tentativas = sessao.tentativas || 0;\nconst max = Number(cfg.max_tentativas_documento || 3);\nconst out = { ...d, chamar: 'nenhuma', transbordo: false, nota: null };\nconst r = api.resposta || {};\n\nconst REENVIO = ['CHAVE_ILEGIVEL', 'DOCUMENTO_NAO_E_MDFE', 'CTE_DIVERGENTE', 'EMPRESA_DIVERGENTE'];\nlet status = r.status || null, codigo = r.codigo || null;\nconst notaOperacao = c => `Bot MDF-e: código ${c || '-'}, protocolo ${r.protocolo || '-'}, chave ${r.mdfe?.chave || '-'}, telefone ${d.telefone}`;\nconst aguardarDeNovo = (texto) => { out.texto = texto; out.estado = 'AGUARDANDO_DAMDFE'; };\nconst contarTentativa = (texto) => {\n  tentativas += 1;\n  if (tentativas >= max) {\n    out.texto = juntar(texto, cfgMsg(cfg, 'msg_transbordo'));\n    out.transbordo = true; out.nota = notaOperacao(codigo); out.estado = 'HUMANO';\n  } else aguardarDeNovo(texto);\n};\nconst operacao = (texto) => {\n  out.texto = juntar(texto, cfgMsg(cfg, 'msg_operacao'));\n  out.transbordo = true; out.nota = notaOperacao(codigo); out.estado = 'HUMANO';\n};\n\nif (api.falha === 'sem_midia') { status = 'falha_local'; codigo = 'SEM_MIDIA'; aguardarDeNovo(cfgMsg(cfg, 'msg_pedir_arquivo')); }\nelse if (api.falha === 'arquivo_grande' || api.http === 413) { status = status || 'falha_local'; codigo = codigo || 'ARQUIVO_GRANDE'; aguardarDeNovo(cfgMsg(cfg, 'msg_arquivo_grande')); }\nelse if (api.falha) { status = 'falha_local'; codigo = api.falha; out.texto = cfgMsg(cfg, 'msg_erro_tecnico'); out.transbordo = true; out.nota = 'Bot MDF-e: falha ao chamar a API (' + api.falha + ')' + (api.falha === 'login_401' ? ' — senha do usuário da API mudou' : ''); out.estado = 'HUMANO'; }\nelse if (api.http === 422) { codigo = 'HTTP_422'; contarTentativa(cfgMsg(cfg, 'msg_arquivo_ilegivel')); }\nelse if (api.http === 429 || api.http === 503) { codigo = 'HTTP_' + api.http; out.texto = cfgMsg(cfg, 'msg_indisponivel'); out.estado = 'FIM'; }\nelse if (api.http !== 200) { codigo = 'HTTP_' + api.http; out.texto = cfgMsg(cfg, 'msg_erro_tecnico'); out.transbordo = true; out.nota = `Bot MDF-e: API devolveu HTTP ${api.http}: ${r.detail || ''}`; out.estado = 'HUMANO'; }\nelse if (status === 'encerrado' || status === 'validado') {\n  tentativas = 0;\n  aguardarDeNovo(juntar(r.mensagem, cfgMsg(cfg, 'msg_pos_encerrado')));\n}\nelse if (status === 'divergente') {\n  if (REENVIO.includes(codigo)) contarTentativa(juntar(r.mensagem, cfgMsg(cfg, 'msg_reenviar')));\n  else operacao(r.mensagem);\n}\nelse if (status === 'erro') {\n  if (codigo === 'ENCERRAMENTO_EM_PROCESSAMENTO') aguardarDeNovo(juntar(r.mensagem, cfgMsg(cfg, 'msg_em_processamento')));\n  else operacao(r.mensagem);\n}\nelse { codigo = codigo || 'RESPOSTA_INESPERADA'; out.texto = cfgMsg(cfg, 'msg_erro_tecnico'); out.transbordo = true; out.nota = 'Bot MDF-e: resposta fora do contrato da API'; out.estado = 'HUMANO'; }\n\nout.contexto = ctx;\nout.tentativas = tentativas;\nout.registro = {\n  conversation_id: d.conversationId, telefone: d.telefone,\n  http_status: api.http, status, codigo,\n  protocolo: r.protocolo ?? null, chave_mdfe: r.mdfe?.chave ?? null,\n  numero_mdfe: r.mdfe?.numero != null ? String(r.mdfe.numero) : null,\n  mensagem: r.mensagem ?? r.detail ?? null,\n  retorno_api: api.resposta ?? null,\n  encerrado_em: status === 'encerrado' ? new Date().toISOString() : null,\n  arquivos: api.arquivosIds || [],\n};\nreturn [{ json: out }];\n"
+        "jsCode": "// Alerta para o contato de `contato_alerta`. No máximo um por motivo a cada\n// `alerta_intervalo_seg`; os demais só entram na contagem do próximo.\nfunction montarAlerta(cfg, motivo, texto) {\n  if (!String(cfg.contato_alerta || '').trim()) return null;\n  const st = $getWorkflowStaticData('global');\n  const chaveAt = 'alertaAt_' + motivo, chaveOcultos = 'alertaOcultos_' + motivo;\n  if (Date.now() - Number(st[chaveAt] || 0) < Number(cfg.alerta_intervalo_seg ?? 60) * 1000) {\n    st[chaveOcultos] = Number(st[chaveOcultos] || 0) + 1;\n    return null;\n  }\n  const ocultos = Number(st[chaveOcultos] || 0);\n  st[chaveAt] = Date.now();\n  st[chaveOcultos] = 0;\n  return ocultos ? `${texto}\\n(+${ocultos} parecido(s) nos últimos minutos)` : texto;\n}\n\nconst cfgMsg = (cfg, k) => String(cfg[k] ?? '').replace(/\\\\n/g, '\\n');\nconst juntar = (...partes) => partes.map(p => String(p ?? '').trim()).filter(Boolean).join('\\n\\n');\n\nconst d = $('Decidir').first().json;\nconst sessao = $('Marcar validando').first().json;\nconst api = $input.first().json;\nconst cfg = d.config;\nconst ctx = { ...(sessao.contexto || {}), arquivos: [], invalidas: 0 };\nlet tentativas = sessao.tentativas || 0;\nconst max = Number(cfg.max_tentativas_documento || 3);\nconst out = { ...d, chamar: 'nenhuma', transbordo: false, nota: null };\nconst r = api.resposta || {};\n\nconst REENVIO = ['CHAVE_ILEGIVEL', 'DOCUMENTO_NAO_E_MDFE', 'CTE_DIVERGENTE', 'EMPRESA_DIVERGENTE'];\nlet status = r.status || null, codigo = r.codigo || null;\nconst notaOperacao = c => `Bot MDF-e: código ${c || '-'}, protocolo ${r.protocolo || '-'}, chave ${r.mdfe?.chave || '-'}, telefone ${d.telefone}`;\nconst aguardarDeNovo = (texto) => { out.texto = texto; out.estado = 'AGUARDANDO_DAMDFE'; };\nconst contarTentativa = (texto) => {\n  tentativas += 1;\n  if (tentativas >= max) {\n    out.texto = juntar(texto, cfgMsg(cfg, 'msg_transbordo'));\n    out.transbordo = true; out.nota = notaOperacao(codigo); out.estado = 'HUMANO';\n  } else aguardarDeNovo(texto);\n};\nconst operacao = (texto) => {\n  out.texto = juntar(texto, cfgMsg(cfg, 'msg_operacao'));\n  out.transbordo = true; out.nota = notaOperacao(codigo); out.estado = 'HUMANO';\n};\n\nif (api.falha === 'sem_midia') { status = 'falha_local'; codigo = 'SEM_MIDIA'; aguardarDeNovo(cfgMsg(cfg, 'msg_pedir_arquivo')); }\nelse if (api.falha === 'arquivo_grande' || api.http === 413) { status = status || 'falha_local'; codigo = codigo || 'ARQUIVO_GRANDE'; aguardarDeNovo(cfgMsg(cfg, 'msg_arquivo_grande')); }\nelse if (api.falha) { status = 'falha_local'; codigo = api.falha; out.texto = cfgMsg(cfg, 'msg_erro_tecnico'); out.transbordo = true; out.nota = 'Bot MDF-e: falha ao chamar a API (' + api.falha + ')' + (api.falha === 'login_401' ? ' — senha do usuário da API mudou' : ''); out.estado = 'HUMANO'; }\nelse if (api.http === 422) { codigo = 'HTTP_422'; contarTentativa(cfgMsg(cfg, 'msg_arquivo_ilegivel')); }\nelse if (api.http === 429 || api.http === 503) { codigo = 'HTTP_' + api.http; out.texto = cfgMsg(cfg, 'msg_indisponivel'); out.estado = 'FIM'; }\nelse if (api.http !== 200) { codigo = 'HTTP_' + api.http; out.texto = cfgMsg(cfg, 'msg_erro_tecnico'); out.transbordo = true; out.nota = `Bot MDF-e: API devolveu HTTP ${api.http}: ${r.detail || ''}`; out.estado = 'HUMANO'; }\nelse if (status === 'encerrado' || status === 'validado') {\n  tentativas = 0;\n  aguardarDeNovo(juntar(r.mensagem, cfgMsg(cfg, 'msg_pos_encerrado')));\n}\nelse if (status === 'divergente') {\n  if (REENVIO.includes(codigo)) contarTentativa(juntar(r.mensagem, cfgMsg(cfg, 'msg_reenviar')));\n  else operacao(r.mensagem);\n}\nelse if (status === 'erro') {\n  if (codigo === 'ENCERRAMENTO_EM_PROCESSAMENTO') aguardarDeNovo(juntar(r.mensagem, cfgMsg(cfg, 'msg_em_processamento')));\n  else operacao(r.mensagem);\n}\nelse { codigo = codigo || 'RESPOSTA_INESPERADA'; out.texto = cfgMsg(cfg, 'msg_erro_tecnico'); out.transbordo = true; out.nota = 'Bot MDF-e: resposta fora do contrato da API'; out.estado = 'HUMANO'; }\n\nout.contexto = ctx;\nout.tentativas = tentativas;\nout.registro = {\n  conversation_id: d.conversationId, telefone: d.telefone,\n  http_status: api.http, status, codigo,\n  protocolo: r.protocolo ?? null, chave_mdfe: r.mdfe?.chave ?? null,\n  numero_mdfe: r.mdfe?.numero != null ? String(r.mdfe.numero) : null,\n  mensagem: r.mensagem ?? r.detail ?? api.falhaDetalhe ?? null,\n  retorno_api: api.resposta ?? null,\n  encerrado_em: status === 'encerrado' ? new Date().toISOString() : null,\n  arquivos: api.arquivosIds || [],\n};\nconst reg = out.registro;\nconst resumo = `status ${reg.status || '-'}, código ${reg.codigo || '-'}, protocolo ${reg.protocolo || '-'}, chave ${reg.chave_mdfe || '-'}, telefone ${d.telefone}, mensagem: ${reg.mensagem || '-'}`;\nout.nota = null;\nout.notaRetorno = ('Bot MDF-e: ' + resumo).slice(0, 1000);\nif (!['encerrado', 'validado'].includes(reg.status)) {\n  out.alerta = montarAlerta(cfg, reg.codigo || 'erro',\n    `⚠️ Erro no bot MDF-e\\nMotorista: ${d.telefone}\\nStatus: ${reg.status || '-'}\\nCódigo: ${reg.codigo || '-'}\\nProtocolo: ${reg.protocolo || '-'}\\nMensagem: ${reg.mensagem || '-'}`);\n}\nreturn [{ json: out }];\n"
       },
       "id": "a0612f27-0537-5fca-bdb6-4367452f8022",
       "name": "Pós-validar",
@@ -855,6 +855,128 @@
           "name": "Vocero x-internal-key (Bot MDF-e)"
         }
       }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "b97f4a7d-9815-5066-88f0-0e2a6a3363f0",
+              "leftValue": "={{ $('Saída').first().json.alerta }}",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "1422deca-d393-514c-927e-1fd078e1ae12",
+      "name": "Tem alerta?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        5500,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Saída').first().json.config.vocero_url }}/api/internal/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ to: $('Saída').first().json.config.contato_alerta, text: $('Saída').first().json.alerta }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "26fab598-d7ad-5954-a955-3aec2bbcfcf8",
+      "name": "Vocero: enviar alerta",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5940,
+        560
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_VOCERO",
+          "name": "Vocero x-internal-key (Bot MDF-e)"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "a786280e-a9da-5100-9c4e-683f568c38d0",
+              "leftValue": "={{ $('Saída').first().json.notaRetorno }}",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "5e814480-a618-538a-835e-c7490f9e59a1",
+      "name": "Tem retorno?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        5940,
+        760
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Saída').first().json.config.vocero_url }}/api/internal/conversations/{{ $('Saída').first().json.conversationId }}/note",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ note: $('Saída').first().json.notaRetorno }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "982f8625-2484-5902-944c-147121c6e864",
+      "name": "Vocero: anotar retorno",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        6380,
+        760
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_VOCERO",
+          "name": "Vocero x-internal-key (Bot MDF-e)"
+        }
+      },
+      "onError": "continueRegularOutput"
     }
   ],
   "connections": {
@@ -1156,8 +1278,42 @@
             "node": "Salvar sessão",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "Tem alerta?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Tem retorno?",
+            "type": "main",
+            "index": 0
           }
         ]
+      ]
+    },
+    "Tem alerta?": {
+      "main": [
+        [
+          {
+            "node": "Vocero: enviar alerta",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Tem retorno?": {
+      "main": [
+        [
+          {
+            "node": "Vocero: anotar retorno",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
       ]
     },
     "Salvar sessão": {
