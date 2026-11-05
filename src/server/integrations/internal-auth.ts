@@ -35,7 +35,7 @@ export async function resolveInternalCaller(
 }
 
 /** A org desta instância — sempre a mais antiga (só existe 1 de verdade). */
-async function getInstanceOrganizationId(): Promise<string | null> {
+export async function getInstanceOrganizationId(): Promise<string | null> {
   const rows = await getDb()
     .select({ id: schema.organization.id })
     .from(schema.organization)

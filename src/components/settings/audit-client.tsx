@@ -32,6 +32,7 @@ export const ACTION_LABEL: Record<string, string> = {
   "settings.n8n_changed": "Configuração N8N alterada",
   "n8n.workflow_executed": "Workflow N8N executado",
   "n8n.workflow_deleted": "Workflow N8N removido",
+  "bot.messages_changed": "Mensagens do bot alteradas",
   "conversation.deleted": "Conversa removida",
   "department.created": "Departamento criado",
   "department.updated": "Departamento atualizado",

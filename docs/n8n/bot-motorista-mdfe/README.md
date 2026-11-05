@@ -29,6 +29,14 @@ Com o webhook ligado, o agente de IA do Vocero não responde nessa instância.
 Importar a nova versão não muda a URL do webhook nem o token. Só desative o
 workflow antigo antes de publicar o novo, porque os dois usam a mesma URL.
 
+## Editar as mensagens
+
+No painel admin, abra o cliente e use **Mensagens do bot**. Vale a partir da próxima
+mensagem recebida, sem republicar o workflow. A instância precisa estar cadastrada
+no painel, com o mesmo segredo em `LICENSE_CONTROL_SECRET`.
+
+Editar `01-migration-bot-mdfe.sql` não muda textos já gravados no banco.
+
 ## Ajustes em `bot_fluxo_config`
 
 | Chave | Padrão | O que faz |
