@@ -11,6 +11,8 @@ const GROUPS: { title: string; items: Record<string, string> }[] = [
       msg_saudacao: "Saudação",
       msg_menu: "Menu de opções",
       msg_opcao_invalida: "Opção não entendida",
+      msg_ia_como_enviar: "IA: como enviar o documento",
+      msg_ia_fora_escopo: "IA: assunto fora do atendimento",
     },
   },
   {
@@ -20,6 +22,7 @@ const GROUPS: { title: string; items: Record<string, string> }[] = [
       msg_pedir_arquivo: "Pedir arquivo em foto ou PDF",
       msg_conferindo: "Conferindo o documento",
       msg_aguarde: "Ainda conferindo",
+      msg_encerrado: "Confirmação de encerramento",
       msg_pos_encerrado: "Depois de encerrar",
       msg_reenviar: "Pedir novo envio",
       msg_em_processamento: "Encerramento em processamento",
@@ -30,15 +33,16 @@ const GROUPS: { title: string; items: Record<string, string> }[] = [
   {
     title: "Cargas na região",
     items: {
+      msg_cargas_em_breve: "Consulta ainda indisponível",
       msg_pedir_localizacao: "Pedir a localização",
       msg_cargas_recebido: "Localização recebida",
     },
   },
   {
-    title: "Atendente e erros",
+    title: "Operação e erros",
     items: {
       msg_operacao: "Passar para a operação",
-      msg_transbordo: "Passar para um atendente",
+      msg_transbordo: "Não conseguiu concluir",
       msg_indisponivel: "Conferência indisponível",
       msg_erro_tecnico: "Problema técnico",
     },

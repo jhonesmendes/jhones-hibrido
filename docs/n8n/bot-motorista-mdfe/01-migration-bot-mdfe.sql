@@ -1,4 +1,4 @@
--- Bot MDF-e motorista — migration v1.5
+-- Bot MDF-e motorista — migration v1.6
 -- Banco: vocero_sankhya (Postgres 16)
 -- Rodar: docker exec -i sankhya_vocero-postgres-1 psql -v ON_ERROR_STOP=1 -U postgres -d vocero_sankhya < 01-migration-bot-mdfe.sql
 -- Re-executável. Não sobrescreve textos já editados.
@@ -90,10 +90,26 @@ INSERT INTO bot_fluxo_config (fluxo, chave, valor) VALUES
 ('motorista_mdfe','vocero_url','https://sankhya.vocero.com.br'),
 ('motorista_mdfe','contato_alerta','5566999679169'),
 ('motorista_mdfe','max_respostas_invalidas','3'),
-('motorista_mdfe','alerta_intervalo_seg','60')
+('motorista_mdfe','alerta_intervalo_seg','60'),
+('motorista_mdfe','msg_encerrado','Seu MDF-e foi encerrado.'),
+('motorista_mdfe','msg_ia_como_enviar','Envie aqui a foto ou o PDF do DAMDFE, do celular cadastrado como motorista da viagem.'),
+('motorista_mdfe','msg_ia_fora_escopo','Por aqui só consigo ajudar a encerrar o MDF-e. Para isso, envie a foto ou o PDF do DAMDFE.'),
+('motorista_mdfe','msg_cargas_em_breve','A consulta de cargas ainda não está disponível por aqui.'),
+('motorista_mdfe','ia_ativa','true'),
+('motorista_mdfe','ia_modelo','gpt-4o-mini'),
+('motorista_mdfe','ia_base_url','https://api.openai.com/v1'),
+('motorista_mdfe','cargas_ativo','false')
 ON CONFLICT (fluxo, chave) DO NOTHING;
+
+-- Operação sem atendente: troca os textos que prometiam um, só se ainda não foram editados.
+UPDATE bot_fluxo_config SET valor = 'Não consegui concluir por aqui. Envie o DAMDFE de novo ou tente mais tarde.', updated_at = now()
+ WHERE fluxo = 'motorista_mdfe' AND chave = 'msg_transbordo' AND valor = 'Não consegui concluir por aqui. Vou te passar para um atendente.';
+UPDATE bot_fluxo_config SET valor = 'Tivemos um problema técnico. Tente novamente em alguns minutos.', updated_at = now()
+ WHERE fluxo = 'motorista_mdfe' AND chave = 'msg_erro_tecnico' AND valor = 'Tivemos um problema técnico. Um atendente vai continuar com você.';
+UPDATE bot_fluxo_config SET valor = 'Esse caso precisa da operação. Nossa equipe já foi avisada.', updated_at = now()
+ WHERE fluxo = 'motorista_mdfe' AND chave = 'msg_operacao' AND valor = 'Vou te passar para um atendente da operação.';
 
 COMMIT;
 
--- Conferência (27 linhas)
+-- Conferência (35 linhas)
 -- SELECT chave, valor FROM bot_fluxo_config WHERE fluxo = 'motorista_mdfe' ORDER BY chave;

@@ -1,4 +1,4 @@
-# Bot Motorista MDF-e (v1.5)
+# Bot Motorista MDF-e (v1.6)
 
 Workflow da instância Sankhya: o Vocero recebe e grava, o n8n conduz o motorista
 e chama a API de MDF-e. Requer n8n 2.x e Vocero com a rota
@@ -7,7 +7,7 @@ e chama a API de MDF-e. Requer n8n 2.x e Vocero com a rota
 ## Instalar
 
 1. Rode `01-migration-bot-mdfe.sql` no banco `vocero_sankhya` (comando no topo do
-   arquivo) e confira as 27 linhas de `bot_fluxo_config`.
+   arquivo) e confira as 35 linhas de `bot_fluxo_config`.
 2. No n8n, defina `MDFE_API_USER`, `MDFE_API_PASS` e
    `N8N_BLOCK_ENV_ACCESS_IN_NODE=false`.
 3. Importe `02-n8n-bot-motorista-mdfe.json` e selecione as credenciais:
@@ -16,7 +16,8 @@ e chama a API de MDF-e. Requer n8n 2.x e Vocero com a rota
      `Avisar conferindo`, `Baixar mídia`, `Vocero: enviar mensagem`,
      `Vocero: transferir para departamento`, `Vocero: enviar alerta` e
      `Vocero: anotar retorno`;
-   - **Header Auth `x-vocero-token`** com um valor aleatório, em `Webhook Vocero`.
+   - **Header Auth `x-vocero-token`** com um valor aleatório, em `Webhook Vocero`;
+   - **OpenAI** com a chave da API, em `IA: classificar`.
 4. Importe `03-n8n-alerta-erro.json`, selecione as mesmas credenciais de Postgres
    e `x-internal-key` em `Ler config` e `Enviar alerta`, e publique.
 5. No workflow do bot, em **Settings → Error Workflow**, escolha
@@ -44,9 +45,19 @@ Editar `01-migration-bot-mdfe.sql` não muda textos já gravados no banco.
 | `contato_alerta` | `5566999679169` | Quem recebe os alertas; vazio desliga os alertas do bot |
 | `alerta_intervalo_seg` | `60` | No máximo um alerta por motivo nesse intervalo |
 | `max_respostas_invalidas` | `3` | Ao chegar nesse número, o bot transfere e fica calado |
+| `ia_ativa` | `true` | `false` usa só as mensagens fixas |
+| `ia_modelo` | `gpt-4o-mini` | Modelo da OpenAI |
+| `cargas_ativo` | `false` | `true` quando a API de cargas existir |
 | `timeout_sessao_min` | `60` | Silêncio do contato que encerra a sessão, e com ela o estado calado |
 
 Quem está no estado calado volta ao menu enviando `menu` ou `0`.
+
+## IA
+
+A IA só classifica a mensagem numa lista fechada de intenções. O texto enviado ao
+motorista é sempre uma mensagem fixa, e a lista de intenções fica em `IA: preparar`.
+Se a IA falhar ou responder fora da lista, segue a mensagem fixa e o contato de
+alerta é avisado.
 
 ## Onde ver o retorno da API
 
