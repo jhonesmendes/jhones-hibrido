@@ -1,0 +1,1221 @@
+{
+  "name": "Fibra Forte — Bot Motorista MDF-e (v1.4)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "bot-motorista-mdfe",
+        "authentication": "headerAuth",
+        "options": {}
+      },
+      "id": "18da313a-e111-58b4-aebf-fd50806270ed",
+      "name": "Webhook Vocero",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ],
+      "webhookId": "94f3ff8a-1387-5cfb-8c54-90bb3308d0e9",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_WEBHOOK",
+          "name": "Vocero x-vocero-token (Bot MDF-e)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "c678fc96-30b9-5af4-b4ef-c37da8603a14",
+              "leftValue": "={{ $json.body.event }}",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              },
+              "rightValue": "message.received"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "fbfa0442-1399-59d5-b267-392c9c2bf137",
+      "name": "É mensagem?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        440,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH limpa AS (\n  DELETE FROM bot_evento_processado WHERE created_at < now() - interval '7 days'\n)\nINSERT INTO bot_evento_processado (event_id) VALUES ($1)\nON CONFLICT DO NOTHING\nRETURNING event_id;",
+        "options": {
+          "queryReplacement": "={{ [ $('Webhook Vocero').first().json.body.eventId ] }}"
+        }
+      },
+      "id": "c36c20be-a2f7-5138-b6a1-13694c17f2f6",
+      "name": "Registrar evento",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        660,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_PG",
+          "name": "Postgres vocero_sankhya"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "82d82088-4420-53b3-a202-e4b43764477b",
+              "leftValue": "={{ $json.event_id }}",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "7feadafe-4170-56b9-b0c0-cb00c8cb49b3",
+      "name": "Evento novo?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        880,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH cfg AS (\n  SELECT COALESCE(jsonb_object_agg(chave, valor), '{}'::jsonb) AS c\n  FROM bot_fluxo_config WHERE fluxo = 'motorista_mdfe'\n), ins AS (\n  INSERT INTO bot_sessao (fluxo, telefone, conversation_id)\n  VALUES ('motorista_mdfe', $1, $2)\n  ON CONFLICT (fluxo, telefone) DO NOTHING\n  RETURNING *, true AS nova\n), s AS (\n  SELECT * FROM ins\n  UNION ALL\n  SELECT b.*, false AS nova FROM bot_sessao b\n  WHERE b.fluxo = 'motorista_mdfe' AND b.telefone = $1 AND NOT EXISTS (SELECT 1 FROM ins)\n)\nSELECT s.*, cfg.c AS config FROM s, cfg;",
+        "options": {
+          "queryReplacement": "={{ [ $('Webhook Vocero').first().json.body.contact.phone, $('Webhook Vocero').first().json.body.conversationId ] }}"
+        }
+      },
+      "id": "96c267f8-9744-5e37-a92d-8e40717910b5",
+      "name": "Carregar sessão",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1100,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_PG",
+          "name": "Postgres vocero_sankhya"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const cfgMsg = (cfg, k) => String(cfg[k] ?? '').replace(/\\\\n/g, '\\n');\nconst juntar = (...partes) => partes.map(p => String(p ?? '').trim()).filter(Boolean).join('\\n\\n');\n\nconst body = $('Webhook Vocero').first().json.body || {};\nconst m = body.message || {};\nconst s = $('Carregar sessão').first().json;\nconst cfg = s.config || {};\nlet ctx = s.contexto || {};\nlet estado = s.estado || 'INICIO';\nlet tentativas = s.tentativas || 0;\nconst msgs = [];\nlet chamar = 'nenhuma';\nlet transbordo = false;\nlet nota = null;\n\n// Telefone do remetente — a API aceita qualquer formato; mandamos 55+DDD+9+número\nlet tel = String(body.contact?.phone || '').replace(/\\D/g, '');\nif (tel.length === 12 && tel.startsWith('55')) tel = tel.slice(0, 4) + '9' + tel.slice(4);\n\nconst timeoutMin = Number(cfg.timeout_sessao_min || 60);\nconst idadeMin = (Date.now() - new Date(s.updated_at).getTime()) / 60000;\nif (s.nova !== true && idadeMin > timeoutMin) estado = 'INICIO';\nif (['FIM', 'HUMANO'].includes(estado)) estado = 'INICIO';\n\nconst texto = String(m.text || '').trim().toLowerCase();\nconst opcao = texto.replace(/^0+(?=\\d)/, '');\nconst midia = m.media || null;\nconst mime = String(midia?.mimeType || '').toLowerCase();\n// Mídia ainda em recuperação (available: false) entra na janela: é baixada depois.\nconst isArquivo = ['image', 'document'].includes(m.type) && !!midia && (midia.available === false ||\n  /^(image\\/(jpeg|png|webp|tiff)|application\\/pdf)$/.test(mime));\n\nif (estado !== 'INICIO' && ['menu', '0'].includes(texto)) estado = 'VOLTAR_MENU';\n\nif (estado === 'INICIO') {\n  ctx = {}; tentativas = 0;\n  msgs.push(cfgMsg(cfg, 'msg_saudacao'), cfgMsg(cfg, 'msg_menu'));\n  estado = 'MENU';\n} else if (estado === 'VOLTAR_MENU') {\n  ctx = {}; tentativas = 0;\n  msgs.push(cfgMsg(cfg, 'msg_menu'));\n  estado = 'MENU';\n} else if (estado === 'MENU') {\n  if (opcao === '1') {\n    ctx = { arquivos: [] }; tentativas = 0;\n    msgs.push(cfgMsg(cfg, 'msg_pedir_damdfe'));\n    estado = 'AGUARDANDO_DAMDFE';\n  } else if (opcao === '2') {\n    msgs.push(cfgMsg(cfg, 'msg_pedir_localizacao'));\n    estado = 'CARGAS_AGUARDANDO_LOCAL';\n  } else {\n    msgs.push(cfgMsg(cfg, 'msg_opcao_invalida'), cfgMsg(cfg, 'msg_menu'));\n  }\n} else if (estado === 'AGUARDANDO_DAMDFE') {\n  if (isArquivo) chamar = 'aguardar_arquivos';\n  else msgs.push(cfgMsg(cfg, 'msg_pedir_arquivo'));\n} else if (estado === 'VALIDANDO') {\n  msgs.push(cfgMsg(cfg, 'msg_aguarde'));\n} else if (estado === 'CARGAS_AGUARDANDO_LOCAL') {\n  // Fluxo 2 ainda não definido: guarda a localização e passa para o atendente\n  ctx.localizacao = m.type === 'location' && m.location ? m.location : { texto: m.text || '' };\n  msgs.push(cfgMsg(cfg, 'msg_cargas_recebido'));\n  transbordo = true;\n  nota = 'Bot MDF-e: motorista pediu cargas na região. Localização: ' + JSON.stringify(ctx.localizacao);\n  estado = 'HUMANO';\n}\n\nreturn [{ json: {\n  sessaoId: s.id,\n  conversationId: body.conversationId,\n  messageId: m.id,\n  telefone: tel,\n  estado, contexto: ctx, tentativas,\n  texto: juntar(...msgs),\n  transbordo, nota, chamar,\n  registro: null,\n  config: cfg,\n} }];\n"
+      },
+      "id": "7bada503-ed67-5905-a9ef-fe90c46ef267",
+      "name": "Decidir",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.chamar }}",
+                    "rightValue": "aguardar_arquivos",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "arquivo"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "responder"
+        }
+      },
+      "id": "4a6ccf28-8d6d-51ab-aa76-b66f9f00d814",
+      "name": "Ação",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        1540,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE bot_sessao\n   SET contexto = jsonb_set(contexto, '{arquivos}',\n                  COALESCE(contexto->'arquivos', '[]'::jsonb) || to_jsonb($2::text)),\n       ultimo_arquivo_em = clock_timestamp(),\n       updated_at = now()\n WHERE id = $1::uuid AND estado = 'AGUARDANDO_DAMDFE'\nRETURNING id, to_char(ultimo_arquivo_em, 'YYYY-MM-DD\"T\"HH24:MI:SS.US') AS marca;",
+        "options": {
+          "queryReplacement": "={{ [ $json.sessaoId, $json.messageId ] }}"
+        }
+      },
+      "id": "fbb66531-c302-5bde-864e-696cf3e4ebda",
+      "name": "Registrar arquivo",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1760,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_PG",
+          "name": "Postgres vocero_sankhya"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "amount": "={{ Number($('Decidir').first().json.config.janela_arquivos_seg || 20) }}",
+        "unit": "seconds"
+      },
+      "id": "e44f71c4-5d62-53f8-beaa-76be29977bf2",
+      "name": "Janela de arquivos",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1980,
+        300
+      ],
+      "webhookId": "d3f8c574-fd74-5c66-a033-29dda072e74d"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE bot_sessao\n   SET estado = 'VALIDANDO', updated_at = now()\n WHERE id = $1::uuid\n   AND estado = 'AGUARDANDO_DAMDFE'\n   AND to_char(ultimo_arquivo_em, 'YYYY-MM-DD\"T\"HH24:MI:SS.US') = $2\nRETURNING id, contexto, tentativas;",
+        "options": {
+          "queryReplacement": "={{ [ $('Decidir').first().json.sessaoId, $('Registrar arquivo').first().json.marca ] }}"
+        }
+      },
+      "id": "311963a8-7569-5c12-b978-ccbe7fcb913d",
+      "name": "Marcar validando",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        2200,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_PG",
+          "name": "Postgres vocero_sankhya"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "8332f3d4-c552-528a-9c89-fbf3cc70d666",
+              "leftValue": "={{ $json.id }}",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "837d92a6-4ec8-5a69-83aa-2e3017915bb4",
+      "name": "Última da janela?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2420,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Decidir').first().json.config.vocero_url }}/api/internal/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ conversationId: $('Decidir').first().json.conversationId, text: String($('Decidir').first().json.config.msg_conferindo || '').replace(/\\\\n/g, '\\n') }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "58537c19-68b9-525b-9eb8-00fa0cded466",
+      "name": "Avisar conferindo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2640,
+        300
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_VOCERO",
+          "name": "Vocero x-internal-key (Bot MDF-e)"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const ids = $('Marcar validando').first().json.contexto.arquivos || [];\nreturn ids.map(messageId => ({ json: { messageId } }));"
+      },
+      "id": "4960a2fe-0be6-5a0c-a5d0-b913b7f27b97",
+      "name": "Listar arquivos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2860,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Decidir').first().json.config.vocero_url }}/api/internal/messages/{{ $json.messageId }}/media",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 60000,
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "file",
+              "outputPropertyName": "data"
+            }
+          }
+        }
+      },
+      "id": "cc1860be-43df-5ea8-b98d-a708cd88e58a",
+      "name": "Baixar mídia",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3080,
+        300
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_VOCERO",
+          "name": "Vocero x-internal-key (Bot MDF-e)"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const cfg = $('Decidir').first().json.config;\nconst baseUrl = String(cfg.api_mdfe_base_url || '').replace(/\\/+$/, '');\nconst st = $getWorkflowStaticData('global');\nconst req = opts => this.helpers.httpRequest({ returnFullResponse: true, ignoreHttpStatusErrors: true,\n  json: false, timeout: 30000, ...opts });\nconst parse = b => { if (b == null) return null; if (typeof b === 'string') { try { return JSON.parse(b); } catch { return { raw: b.slice(0, 500) }; } } return b; };\nconst agora = () => Date.now();\nconst guardar = (j, comRefresh) => {\n  st.mdfeAccess = j.access_token; st.mdfeAccessExp = agora() + 29 * 60 * 1000;\n  if (comRefresh && j.refresh_token) { st.mdfeRefresh = j.refresh_token; st.mdfeRefreshExp = agora() + 7 * 24 * 3600 * 1000 - 3600 * 1000; }\n};\nasync function login() {\n  const user = $env.MDFE_API_USER, pass = $env.MDFE_API_PASS;\n  if (!user || !pass) throw new Error('sem_credencial');\n  const r = await req({ method: 'POST', url: baseUrl + '/auth/login',\n    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },\n    body: 'username=' + encodeURIComponent(user) + '&password=' + encodeURIComponent(pass) });\n  if (r.statusCode === 401) throw new Error('login_401');\n  if (r.statusCode !== 200) throw new Error('login_http_' + r.statusCode);\n  guardar(parse(r.body), true);\n}\nasync function refresh() {\n  if (!st.mdfeRefresh || (st.mdfeRefreshExp || 0) < agora()) return false;\n  const r = await req({ method: 'POST', url: baseUrl + '/auth/refresh',\n    headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ refresh_token: st.mdfeRefresh }) });\n  if (r.statusCode !== 200) return false;\n  guardar(parse(r.body), false);\n  return true;\n}\nasync function garantirToken() {\n  if (st.mdfeAccess && (st.mdfeAccessExp || 0) > agora() + 60000) return;\n  if (await refresh()) return;\n  await login();\n}\n\nconst d = $('Decidir').first().json;\nconst ids = $('Listar arquivos').all().map(i => i.json.messageId);\nconst baixados = $input.all();\nconst IMG = /^image\\/(jpeg|png|webp|tiff)$/;\nconst ext = { 'application/pdf': '.pdf', 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp', 'image/tiff': '.tif' };\nconst midias = [];\nfor (let i = 0; i < baixados.length; i++) {\n  const bin = baixados[i].binary?.data;\n  if (!bin) continue;\n  const mime = String(bin.mimeType || '').split(';')[0].trim().toLowerCase();\n  if (mime !== 'application/pdf' && !IMG.test(mime)) continue;\n  const fileName = String(bin.fileName && /\\.\\w+$/.test(bin.fileName) ? bin.fileName : 'damdfe_' + ids[i] + ext[mime]).replace(/[\"\\r\\n]/g, '');\n  midias.push({ id: ids[i], mime, bin: { ...bin, mimeType: mime, fileName } });\n}\n// Regra da API: 1 PDF ou de 1 a 3 imagens, sem misturar\nconst pdf = midias.find(m => m.mime === 'application/pdf');\nconst sel = pdf ? [pdf] : midias.slice(0, 3);\nconst out = { arquivosIds: sel.map(m => m.id), http: null, resposta: null, falha: null, baseUrl, telefone: d.telefone, qtd: sel.length };\nif (sel.length === 0) { out.falha = 'sem_midia'; return [{ json: out }]; }\ntry {\n  await garantirToken();\n} catch (e) {\n  out.falha = String((e && e.message) || e).slice(0, 200);\n  return [{ json: out }];\n}\n// Os bytes não passam por aqui: o nó Code só repassa as referências dos arquivos.\nconst binary = {};\nsel.forEach((m, i) => { binary['f' + i] = m.bin; });\nreturn [{ json: { ...out, token: st.mdfeAccess }, binary }];\n"
+      },
+      "id": "6d700863-4220-5f8b-bbd8-8d71d2a256da",
+      "name": "Preparar envio",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3300,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "f6540a32-f7de-570e-835b-ffdb3554af06",
+              "leftValue": "={{ $json.falha }}",
+              "operator": {
+                "type": "string",
+                "operation": "empty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a2c8add2-adc0-531b-b04d-ba535a58356d",
+      "name": "Pronto para enviar?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        3520,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.qtd }}",
+                    "rightValue": "1",
+                    "operator": {
+                      "type": "number",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "1"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.qtd }}",
+                    "rightValue": "2",
+                    "operator": {
+                      "type": "number",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "2"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.qtd }}",
+                    "rightValue": "3",
+                    "operator": {
+                      "type": "number",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "3"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e793e178-2e20-51fe-9b53-d3d8bc0da69d",
+      "name": "Quantos arquivos?",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        3740,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.baseUrl }}/mdfe/validar",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "f0"
+            },
+            {
+              "name": "telefone",
+              "value": "={{ $json.telefone }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 120000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "e4cce96b-5c19-58fd-bbb3-437c4d434b37",
+      "name": "POST validar (1)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3740,
+        140
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.baseUrl }}/mdfe/validar",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "f0"
+            },
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "f1"
+            },
+            {
+              "name": "telefone",
+              "value": "={{ $json.telefone }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 120000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "eaaa10ab-70f3-50c9-8ddf-0795a5fd81d7",
+      "name": "POST validar (2)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3960,
+        300
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.baseUrl }}/mdfe/validar",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "f0"
+            },
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "f1"
+            },
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "f2"
+            },
+            {
+              "name": "telefone",
+              "value": "={{ $json.telefone }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 120000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "0db36290-357e-5071-ae5f-87f61c39a6fa",
+      "name": "POST validar (3)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4180,
+        460
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const cfg = $('Decidir').first().json.config;\nconst baseUrl = String(cfg.api_mdfe_base_url || '').replace(/\\/+$/, '');\nconst st = $getWorkflowStaticData('global');\nconst req = opts => this.helpers.httpRequest({ returnFullResponse: true, ignoreHttpStatusErrors: true,\n  json: false, timeout: 30000, ...opts });\nconst parse = b => { if (b == null) return null; if (typeof b === 'string') { try { return JSON.parse(b); } catch { return { raw: b.slice(0, 500) }; } } return b; };\nconst agora = () => Date.now();\nconst guardar = (j, comRefresh) => {\n  st.mdfeAccess = j.access_token; st.mdfeAccessExp = agora() + 29 * 60 * 1000;\n  if (comRefresh && j.refresh_token) { st.mdfeRefresh = j.refresh_token; st.mdfeRefreshExp = agora() + 7 * 24 * 3600 * 1000 - 3600 * 1000; }\n};\nasync function login() {\n  const user = $env.MDFE_API_USER, pass = $env.MDFE_API_PASS;\n  if (!user || !pass) throw new Error('sem_credencial');\n  const r = await req({ method: 'POST', url: baseUrl + '/auth/login',\n    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },\n    body: 'username=' + encodeURIComponent(user) + '&password=' + encodeURIComponent(pass) });\n  if (r.statusCode === 401) throw new Error('login_401');\n  if (r.statusCode !== 200) throw new Error('login_http_' + r.statusCode);\n  guardar(parse(r.body), true);\n}\nasync function refresh() {\n  if (!st.mdfeRefresh || (st.mdfeRefreshExp || 0) < agora()) return false;\n  const r = await req({ method: 'POST', url: baseUrl + '/auth/refresh',\n    headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ refresh_token: st.mdfeRefresh }) });\n  if (r.statusCode !== 200) return false;\n  guardar(parse(r.body), false);\n  return true;\n}\nasync function garantirToken() {\n  if (st.mdfeAccess && (st.mdfeAccessExp || 0) > agora() + 60000) return;\n  if (await refresh()) return;\n  await login();\n}\n\nconst prep = $('Preparar envio').first();\nconst r = $input.first().json;\nconst status = r.statusCode;\nconst out = { arquivosIds: prep.json.arquivosIds, http: status ?? null, resposta: parse(r.body), falha: null };\nif (!status) return [{ json: { ...out, resposta: null, falha: 'rede: ' + String(r.error?.message || r.error || 'sem resposta').slice(0, 180) } }];\n\nconst repetir = token => [{ json: { ...prep.json, token, repetir: true }, binary: prep.binary }];\n// Até 2 repetições por envio ($runIndex conta as passagens por este nó)\nif ($runIndex < 2) {\n  if (status === 401) {\n    try {\n      st.mdfeAccessExp = 0;\n      if (!(await refresh())) await login();\n      return repetir(st.mdfeAccess);\n    } catch (e) {\n      return [{ json: { ...out, falha: String((e && e.message) || e).slice(0, 200) } }];\n    }\n  }\n  if (status === 429 || status === 503) {\n    const ra = Number((r.headers || {})['retry-after']) || 30;\n    await new Promise(ok => setTimeout(ok, Math.min(ra, 60) * 1000));\n    return repetir(prep.json.token);\n  }\n}\nreturn [{ json: out }];\n"
+      },
+      "id": "6c31816e-aa60-556a-9557-8f92765325fd",
+      "name": "Avaliar resposta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4620,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "42cc26dc-a72d-5ebf-a80c-335147bce30d",
+              "leftValue": "={{ $json.repetir }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "deb3bcc7-cffc-5ee2-928a-74f1ec25df58",
+      "name": "Repetir?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        4840,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const cfgMsg = (cfg, k) => String(cfg[k] ?? '').replace(/\\\\n/g, '\\n');\nconst juntar = (...partes) => partes.map(p => String(p ?? '').trim()).filter(Boolean).join('\\n\\n');\n\nconst d = $('Decidir').first().json;\nconst sessao = $('Marcar validando').first().json;\nconst api = $input.first().json;\nconst cfg = d.config;\nconst ctx = { ...(sessao.contexto || {}), arquivos: [] };\nlet tentativas = sessao.tentativas || 0;\nconst max = Number(cfg.max_tentativas_documento || 3);\nconst out = { ...d, chamar: 'nenhuma', transbordo: false, nota: null };\nconst r = api.resposta || {};\n\nconst REENVIO = ['CHAVE_ILEGIVEL', 'DOCUMENTO_NAO_E_MDFE', 'CTE_DIVERGENTE', 'EMPRESA_DIVERGENTE'];\nlet status = r.status || null, codigo = r.codigo || null;\nconst notaOperacao = c => `Bot MDF-e: código ${c || '-'}, protocolo ${r.protocolo || '-'}, chave ${r.mdfe?.chave || '-'}, telefone ${d.telefone}`;\nconst aguardarDeNovo = (texto) => { out.texto = texto; out.estado = 'AGUARDANDO_DAMDFE'; };\nconst contarTentativa = (texto) => {\n  tentativas += 1;\n  if (tentativas >= max) {\n    out.texto = juntar(texto, cfgMsg(cfg, 'msg_transbordo'));\n    out.transbordo = true; out.nota = notaOperacao(codigo); out.estado = 'HUMANO';\n  } else aguardarDeNovo(texto);\n};\nconst operacao = (texto) => {\n  out.texto = juntar(texto, cfgMsg(cfg, 'msg_operacao'));\n  out.transbordo = true; out.nota = notaOperacao(codigo); out.estado = 'HUMANO';\n};\n\nif (api.falha === 'sem_midia') { status = 'falha_local'; codigo = 'SEM_MIDIA'; aguardarDeNovo(cfgMsg(cfg, 'msg_pedir_arquivo')); }\nelse if (api.falha === 'arquivo_grande' || api.http === 413) { status = status || 'falha_local'; codigo = codigo || 'ARQUIVO_GRANDE'; aguardarDeNovo(cfgMsg(cfg, 'msg_arquivo_grande')); }\nelse if (api.falha) { status = 'falha_local'; codigo = api.falha; out.texto = cfgMsg(cfg, 'msg_erro_tecnico'); out.transbordo = true; out.nota = 'Bot MDF-e: falha ao chamar a API (' + api.falha + ')' + (api.falha === 'login_401' ? ' — senha do usuário da API mudou' : ''); out.estado = 'HUMANO'; }\nelse if (api.http === 422) { codigo = 'HTTP_422'; contarTentativa(cfgMsg(cfg, 'msg_arquivo_ilegivel')); }\nelse if (api.http === 429 || api.http === 503) { codigo = 'HTTP_' + api.http; out.texto = cfgMsg(cfg, 'msg_indisponivel'); out.estado = 'FIM'; }\nelse if (api.http !== 200) { codigo = 'HTTP_' + api.http; out.texto = cfgMsg(cfg, 'msg_erro_tecnico'); out.transbordo = true; out.nota = `Bot MDF-e: API devolveu HTTP ${api.http}: ${r.detail || ''}`; out.estado = 'HUMANO'; }\nelse if (status === 'encerrado' || status === 'validado') {\n  tentativas = 0;\n  aguardarDeNovo(juntar(r.mensagem, cfgMsg(cfg, 'msg_pos_encerrado')));\n}\nelse if (status === 'divergente') {\n  if (REENVIO.includes(codigo)) contarTentativa(juntar(r.mensagem, cfgMsg(cfg, 'msg_reenviar')));\n  else operacao(r.mensagem);\n}\nelse if (status === 'erro') {\n  if (codigo === 'ENCERRAMENTO_EM_PROCESSAMENTO') aguardarDeNovo(juntar(r.mensagem, cfgMsg(cfg, 'msg_em_processamento')));\n  else operacao(r.mensagem);\n}\nelse { codigo = codigo || 'RESPOSTA_INESPERADA'; out.texto = cfgMsg(cfg, 'msg_erro_tecnico'); out.transbordo = true; out.nota = 'Bot MDF-e: resposta fora do contrato da API'; out.estado = 'HUMANO'; }\n\nout.contexto = ctx;\nout.tentativas = tentativas;\nout.registro = {\n  conversation_id: d.conversationId, telefone: d.telefone,\n  http_status: api.http, status, codigo,\n  protocolo: r.protocolo ?? null, chave_mdfe: r.mdfe?.chave ?? null,\n  numero_mdfe: r.mdfe?.numero != null ? String(r.mdfe.numero) : null,\n  mensagem: r.mensagem ?? r.detail ?? null,\n  retorno_api: api.resposta ?? null,\n  encerrado_em: status === 'encerrado' ? new Date().toISOString() : null,\n  arquivos: api.arquivosIds || [],\n};\nreturn [{ json: out }];\n"
+      },
+      "id": "a0612f27-0537-5fca-bdb6-4367452f8022",
+      "name": "Pós-validar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5060,
+        300
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "f89cada1-feeb-5c6d-907d-87e744b0b2fd",
+      "name": "Saída",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        5280,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH upd AS (\n  UPDATE bot_sessao\n     SET estado = $2, contexto = $3::jsonb, tentativas = $4::int,\n         conversation_id = COALESCE($5, conversation_id), updated_at = now()\n   WHERE id = $1::uuid\n  RETURNING id\n), x AS (SELECT $6::jsonb AS r),\nreg AS (\n  INSERT INTO mdfe_atendimento (sessao_id, conversation_id, telefone, http_status, status, codigo,\n                                protocolo, chave_mdfe, numero_mdfe, mensagem, retorno_api, encerrado_em)\n  SELECT $1::uuid, r->>'conversation_id', r->>'telefone', (r->>'http_status')::int, r->>'status', r->>'codigo',\n         r->>'protocolo', r->>'chave_mdfe', r->>'numero_mdfe', r->>'mensagem',\n         NULLIF(r->'retorno_api', 'null'::jsonb), NULLIF(r->>'encerrado_em', '')::timestamptz\n    FROM x WHERE r <> 'null'::jsonb\n  RETURNING id\n), arq AS (\n  INSERT INTO mdfe_atendimento_arquivo (atendimento_id, message_id)\n  SELECT reg.id, a\n    FROM reg, x, jsonb_array_elements_text(COALESCE(x.r->'arquivos', '[]'::jsonb)) a\n  ON CONFLICT DO NOTHING\n  RETURNING id\n)\nSELECT (SELECT id FROM upd) AS sessao_id, (SELECT id FROM reg) AS atendimento_id,\n       (SELECT count(*) FROM arq) AS arquivos_gravados;",
+        "options": {
+          "queryReplacement": "={{ [ $json.sessaoId, $json.estado, JSON.stringify($json.contexto), $json.tentativas, $json.conversationId || null, JSON.stringify($json.registro) ] }}"
+        }
+      },
+      "id": "1a5ca09e-4c64-5bc1-967e-858de951ca3d",
+      "name": "Salvar sessão",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        5500,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_PG",
+          "name": "Postgres vocero_sankhya"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "c84b1a09-28b7-5b89-b9ed-60c04a784691",
+              "leftValue": "={{ $('Saída').first().json.texto }}",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "fe1eb310-8743-530c-a663-354d396a6dd9",
+      "name": "Tem mensagem?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        5720,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Saída').first().json.config.vocero_url }}/api/internal/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ conversationId: $('Saída').first().json.conversationId, text: $('Saída').first().json.texto }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "155b896a-e13c-53e0-bd5d-28523dbd4fc1",
+      "name": "Vocero: enviar mensagem",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5940,
+        300
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_VOCERO",
+          "name": "Vocero x-internal-key (Bot MDF-e)"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "98b4c80d-436f-500e-a77c-081a320b0c3c",
+              "leftValue": "={{ $('Saída').first().json.transbordo }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "68258ba9-1978-5833-8500-9a02ac7d16d3",
+      "name": "Transbordo?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        6160,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Saída').first().json.config.vocero_url }}/api/internal/conversations/{{ $('Saída').first().json.conversationId }}/transfer",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ departmentName: $('Saída').first().json.config.departamento_transbordo, reason: 'bot_transbordo', note: $('Saída').first().json.nota ? String($('Saída').first().json.nota).slice(0, 1000) : null }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "1be3e897-ac36-5584-b6a5-b8664aa83127",
+      "name": "Vocero: transferir para departamento",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        6380,
+        300
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_VOCERO",
+          "name": "Vocero x-internal-key (Bot MDF-e)"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook Vocero": {
+      "main": [
+        [
+          {
+            "node": "É mensagem?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "É mensagem?": {
+      "main": [
+        [
+          {
+            "node": "Registrar evento",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Registrar evento": {
+      "main": [
+        [
+          {
+            "node": "Evento novo?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evento novo?": {
+      "main": [
+        [
+          {
+            "node": "Carregar sessão",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Carregar sessão": {
+      "main": [
+        [
+          {
+            "node": "Decidir",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Decidir": {
+      "main": [
+        [
+          {
+            "node": "Ação",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ação": {
+      "main": [
+        [
+          {
+            "node": "Registrar arquivo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Saída",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar arquivo": {
+      "main": [
+        [
+          {
+            "node": "Janela de arquivos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Janela de arquivos": {
+      "main": [
+        [
+          {
+            "node": "Marcar validando",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Marcar validando": {
+      "main": [
+        [
+          {
+            "node": "Última da janela?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Última da janela?": {
+      "main": [
+        [
+          {
+            "node": "Avisar conferindo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Avisar conferindo": {
+      "main": [
+        [
+          {
+            "node": "Listar arquivos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Listar arquivos": {
+      "main": [
+        [
+          {
+            "node": "Baixar mídia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Baixar mídia": {
+      "main": [
+        [
+          {
+            "node": "Preparar envio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar envio": {
+      "main": [
+        [
+          {
+            "node": "Pronto para enviar?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pronto para enviar?": {
+      "main": [
+        [
+          {
+            "node": "Quantos arquivos?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pós-validar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Quantos arquivos?": {
+      "main": [
+        [
+          {
+            "node": "POST validar (1)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "POST validar (2)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "POST validar (3)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST validar (1)": {
+      "main": [
+        [
+          {
+            "node": "Avaliar resposta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST validar (2)": {
+      "main": [
+        [
+          {
+            "node": "Avaliar resposta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST validar (3)": {
+      "main": [
+        [
+          {
+            "node": "Avaliar resposta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Avaliar resposta": {
+      "main": [
+        [
+          {
+            "node": "Repetir?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Repetir?": {
+      "main": [
+        [
+          {
+            "node": "Quantos arquivos?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pós-validar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pós-validar": {
+      "main": [
+        [
+          {
+            "node": "Saída",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Saída": {
+      "main": [
+        [
+          {
+            "node": "Salvar sessão",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Salvar sessão": {
+      "main": [
+        [
+          {
+            "node": "Tem mensagem?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tem mensagem?": {
+      "main": [
+        [
+          {
+            "node": "Vocero: enviar mensagem",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Transbordo?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vocero: enviar mensagem": {
+      "main": [
+        [
+          {
+            "node": "Transbordo?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transbordo?": {
+      "main": [
+        [
+          {
+            "node": "Vocero: transferir para departamento",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false,
+  "pinData": {}
+}

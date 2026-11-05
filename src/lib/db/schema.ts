@@ -13,6 +13,7 @@ import {
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
+import type { MessageLocation } from "@/server/inbox/location";
 
 /* ============================================================
  * Auth (Better Auth + plugin organization)
@@ -526,6 +527,9 @@ export const conversation = pgTable(
     assignedTo: text("assigned_to").references(() => member.id, {
       onDelete: "set null",
     }),
+    /** Não nulo = transferida para `departmentId` por automação: o ingest
+     * não a devolve ao departamento do canal na próxima mensagem. */
+    departmentPinnedAt: timestamp("department_pinned_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
@@ -562,6 +566,8 @@ export const message = pgTable(
     direction: text("direction", { enum: ["in", "out"] }).notNull(),
     type: text("type").notNull().default("text"),
     text: text("text"),
+    /** Coordenadas de mensagem `location`; `text` traz a versão legível. */
+    location: jsonb("location").$type<MessageLocation>(),
     status: text("status", {
       enum: ["pending", "sent", "delivered", "read", "failed"],
     })

@@ -4,6 +4,7 @@ import { getDb, schema } from "@/lib/db";
 import { newId } from "@/lib/db/ids";
 import { scoped } from "@/lib/db/tenant";
 import { getEnv } from "@/lib/env";
+import type { MessageLocation } from "@/server/inbox/location";
 
 /**
  * Entrega ao n8n cada mensagem recebida, nas instâncias operadas por
@@ -110,6 +111,7 @@ export type InboundEventPayload = {
     type: string;
     text: string | null;
     replyToMessageId: string | null;
+    location: MessageLocation | null;
     media: {
       url: string;
       available: boolean;
@@ -141,6 +143,7 @@ export function buildInboundPayload(input: {
       type: m.type,
       text: m.text,
       replyToMessageId: m.replyToMessageId,
+      location: m.location ?? null,
       media: m.mediaUrl
         ? {
             url: `${input.baseUrl.replace(/\/$/, "")}/api/internal/messages/${m.id}/media`,

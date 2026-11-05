@@ -31,6 +31,7 @@ import { handleSelectionReply, sendSelectionGreeting } from "@/server/queue/sele
 import { LOCAL_MEDIA_MARKER, MEDIA_TYPES, serializeMessage } from "@/server/inbox/message-format";
 import { logTrace } from "@/server/observability/trace";
 import { queueMediaRecovery, type PendingMediaSource } from "@/server/inbox/media-recovery";
+import { formatLocationText, normalizeLocation, type MessageLocation } from "@/server/inbox/location";
 
 // Re-exportados por compatibilidade — outros módulos importam esses dois
 // símbolos daqui (`@/server/inbox/ingest`); a definição real vive em
@@ -358,6 +359,7 @@ export async function processMessagesValue(value: WebhookValue): Promise<void> {
     const media = mediaField
       ? await downloadOfficialMedia(mediaField, credentials.token)
       : null;
+    const location = normalizeLocation(msg.location);
 
     await ingestInboundMessage({
       organizationId,
@@ -366,7 +368,9 @@ export async function processMessagesValue(value: WebhookValue): Promise<void> {
       profileName: profileName ?? null,
       waMessageId: msg.id,
       type: msg.type,
-      text: msg.text?.body ?? mediaField?.caption ?? null,
+      text:
+        msg.text?.body ?? mediaField?.caption ?? (location ? formatLocationText(location) : null),
+      location,
       timestamp: msg.timestamp,
       media,
       pendingMedia:
@@ -426,6 +430,7 @@ export async function ingestInboundMessage(input: {
   waMessageId: string;
   type: string;
   text: string | null;
+  location?: MessageLocation | null;
   timestamp: string;
   /** Canal de origem — identidade da conversa (ver ConversationChannel).
    * Padrão: official. */
@@ -545,6 +550,7 @@ export async function ingestInboundMessage(input: {
       direction: fromMe ? "out" : "in",
       type: input.type,
       text: input.text,
+      location: input.location ?? null,
       mediaUrl:
         input.mediaUrl ??
         (input.media || input.pendingMedia ? LOCAL_MEDIA_MARKER : null),
@@ -608,7 +614,10 @@ export async function ingestInboundMessage(input: {
             // uma vez roteada, quem decide department_id é
             // queue/manager.ts (acceptQueuedConversation); antes de
             // roteada, fica null de propósito (ver comentário acima).
-            ...(skipsQueueEntirely ? {} : { departmentId: channelDepartmentId }),
+            // Transferida por automação: fica no departamento de destino.
+            ...(skipsQueueEntirely || conversation.departmentPinnedAt
+              ? {}
+              : { departmentId: channelDepartmentId }),
             updatedAt: new Date(),
           }
     )
@@ -716,7 +725,7 @@ export async function ingestInboundMessage(input: {
  * ESCOLHA, não uma nova entrada. Senão, cria a linha e dispara o modo
  * configurado (Modo A distribui direto; Modo B manda a saudação).
  */
-async function routeQueueMessage(
+export async function routeQueueMessage(
   conversationId: string,
   departmentId: string,
   text: string

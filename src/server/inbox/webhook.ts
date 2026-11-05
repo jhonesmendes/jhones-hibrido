@@ -57,6 +57,7 @@ export type WebhookMessage = {
   audio?: WebhookMedia;
   video?: WebhookMedia;
   sticker?: WebhookMedia;
+  location?: { latitude?: number; longitude?: number; name?: string; address?: string };
   /** Presente quando esta mensagem é resposta a outra (`id` = wa_message_id
    * da mensagem citada). */
   context?: { id?: string };

@@ -21,6 +21,14 @@ const schema = z.object({
   /** Mídia simulada (type image/audio/video/document): bytes em base64. */
   mediaBase64: z.string().optional(),
   mimeType: z.string().optional(),
+  location: z
+    .object({
+      latitude: z.number(),
+      longitude: z.number(),
+      name: z.string().optional(),
+      address: z.string().optional(),
+    })
+    .optional(),
 });
 
 export async function POST(req: Request) {

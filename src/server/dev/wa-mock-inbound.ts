@@ -38,6 +38,7 @@ export function buildInboundPayload(input: {
   /** Mídia já guardada no mock (`putMockMedia`) — para type image/audio/… */
   mediaId?: string;
   mimeType?: string;
+  location?: { latitude: number; longitude: number; name?: string; address?: string };
 }) {
   const type = input.type ?? "text";
   const message: Record<string, unknown> = {
@@ -47,6 +48,7 @@ export function buildInboundPayload(input: {
     type,
   };
   if (type === "text") message.text = { body: input.text ?? "oi" };
+  else if (type === "location") message.location = input.location;
   else if (input.mediaId) {
     message[type] = { id: input.mediaId, mime_type: input.mimeType, caption: input.text };
   }

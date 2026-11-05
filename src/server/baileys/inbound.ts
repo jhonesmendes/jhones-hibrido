@@ -1,5 +1,6 @@
 import type { WASocket, WAMessage, proto } from "@whiskeysockets/baileys";
 import { ingestInboundMessage } from "@/server/inbox/ingest";
+import { formatLocationText, normalizeLocation } from "@/server/inbox/location";
 import { refreshContactAvatar } from "@/server/baileys/avatar";
 import { ensureBrNinthDigit } from "@/lib/utils";
 import {
@@ -242,7 +243,15 @@ export async function handleIncomingMessages(
 
     const isMedia = MEDIA_TYPES.has(type);
     const media = isMedia ? await downloadMedia(sock, msg) : null;
-    const text = extractText(content);
+    const location = normalizeLocation(
+      content?.locationMessage && {
+        latitude: content.locationMessage.degreesLatitude,
+        longitude: content.locationMessage.degreesLongitude,
+        name: content.locationMessage.name,
+        address: content.locationMessage.address,
+      }
+    );
+    const text = extractText(content) ?? (location ? formatLocationText(location) : null);
     const fromMe = msg.key.fromMe ?? false;
     const quotedStanzaId = extractQuotedStanzaId(content);
 
@@ -263,6 +272,7 @@ export async function handleIncomingMessages(
       waMessageId: baileysMessageId(msg.key.id),
       type,
       text: displayText,
+      location,
       timestamp: timestampToEpochSeconds(msg.messageTimestamp),
       channel: "unofficial",
       fromMe,

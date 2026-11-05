@@ -1,6 +1,6 @@
 # Integração via API — como o N8N (ou qualquer sistema externo) conversa com o Vocero
 
-> Atualizado em 2026-11-04, reflete o estado real do código nesta data.
+> Atualizado em 2026-11-05, reflete o estado real do código nesta data.
 > Cobre a instância operada por automação (o n8n responde, o Vocero recebe
 > e grava) e as rotas de disparo. A execução manual de workflows pela aba
 > Automações em Campanhas está em `src/lib/docs/content.ts`, seção
@@ -42,6 +42,7 @@ dupla). Fila de atendimento e grupos não mudam: mensagem de grupo não vai ao n
     "type": "text",
     "text": "quero um orçamento",
     "replyToMessageId": null,
+    "location": null,
     "media": null
   }
 }
@@ -51,6 +52,9 @@ Em mensagem com mídia, `message.media` traz `url`, `available`, `mimeType`,
 `filename` e `sizeBytes`. Baixe de `url` com o header `x-internal-key`.
 `available: false` significa download ainda em recuperação: a URL responde 404
 até a mídia chegar.
+
+Em mensagem `location`, `message.location` traz `latitude`, `longitude`, `name`
+e `address`, e `message.text` traz a versão legível.
 
 Entrega: qualquer resposta 2xx confirma. Sem ela, tenta de novo após 30s, 2min,
 10min, 1h e 6h, sobrevivendo a reinício. Pode haver entrega repetida: deduplique
@@ -93,6 +97,31 @@ Sucesso `201`: `{ "success": true, "messageId", "conversationId", "contactId" }`
 
 `to` com a janela fechada devolve `window_closed`, mas o contato e a conversa
 ficam criados.
+
+### `POST /api/internal/conversations/{id}/transfer`
+
+Passa a conversa para um departamento humano. Informe `departmentId` **ou**
+`departmentName`; `reason` (até 120 caracteres) e `note` (até 1000) são opcionais.
+
+```json
+{ "departmentName": "Operação", "reason": "bot_transbordo", "note": "Protocolo 123" }
+```
+
+A conversa fica sem responsável e marcada como escalada. Se o destino tem fila,
+ela entra na fila. Se já está com alguém desse departamento, continua com essa
+pessoa. A `note` vai para as observações do contato e para o rastro da conversa.
+
+Sucesso `200`: `{ "success": true, "conversationId", "departmentId", "departmentName", "queued" }`.
+
+| HTTP | `code` | Quando |
+|---|---|---|
+| 401 | `unauthorized` | Chave ausente/inválida |
+| 422 | `invalid_body` | Corpo fora do schema |
+| 404 | `not_found` | Conversa não existe |
+| 404 | `department_not_found` | Sem departamento ativo com esse id/nome |
+
+O transbordo não desliga o evento: as próximas mensagens continuam chegando ao
+workflow, que decide o que fazer com elas.
 
 ## 1. Visão geral
 
