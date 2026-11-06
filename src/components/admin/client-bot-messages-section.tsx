@@ -42,6 +42,7 @@ const GROUPS: { title: string; items: Record<string, string> }[] = [
     title: "Operação e erros",
     items: {
       msg_operacao: "Passar para a operação",
+      msg_voltar_menu: "Oferecer a volta ao menu",
       msg_transbordo: "Não conseguiu concluir",
       msg_indisponivel: "Conferência indisponível",
       msg_erro_tecnico: "Problema técnico",

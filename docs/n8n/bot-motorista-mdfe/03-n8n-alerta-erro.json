@@ -15,7 +15,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT COALESCE(jsonb_object_agg(chave, valor), '{}'::jsonb) AS config FROM bot_fluxo_config WHERE fluxo = 'motorista_mdfe' AND chave IN ('vocero_url','contato_alerta');",
+        "query": "SELECT COALESCE(jsonb_object_agg(chave, valor), '{}'::jsonb) AS config FROM bot_fluxo_config WHERE fluxo = 'motorista_mdfe' AND chave IN ('vocero_url','contato_alerta','email_alerta_para','email_remetente');",
         "options": {}
       },
       "id": "3ae67248-179a-5c35-a91a-da62151447d2",
@@ -60,7 +60,67 @@
           "id": "REPLACE_VOCERO",
           "name": "Vocero x-internal-key (Bot MDF-e)"
         }
-      }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "19503970-1522-5917-84e8-eaab346d56e8",
+              "leftValue": "={{ $('Ler config').first().json.config?.email_alerta_para }}",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "815be491-9983-51b6-b3b0-043ae01742cb",
+      "name": "Tem e-mail?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        660,
+        520
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "email",
+        "operation": "send",
+        "fromEmail": "={{ $('Ler config').first().json.config.email_remetente || $('Ler config').first().json.config.email_alerta_para }}",
+        "toEmail": "={{ $('Ler config').first().json.config.email_alerta_para }}",
+        "subject": "={{ '[Bot MDF-e] Workflow com erro — nó ' + ($('Error Trigger').first().json.execution?.lastNodeExecuted || '-') }}",
+        "emailFormat": "text",
+        "text": "={{ 'O workflow parou antes de terminar. O motorista pode ter ficado sem resposta.\\n\\nONDE PAROU\\nWorkflow: ' + ($('Error Trigger').first().json.workflow?.name || '-') + '\\nNó: ' + ($('Error Trigger').first().json.execution?.lastNodeExecuted || '-') + '\\nErro: ' + String($('Error Trigger').first().json.execution?.error?.message || '-').slice(0, 2000) + '\\n\\nO QUE FAZER\\nAbra a execução, veja o nó acima e corrija a causa. Se a mensagem citar credencial ou 401, confira docs/n8n/bot-motorista-mdfe/CREDENCIAIS.md.\\n\\nExecução: ' + ($('Error Trigger').first().json.execution?.url || '-') }}",
+        "options": {}
+      },
+      "id": "dbb8a05a-a698-5dbe-a1ce-0f3f800c2435",
+      "name": "Enviar e-mail",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        880,
+        520
+      ],
+      "credentials": {
+        "smtp": {
+          "id": "REPLACE_SMTP",
+          "name": "SMTP (Bot MDF-e)"
+        }
+      },
+      "onError": "continueRegularOutput"
     }
   ],
   "connections": {
@@ -82,8 +142,25 @@
             "node": "Enviar alerta",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "Tem e-mail?",
+            "type": "main",
+            "index": 0
           }
         ]
+      ]
+    },
+    "Tem e-mail?": {
+      "main": [
+        [
+          {
+            "node": "Enviar e-mail",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
       ]
     }
   },

@@ -20,6 +20,8 @@ Workflow em `docs/n8n/bot-motorista-mdfe/`.
 | # | Etapa | Estado |
 |---|---|---|
 | 1 | IA quando o fluxo travar; documento direto; textos sem prometer atendente | v1.6 |
+| 1 | Depois de um caso da operação, oferecer a volta ao menu em vez de reabri-lo; ignorar texto reentregue fora de ordem; texto na janela não cancela o documento | v1.7 |
+| 1 | E-mail de diagnóstico por SMTP do operador: etapa em que parou, retorno da API, entregas que falharam | v1.7 |
 | 2 | Guardar o MDF-e encerrado na sessão (`contexto.ultimoMdfe`) | v1.6; falta ver no retorno real qual campo traz o destino |
 | 3 | Opção 02: oferecer uma carga da região do destino; "ver mais" lista as cargas; mostrar o frete | Depende da API de cargas (não existe) |
 | 4 | Com o "ok" do motorista, disparar a carga escolhida para os grupos da filial | Depende da regra região × filial |

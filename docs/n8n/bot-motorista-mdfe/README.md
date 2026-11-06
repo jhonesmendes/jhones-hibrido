@@ -1,13 +1,15 @@
-# Bot Motorista MDF-e (v1.6)
+# Bot Motorista MDF-e (v1.7)
 
 Workflow da instância Sankhya: o Vocero recebe e grava, o n8n conduz o motorista
 e chama a API de MDF-e. Requer n8n 2.x e Vocero com a rota
 `POST /api/internal/conversations/{id}/transfer` e `.../note`.
 
+Cada credencial, o nó que a usa e os erros comuns estão em [CREDENCIAIS.md](CREDENCIAIS.md).
+
 ## Instalar
 
 1. Rode `01-migration-bot-mdfe.sql` no banco `vocero_sankhya` (comando no topo do
-   arquivo) e confira as 35 linhas de `bot_fluxo_config`.
+   arquivo) e confira as 40 linhas de `bot_fluxo_config`.
 2. No n8n, defina `MDFE_API_USER`, `MDFE_API_PASS` e
    `N8N_BLOCK_ENV_ACCESS_IN_NODE=false`.
 3. Importe `02-n8n-bot-motorista-mdfe.json` e selecione as credenciais:
@@ -51,6 +53,58 @@ Editar `01-migration-bot-mdfe.sql` não muda textos já gravados no banco.
 | `timeout_sessao_min` | `60` | Silêncio do contato que encerra a sessão, e com ela o estado calado |
 
 Quem está no estado calado volta ao menu enviando `menu` ou `0`.
+
+## E-mail de diagnóstico
+
+Opcional, pelo SMTP do próprio operador. Vai um e-mail quando:
+
+- a conferência do documento não termina em `encerrado` ou `validado`;
+- uma entrega falha, como a resposta ao motorista ou o alerta no WhatsApp;
+- um alerta é gerado, como o de IA fora do ar ou o limite de respostas inválidas;
+- o workflow para com erro, pelo workflow de alerta (`03`).
+
+O e-mail traz a etapa em que parou, o que fazer, o que o motorista recebeu, o retorno
+completo da API e o link da execução no n8n. Não leva token nem senha, mas leva o
+telefone e os dados do MDF-e devolvidos pela API.
+
+Para ligar, crie a credencial SMTP ([CREDENCIAIS.md](CREDENCIAIS.md)) e preencha:
+
+| Chave | Padrão | O que faz |
+|---|---|---|
+| `email_alerta_para` | vazio | Destinatário; vazio desliga os e-mails |
+| `email_remetente` | vazio | Remetente; vazio usa o destinatário |
+| `email_intervalo_seg` | `60` | No máximo um e-mail por motivo nesse intervalo |
+| `n8n_url` | `https://n8n.sankhya.vocero.com.br` | Base do link da execução |
+
+Sem conexão com o banco, o workflow de alerta não lê o destinatário e o e-mail não sai.
+
+## Quando a API devolve um caso para a operação
+
+Telefone que não é do motorista, por exemplo, ou outra divergência que reenviar
+não resolve. O bot:
+
+1. envia a mensagem da API, `msg_operacao` e `msg_voltar_menu`;
+2. transfere a conversa para `departamento_transbordo`;
+3. anota o retorno nas observações do contato e alerta `contato_alerta`.
+
+Depois disso o menu só volta se a pessoa pedir:
+
+| O motorista envia | O bot |
+|---|---|
+| `0` ou `menu` | Mostra o menu |
+| `1` ou `2` | Segue direto para a opção |
+| Foto ou PDF | Confere o novo documento |
+| Outro texto | Responde pela IA, em lista fechada, ou repete `msg_voltar_menu`; no limite de `max_respostas_invalidas`, fica calado |
+
+Depois de `timeout_sessao_min` sem mensagens, a próxima começa com a saudação e o menu.
+
+## Mensagens fora de ordem e texto junto do documento
+
+- O Vocero reentrega o evento que o n8n recusou, em até 6 horas. Um texto mais antigo
+  que a última mensagem recebida é ignorado; foto e PDF são sempre conferidos.
+- Texto enviado durante a janela de arquivos não recebe resposta nem cancela o
+  documento. `0` ou `menu` cancelam.
+- Arquivo de uma tentativa antiga não é enviado junto com um novo.
 
 ## IA
 

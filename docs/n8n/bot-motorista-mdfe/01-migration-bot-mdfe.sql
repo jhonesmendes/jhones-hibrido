@@ -63,6 +63,9 @@ CREATE TABLE IF NOT EXISTS mdfe_atendimento_arquivo (
   UNIQUE (atendimento_id, message_id)
 );
 
+-- Última mensagem recebida: a reentrega de uma mais antiga não recebe resposta.
+ALTER TABLE bot_sessao ADD COLUMN IF NOT EXISTS ultimo_evento_em timestamptz;
+
 INSERT INTO bot_fluxo_config (fluxo, chave, valor) VALUES
 ('motorista_mdfe','msg_saudacao','Olá! 👋 Aqui é o atendimento da Fibra Forte para motoristas.'),
 ('motorista_mdfe','msg_menu','Escolha uma opção:\n01 - Encerrar MDF-e\n02 - Ver cargas na minha região'),
@@ -98,7 +101,12 @@ INSERT INTO bot_fluxo_config (fluxo, chave, valor) VALUES
 ('motorista_mdfe','ia_ativa','true'),
 ('motorista_mdfe','ia_modelo','gpt-4o-mini'),
 ('motorista_mdfe','ia_base_url','https://api.openai.com/v1'),
-('motorista_mdfe','cargas_ativo','false')
+('motorista_mdfe','cargas_ativo','false'),
+('motorista_mdfe','msg_voltar_menu','Deseja voltar ao menu? Envie 0.'),
+('motorista_mdfe','email_alerta_para',''),
+('motorista_mdfe','email_remetente',''),
+('motorista_mdfe','email_intervalo_seg','60'),
+('motorista_mdfe','n8n_url','https://n8n.sankhya.vocero.com.br')
 ON CONFLICT (fluxo, chave) DO NOTHING;
 
 -- Operação sem atendente: troca os textos que prometiam um, só se ainda não foram editados.
@@ -111,5 +119,5 @@ UPDATE bot_fluxo_config SET valor = 'Esse caso precisa da operação. Nossa equi
 
 COMMIT;
 
--- Conferência (35 linhas)
+-- Conferência (40 linhas)
 -- SELECT chave, valor FROM bot_fluxo_config WHERE fluxo = 'motorista_mdfe' ORDER BY chave;
