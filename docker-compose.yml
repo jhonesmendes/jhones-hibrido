@@ -1,6 +1,15 @@
+# ============================================================
+# Vocero CRM — uma instância (app + Postgres)
+#
+# Cada instância precisa de nomes PRÓPRIOS de volume e rede. As variáveis
+# marcadas com `:?` são obrigatórias: sem elas o compose para com a mensagem
+# indicada, em vez de subir com valor vazio. O instalador
+# (scripts/install/vocero-install.sh) gera todas elas.
+# ============================================================
 services:
   app:
-    image: ghcr.io/jhonesmendes/jhones-hibrido:latest
+    # VOCERO_VERSION fixa a versão (ex. 1.1.0 ou sha-abc1234); vazio = latest.
+    image: ghcr.io/jhonesmendes/jhones-hibrido:${VOCERO_VERSION:-latest}
 
     restart: unless-stopped
 
@@ -8,14 +17,14 @@ services:
       - "${APP_PORT:-3000}:3000"
 
     environment:
-      APP_BASE_URL: ${APP_BASE_URL}
+      APP_BASE_URL: "${APP_BASE_URL:?Defina APP_BASE_URL (ex. https://crm.cliente.com.br)}"
 
-      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      DATABASE_URL: "postgresql://postgres:${POSTGRES_PASSWORD:?Defina POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:?Defina POSTGRES_DB}"
 
-      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
-      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      BETTER_AUTH_SECRET: "${BETTER_AUTH_SECRET:?Defina BETTER_AUTH_SECRET (openssl rand -base64 32)}"
+      ENCRYPTION_KEY: "${ENCRYPTION_KEY:?Defina ENCRYPTION_KEY (openssl rand -base64 32)}"
 
-      META_WEBHOOK_VERIFY_TOKEN: ${META_WEBHOOK_VERIFY_TOKEN}
+      META_WEBHOOK_VERIFY_TOKEN: "${META_WEBHOOK_VERIFY_TOKEN:?Defina META_WEBHOOK_VERIFY_TOKEN (openssl rand -hex 32)}"
       META_APP_SECRET: ${META_APP_SECRET:-}
       META_GRAPH_API_VERSION: ${META_GRAPH_API_VERSION:-v25.0}
 
@@ -34,17 +43,16 @@ services:
       LICENSE_CONTROL_SECRET: ${LICENSE_CONTROL_SECRET:-}
       OPERATOR_WHATSAPP: ${OPERATOR_WHATSAPP:-}
       OPERATOR_EMAIL: ${OPERATOR_EMAIL:-}
-      # Chave legada da API interna. Instância nova: defina um valor próprio
-      # na stack (ou use só as chaves de Configurações → Integrações).
-      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-vocero_internal_2024}
+      # Chave legada da API interna, SEM valor padrão: vazia = desligada.
+      # Prefira as chaves nomeadas de Configurações → Integrações.
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-}
 
     volumes:
       # Backup do banco (pg_dump) — disco local da própria instância,
       # persiste entre redeploys (Constituição II: nada de S3/R2).
       - vocero_backups:/app/backups
       # Mídia das mensagens (fotos, áudios, documentos) — arquivos fora do
-      # Postgres. Sem `name:` fixo: o Compose prefixa com o nome da stack,
-      # então cada instância no mesmo host tem o seu volume.
+      # Postgres. Sem `name:` fixo: o Compose prefixa com o nome da stack.
       - vocero_media:/app/media
 
     depends_on:
@@ -61,8 +69,8 @@ services:
 
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?Defina POSTGRES_PASSWORD}"
+      POSTGRES_DB: "${POSTGRES_DB:?Defina POSTGRES_DB}"
 
     volumes:
       - vocero_pg:/var/lib/postgresql/data
@@ -78,12 +86,15 @@ services:
 
 volumes:
   vocero_pg:
-    name: ${POSTGRES_VOLUME}
+    name: "${POSTGRES_VOLUME:?Defina POSTGRES_VOLUME (único por instância, ex.: vocero_pg_cliente)}"
   vocero_backups:
-    name: ${BACKUPS_VOLUME:-vocero_backups}
+    # Sem valor padrão de propósito: um nome fixo fazia instâncias diferentes
+    # dividirem a mesma pasta de backup. Instância antiga que usava o padrão:
+    # BACKUPS_VOLUME=vocero_backups mantém os backups existentes.
+    name: "${BACKUPS_VOLUME:?Defina BACKUPS_VOLUME (único por instância, ex.: vocero_backups_cliente)}"
   vocero_media:
 
 networks:
   vocero-net:
-    name: ${NETWORK_NAME}
+    name: "${NETWORK_NAME:?Defina NETWORK_NAME (único por instância, ex.: vocero-net-cliente)}"
     driver: bridge

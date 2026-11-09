@@ -30,6 +30,7 @@ import { resolveDefaultUnofficialChannelId } from "@/server/settings/unofficial-
 import { logTrace } from "@/server/observability/trace";
 import { getMemberName } from "@/server/inbox/queries";
 import { claimOnManualReply } from "@/server/queue/manager";
+import { scoped } from "@/lib/db/tenant";
 
 /** Mensagem sendo respondida/citada — resolvida uma vez a partir do
  * `replyToMessageId` recebido do composer, reusada tanto pro contexto do
@@ -159,7 +160,9 @@ export async function sendText(input: {
       schema.contact,
       eq(schema.conversation.contactId, schema.contact.id)
     )
-    .where(eq(schema.conversation.id, input.conversationId))
+    .where(
+      scoped(schema.conversation.organizationId, input.organizationId, eq(schema.conversation.id, input.conversationId))
+    )
     .limit(1);
   const row = rows[0];
   if (!row || row.conversation.organizationId !== input.organizationId) {
@@ -305,7 +308,9 @@ export async function sendMedia(input: {
       schema.contact,
       eq(schema.conversation.contactId, schema.contact.id)
     )
-    .where(eq(schema.conversation.id, input.conversationId))
+    .where(
+      scoped(schema.conversation.organizationId, input.organizationId, eq(schema.conversation.id, input.conversationId))
+    )
     .limit(1);
   const row = rows[0];
   if (!row || row.conversation.organizationId !== input.organizationId) {

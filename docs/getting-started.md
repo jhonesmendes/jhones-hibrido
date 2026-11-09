@@ -1,71 +1,50 @@
-# Getting Started
+# Começando no código do Vocero
 
-Esta guía te lleva de "carpeta recién clonada" a "primera feature corriendo el loop SDD".
+Do repositório clonado até um ambiente local com testes verdes.
 
-## 0. Requisitos
+## Requisitos
 
-- **Claude Code** instalado y autenticado.
-- **git**.
-- **PowerShell** (los scripts de Spec Kit viven en `.specify/scripts/powershell/`).
-- Opcional: **Node.js + npx** (para MCP por `npx`), y el stack que elijas para la app.
+Node 22, Docker (com `docker compose`) e pnpm 11 (`corepack enable` ou
+`npx pnpm@11.5.0`).
 
-## 1. Haz tuyo el starter
+## Ambiente local
 
 ```bash
-# copia/renombra esta carpeta para tu proyecto y entra en ella
-git init
-git add -A
-git commit -m "chore: SDD starter"
+pnpm install
+cp .env.example .env          # preencha os REEMPLAZA_...
+docker run -d --name vocero-dev-pg -e POSTGRES_PASSWORD=postgres \
+  -e POSTGRES_DB=vocero -p 127.0.0.1:5432:5432 postgres:16-alpine
+MIGRATIONS_DIR=$PWD/drizzle node scripts/migrate.mjs
+pnpm dev
 ```
 
-## 2. Define tu constitución (el "qué no se negocia")
+Em desenvolvimento, sem convite pendente, o primeiro cadastro em `/register`
+cria a organização. Para testar o fluxo de produção (dono por convite):
+`pnpm owner:invite -- --email voce@exemplo.com`.
 
-Ejecuta `/speckit-constitution` y describe tu producto y tu nicho. Edita
-[`.specify/memory/constitution.md`](../.specify/memory/constitution.md):
+Modo de testes (mocks do WhatsApp e da IA): ver
+[`specs/001-vocero-core/quickstart.md`](../specs/001-vocero-core/quickstart.md).
 
-- **Rellena el Principio VIII** (`Foco Vertical [DEFINE-TU-NICHO]`) — es el que ancla el
-  producto a un dominio concreto.
-- **Ajusta o elimina** los principios I-VII que no apliquen (p. ej. borra "Multi-Tenancy"
-  si tu producto es single-tenant; relaja "Self-Hosted" si aceptas servicios gestionados).
-- Sube la versión y actualiza el Sync Impact Report del encabezado.
+## Gate antes de "pronto"
 
-## 3. Personaliza `CLAUDE.md`
+```bash
+pnpm typecheck && pnpm lint && pnpm build && pnpm test
+```
 
-Reemplaza los `[corchetes]`: nombre del proyecto, stack real (framework, BD, auth, deploy),
-y deja vacío el bloque `## Active feature` hasta tu primera feature. **No borres** las
-secciones de metodología (manejo de credenciales, Definición de Hecho REFORZADA, Modo
-Objetivo / Loop SDD) — son el núcleo evergreen.
+E2E com Playwright contra o `pnpm dev` com mocks:
 
-## 4. MCP + credenciales
+```bash
+E2E_BASE_URL=http://localhost:3000 E2E_MOCKS=1 E2E_BROWSER_CHANNEL=chrome \
+E2E_OWNER_INVITE_CMD='pnpm -s run owner:invite --email {email} --json' \
+pnpm test:e2e
+```
 
-- Configura los servidores MCP que uses: ver [mcp-setup.md](mcp-setup.md).
-- `cp .env.example .env` y rellena los `REEMPLAZA_...`. `.env` está gitignored.
+O fluxo do dono precisa de uma base **sem organização**. O CI
+(`.github/workflows/ci.yml`) roda o mesmo, mais a imagem de produção instalada
+pelo instalador.
 
-## 5. Tu primera feature
+## Fluxo de trabalho
 
-Dos formas equivalentes de arrancar:
-
-**A) Modo Objetivo (recomendado).** Describe un objetivo y deja que el orquestador corra el
-loop: `/loop-sdd Quiero que [comportamiento observable del producto]`. Ver
-[sdd-workflow.md](sdd-workflow.md).
-
-**B) Paso a paso.** `/speckit-specify` → `/speckit-clarify` → `/speckit-plan` →
-`/speckit-tasks` → `/speckit-analyze` → `/speckit-implement`.
-
-Cada feature crea su carpeta en [`specs/`](../specs/) (`NNN-nombre/` con
-`spec.md`, `plan.md`, `tasks.md`, etc.).
-
-## 6. Verifica antes de declarar "Hecho"
-
-El gate técnico (typecheck + lint + build) es el piso. El techo es un **self-test de
-comportamiento E2E**: ejerce el flujo real como usuario y prueba el camino infeliz. Lo que
-no puedas verificar tú, márcalo *pendiente de verificación humana*.
-
-## Checklist de personalización (búsqueda de placeholders)
-
-- [ ] `CLAUDE.md` — `[NOMBRE_DEL_PROYECTO]`, stack, feature activa
-- [ ] `.specify/memory/constitution.md` — Principio VIII + ajustes I-VII + fechas/versión
-- [ ] `LICENSE` — titular del copyright
-- [ ] `.env.example` / `.env` — `REEMPLAZA_...`
-- [ ] `.mcp.json` — servidores que realmente uses
-- [ ] Subagentes (`.claude/agents/`) — solo si tu deploy/proveedor difieren de los defaults
+Features novas seguem o SDD: [`sdd-workflow.md`](sdd-workflow.md) e a pasta
+[`specs/`](../specs/). Regras do projeto: [`CLAUDE.md`](../CLAUDE.md) e a
+[constituição](../.specify/memory/constitution.md).

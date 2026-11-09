@@ -13,7 +13,7 @@ import {
   resolveActiveOrganizationId,
   resolveMembership,
 } from "@/server/auth/on-signup";
-import { isPublicSignupAllowed } from "@/server/auth/registration";
+import { getRegistrationState } from "@/server/auth/registration";
 
 /**
  * Contexto interno do processo: permite que a criação de contas de equipe
@@ -92,12 +92,20 @@ function createAuth() {
             });
           }
         }
-        // Registro público fechado após a primeira organização (FR-060).
-        if (ctx.path === "/sign-up/email") {
-          if (!isInternalSignup() && !(await isPublicSignupAllowed())) {
+        // Registro público fechado após a primeira organização (FR-060) e,
+        // em instância vazia de produção, até o convite do dono (spec 009).
+        if (ctx.path === "/sign-up/email" && !isInternalSignup()) {
+          const state = await getRegistrationState();
+          if (state === "closed") {
             throw new APIError("FORBIDDEN", {
               message:
                 "O cadastro está fechado: esta instância já tem a sua organização",
+            });
+          }
+          if (state === "awaiting_owner") {
+            throw new APIError("FORBIDDEN", {
+              message:
+                "Esta instância aguarda o convite do proprietário gerado na instalação",
             });
           }
         }

@@ -23,6 +23,14 @@ RUN pnpm exec esbuild scripts/migrate.mjs --bundle --platform=node \
 RUN pnpm exec esbuild scripts/seed/demo.ts --bundle --platform=node \
     --format=esm --outfile=seed-demo.bundle.mjs --alias:@=./src \
     --banner:js="import { createRequire } from 'module'; const require = createRequire(import.meta.url);"
+# Ferramentas de operação dentro do container (spec 009): convite do dono e
+# recuperação da senha do dono.
+RUN pnpm exec esbuild scripts/bootstrap-owner.ts --bundle --platform=node \
+    --format=esm --outfile=bootstrap-owner.bundle.mjs --alias:@=./src \
+    --banner:js="import { createRequire } from 'module'; const require = createRequire(import.meta.url);"
+RUN pnpm exec esbuild scripts/recover-owner-password.ts --bundle --platform=node \
+    --format=esm --outfile=recover-owner-password.bundle.mjs --alias:@=./src \
+    --banner:js="import { createRequire } from 'module'; const require = createRequire(import.meta.url);"
 
 FROM node:22-alpine AS runner
 WORKDIR /app
@@ -46,7 +54,15 @@ COPY --from=builder --chown=vocero:vocero /app/.next/static ./.next/static
 COPY --from=builder --chown=vocero:vocero /app/public ./public
 COPY --from=builder --chown=vocero:vocero /app/migrate.bundle.mjs ./migrate.mjs
 COPY --from=builder --chown=vocero:vocero /app/seed-demo.bundle.mjs ./seed-demo.mjs
+COPY --from=builder --chown=vocero:vocero /app/bootstrap-owner.bundle.mjs ./bootstrap-owner.mjs
+COPY --from=builder --chown=vocero:vocero /app/recover-owner-password.bundle.mjs ./recover-owner-password.mjs
 COPY --from=builder --chown=vocero:vocero /app/drizzle ./drizzle
+
+# Versão do build — exposta em /api/health (o CI passa os dois).
+ARG APP_VERSION=dev
+ARG GIT_SHA=dev
+ENV APP_VERSION=$APP_VERSION
+ENV GIT_SHA=$GIT_SHA
 
 USER vocero
 EXPOSE 3000

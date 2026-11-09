@@ -20,7 +20,6 @@ export default async function Icon() {
   if (branding.logo && logoIsRaster) {
     return new ImageResponse(
       (
-        // eslint-disable-next-line @next/next/no-img-element
         <img
           src={branding.logo}
           width={size.width}

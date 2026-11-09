@@ -2,6 +2,7 @@ import { eq, inArray } from "drizzle-orm";
 import type { getDb } from "@/lib/db";
 import { schema } from "@/lib/db";
 import { newId } from "@/lib/db/ids";
+import { scoped } from "@/lib/db/tenant";
 
 /**
  * Negócio de demonstração "Casa do Martelo" (FR-075).
@@ -140,7 +141,9 @@ export async function seedDemo(
   const prevContacts = await db
     .select({ id: schema.contact.id })
     .from(schema.contact)
-    .where(inArray(schema.contact.phone, demoPhones));
+    // Só os contatos demo DESTA organização — sem o escopo, a limpeza
+    // apagava contatos/conversas com esses telefones de qualquer org.
+    .where(scoped(schema.contact.organizationId, organizationId, inArray(schema.contact.phone, demoPhones)));
   const prevIds = prevContacts.map((c) => c.id);
   if (prevIds.length > 0) {
     const prevConvs = await db

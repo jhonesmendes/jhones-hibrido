@@ -65,6 +65,13 @@ obtido pelos nós `Preparar envio` e `Avaliar resposta`.
 A API de MDF-e não usa credencial do n8n: `MDFE_API_USER` e `MDFE_API_PASS` ficam nas
 variáveis da stack `sankhya_n8n`, com `N8N_BLOCK_ENV_ACCESS_IN_NODE=false`.
 
+**Instância nova pelo add-on** (`scripts/install/addon-mdfe.sh`): o add-on já cria a
+credencial do Postgres (`Postgres <banco> (Bot MDF-e)`, host `postgres`) e a liga aos
+nós de banco, importa os dois workflows desligados e já define o workflow de alerta
+como Error Workflow do bot. Continuam manuais as credenciais com segredo do operador:
+`x-internal-key`, `x-vocero-token`, OpenAI e SMTP, além de `MDFE_API_USER`/`MDFE_API_PASS`
+no arquivo `vocero.env` da instância.
+
 ## Erros comuns
 
 | Sintoma | Causa provável | O que fazer |

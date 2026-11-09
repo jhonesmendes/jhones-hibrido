@@ -221,13 +221,40 @@ própria UI (Configurações → Email / Campanhas → Automações N8N).
 — toda feature exige self-test de comportamento de ponta a ponta antes de
 "pronta". Detalhe completo: [`CLAUDE.md`](CLAUDE.md#definição-de-pronto-reforçada-obrigatória).
 
+E2E executável (Playwright) — ver [`playwright.config.ts`](playwright.config.ts):
+`pnpm test:e2e` contra uma instância no ar, com `E2E_BASE_URL` e
+`E2E_OWNER_INVITE_CMD`; com mocks (`E2E_MOCKS=1`) cobre também caixa de
+entrada e API interna. O CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml))
+roda tudo isso, instala a imagem com o instalador e só então publica.
+
+## Instalar e verificar uma instância
+
+```bash
+scripts/install/vocero-install.sh --name cliente --url https://crm.cliente.com.br \
+  --owner-email dono@cliente.com.br --org "Nome do negócio" --port 3010
+```
+
+Gera os segredos (arquivo `instances/<nome>/vocero.env`, permissão 600 —
+guarde uma cópia), sobe app + Postgres com volumes e rede próprios, cria o
+**convite do proprietário** (link de uso único para o e-mail informado) e
+imprime o relatório de verificação. Em produção, uma instância vazia **não**
+aceita cadastro público: só o link do convite cria a conta dona.
+
+- Portainer: `--mode portainer` só gera o arquivo de variáveis.
+- Novo convite (link perdido/expirado): `node bootstrap-owner.mjs --email ...`
+  no container `app` — invalida o anterior.
+- Verificar qualquer instância: `scripts/install/vocero-verify.sh https://crm.cliente.com.br`.
+- Bot MDF-e (n8n): `--addon-mdfe` ou `scripts/install/addon-mdfe.sh`.
+- Versão fixa da imagem: `VOCERO_VERSION=1.1.0` (o CI publica `latest`,
+  `sha-xxxxxxx` e as tags `v*`); a versão aparece em `/api/health`.
+
+Roteiro para assistente de IA: [`INSTALL-IA.md`](INSTALL-IA.md).
+
 ## Deploy
 
 Stack via Portainer ("Redeploy from git repository", **Pull and redeploy**
-para buscar commits novos) ou `docker compose up -d --build` + Caddy.
-Migrações do Drizzle aplicam automaticamente ao iniciar o container.
-Healthcheck em `/api/health`. Roteiro completo pra provisionar uma instância
-nova (um cliente = uma stack isolada): [`INSTALL-IA.md`](INSTALL-IA.md).
+para buscar commits novos) ou docker compose. Migrações do Drizzle aplicam
+automaticamente ao iniciar o container. Healthcheck em `/api/health`.
 
 ## Cumprimento das políticas da Meta
 

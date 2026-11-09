@@ -72,7 +72,7 @@ export const PATCH = withAuth(async (session, req: Request, ctx: Params) => {
   const updated = await db
     .update(schema.labPersona)
     .set(set)
-    .where(eq(schema.labPersona.id, id))
+    .where(scoped(schema.labPersona.organizationId, session.organizationId, eq(schema.labPersona.id, id)))
     .returning();
   return Response.json({ persona: updated[0] });
 });

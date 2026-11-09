@@ -1,0 +1,170 @@
+name: CI
+
+# Spec 009 — nada é publicado sem passar pelo gate:
+#   verify     typecheck + lint + testes unitários + build
+#   e2e-dev    Playwright com mocks (next dev): convite do dono, caixa de entrada, API interna
+#   e2e-image  imagem de produção instalada pelo instalador + relatório de verificação
+#   publish    só em push na main ou tag v*: imagem com tags latest, sha-xxxxxxx e versão
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  IMAGE: ghcr.io/jhonesmendes/jhones-hibrido
+  NODE_VERSION: "22"
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm test
+      - run: pnpm build
+      - name: Auditoria de dependências de produção (falha só em crítico)
+        run: pnpm audit --prod --audit-level critical
+
+  e2e-dev:
+    runs-on: ubuntu-latest
+    needs: verify
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: vocero_e2e
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      APP_BASE_URL: http://localhost:3000
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/vocero_e2e
+      BETTER_AUTH_SECRET: ci-only-secret-not-used-anywhere-else
+      ENCRYPTION_KEY: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+      META_WEBHOOK_VERIFY_TOKEN: ci-only-verify-token
+      WA_MOCK_ENABLED: "true"
+      META_GRAPH_BASE_URL: http://localhost:3000/api/dev/wa-mock/graph
+      OPENROUTER_BASE_URL: http://localhost:3000/api/dev/ai-mock
+      MEDIA_DIR: /tmp/vocero-media
+      BACKUP_DIR: /tmp/vocero-backups
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - name: Migrações
+        run: MIGRATIONS_DIR=$PWD/drizzle node scripts/migrate.mjs
+      - name: Subir next dev com mocks
+        run: |
+          nohup pnpm dev > next-dev.log 2>&1 &
+          for i in $(seq 1 90); do curl -fs http://localhost:3000/api/health && exit 0; sleep 2; done
+          cat next-dev.log; exit 1
+      - name: Playwright
+        env:
+          E2E_BASE_URL: http://localhost:3000
+          E2E_MOCKS: "1"
+          E2E_OWNER_INVITE_CMD: pnpm -s run owner:invite --email {email} --org "Ferragens CI" --json
+        run: pnpm test:e2e
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-dev-report
+          path: |
+            playwright-report
+            test-results
+            next-dev.log
+          retention-days: 7
+
+  e2e-image:
+    runs-on: ubuntu-latest
+    needs: verify
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - name: Build da imagem de produção
+        run: |
+          docker build \
+            --build-arg APP_VERSION=$(node -p "require('./package.json').version") \
+            --build-arg GIT_SHA=${{ github.sha }} \
+            -t vocero:ci .
+      - name: Instalar com o instalador (inclui o relatório de verificação)
+        run: |
+          scripts/install/vocero-install.sh --yes --name ci --url http://localhost:3000 \
+            --owner-email dono@ci.test --org "Ferragens CI" --port 3000 \
+            --image vocero:ci --dir "$RUNNER_TEMP/instances"
+      - name: Playwright (ativação pelo convite do proprietário)
+        env:
+          E2E_BASE_URL: http://localhost:3000
+          E2E_OWNER_EMAIL: dono@ci.test
+          E2E_OWNER_INVITE_CMD: >-
+            docker compose -p vocero-ci --env-file ${{ runner.temp }}/instances/ci/vocero.env
+            -f docker-compose.yml -f ${{ runner.temp }}/instances/ci/image.override.yml
+            exec -T app node bootstrap-owner.mjs --email {email} --org "Ferragens CI" --json
+        run: pnpm exec playwright test --project owner
+      - name: Verificação depois da ativação
+        run: scripts/install/vocero-verify.sh http://127.0.0.1:3000
+      - if: failure()
+        run: docker logs --tail 200 vocero-ci-app-1 || true
+
+  publish:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    needs: [verify, e2e-dev, e2e-image]
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - id: version
+        run: echo "app=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix=sha-,format=short
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            APP_VERSION=${{ github.ref_type == 'tag' && github.ref_name || steps.version.outputs.app }}
+            GIT_SHA=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

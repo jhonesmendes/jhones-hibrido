@@ -19,77 +19,68 @@ pronta (não builda a partir do Dockerfile local).
 1. Pergunte ao operador SOMENTE isto, numa única mensagem:
    - **Domínio** onde a instância vai viver (ex.: `crm.clientex.com.br`), já
      apontando para o servidor (registro A/CNAME).
-   - **Nome da stack** no Portainer (ex.: `vocero_crm_clientex`).
-   - **Token do OpenRouter** (opcional — sem ele, tudo funciona exceto o
-     agente de IA e o Laboratório; pode entrar depois).
-2. **Gere você mesmo todos os segredos** (não peça ao operador):
-
-   ```bash
-   openssl rand -base64 32   # BETTER_AUTH_SECRET
-   openssl rand -base64 32   # ENCRYPTION_KEY (precisa ser exatamente 32 bytes base64)
-   openssl rand -hex 32      # META_WEBHOOK_VERIFY_TOKEN
-   openssl rand -hex 24      # POSTGRES_PASSWORD
-   ```
-
+   - **Nome curto** da instância (ex.: `clientex`) e a **porta** livre no servidor.
+   - **E-mail do proprietário** — só ele vai conseguir criar a conta dona.
+   - **Nome do negócio** (opcional) e **token do OpenRouter** (opcional — sem
+     ele tudo funciona, exceto o agente de IA e o Laboratório).
+2. **Não gere segredos à mão**: o instalador gera todos e nunca os regenera
+   numa instância que já existe (trocar `ENCRYPTION_KEY` tornaria ilegíveis
+   os dados cifrados).
 3. A conexão do número de WhatsApp NÃO faz parte do provisionamento — isso
    se faz depois, dentro do app (Configurações → Canais).
 
-## Variáveis de ambiente
+## Provisionar com o instalador (com acesso ao terminal do servidor)
 
-| Variável | Valor |
-|---|---|
-| `APP_BASE_URL` | `https://<domínio>` |
-| `POSTGRES_DB` | ex.: `vocero_<cliente>` |
-| `POSTGRES_PASSWORD` | gerado |
-| `POSTGRES_VOLUME` | ex.: `vocero_pg_<cliente>` (nome do volume Docker — precisa ser único por stack) |
-| `NETWORK_NAME` | ex.: `vocero-net-<cliente>` (idem, único por stack) |
-| `BETTER_AUTH_SECRET` | gerado |
-| `ENCRYPTION_KEY` | gerado (base64, 44 caracteres) |
-| `META_WEBHOOK_VERIFY_TOKEN` | gerado |
-| `META_APP_SECRET` | opcional — assinatura extra do webhook em modo direto |
-| `META_GRAPH_API_VERSION` | `v25.0` |
-| `OPENROUTER_API_TOKEN` | do operador, se informado |
-| `OPENROUTER_MODEL` | se houver token: sugira `anthropic/claude-sonnet-4.5` ou outro |
-| `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` | opcional — push notifications; `VAPID_SUBJECT` MUST começar com `mailto:` ou `https:` |
+```bash
+scripts/install/vocero-install.sh --name <nome> --url https://<domínio> \
+  --owner-email <email> [--org "<negócio>"] --port <porta> [--version 1.1.0]
+```
 
-⚠️ **Gotcha conhecido**: no Portainer, as variáveis cadastradas na UI da stack
-só valem como substituição `${VAR}` dentro do texto do `docker-compose.yml`
-— elas NÃO chegam ao container sozinhas. Cada variável nova precisa estar
-listada também no bloco `environment:` do serviço `app` no compose (já é o
-caso de todas as da tabela acima); se adicionar uma variável nova no futuro,
-lembre de adicioná-la lá também.
+O instalador grava `instances/<nome>/vocero.env` (permissão 600), sobe app +
+Postgres com volume e rede próprios (`vocero_pg_<nome>`,
+`vocero_backups_<nome>`, `vocero-net-<nome>`), espera o `/api/health`, gera
+o **link de convite do proprietário** e roda o relatório de verificação.
+Reexecutar é seguro. Se o nome já pertence a outro volume de banco, ele para.
 
-## Provisionar (Portainer — fluxo atual)
+Depois: aponte o proxy (Nginx Proxy Manager/Caddy) do domínio para a porta,
+com destino `http://` (o app não fala TLS), e rode
+`scripts/install/vocero-verify.sh https://<domínio>` — ele precisa terminar
+com **INSTÂNCIA APROVADA**.
 
-1. **Confirme a infraestrutura compartilhada do servidor**: reverse proxy/
-   HTTPS de domínios já existe no servidor (não é provisionado por este
-   compose — ele não inclui Caddy nem Traefik). Pergunte ao operador como o
-   domínio novo deve ser roteado até a porta exposta pelo serviço `app`
-   (`APP_PORT`, padrão `3000`) se não for óbvio pela infra já em uso pelas
-   outras stacks.
-2. **Crie a stack** no Portainer: "Repository" apontando para
-   `https://github.com/jhonesmendes/vocero-hibrido.git`, branch `main`,
-   compose path `docker-compose.yml`. Cole as variáveis da tabela acima na
-   seção "Environment variables" da stack.
-3. **Deploy**. As migrações do Drizzle rodam sozinhas ao iniciar o container
-   (`node migrate.mjs && node server.js`) — não precisa de comando extra.
-4. **Verifique**: `https://<domínio>/api/health` responde `{"ok":true}` e
-   `https://<domínio>/login` carrega.
-5. **Atualizações futuras**: um push em `main` gera imagem nova no GHCR — no
-   Portainer, clique **"Pull and redeploy"** (não só "Redeploy", que reusa a
-   imagem já baixada) para a stack buscar o commit novo.
+## Provisionar pelo Portainer (sem terminal)
+
+1. `scripts/install/vocero-install.sh --mode portainer ...` (em qualquer
+   máquina) gera o arquivo de variáveis da instância.
+2. Stack → Repository → este repositório, branch `main`, compose path
+   `docker-compose.yml`; carregue o arquivo de variáveis gerado.
+3. Deploy. As migrações rodam sozinhas no boot.
+4. No console do container `app`:
+   `node bootstrap-owner.mjs --email <email> --org "<negócio>"` → envie o
+   link impresso ao proprietário.
+5. Rode `scripts/install/vocero-verify.sh https://<domínio>`.
+
+⚠️ **Gotcha do Portainer**: as variáveis da UI da stack só valem como
+substituição `${VAR}` no compose. Variável nova precisa estar também no bloco
+`environment:` do serviço `app`.
+
+⚠️ **Variáveis obrigatórias**: sem `POSTGRES_VOLUME`, `BACKUPS_VOLUME`,
+`NETWORK_NAME`, os segredos ou `APP_BASE_URL`, o compose PARA com a mensagem
+da variável que falta. `INTERNAL_API_KEY` não tem mais valor padrão: vazia =
+desligada (use as chaves nomeadas de Configurações → Integrações).
+
+**Atualizações**: um push em `main` publica a imagem nova (`latest` e
+`sha-xxxxxxx`) só depois do CI verde. No Portainer, **Pull and redeploy**.
+Para fixar versão, `VOCERO_VERSION`.
 
 ## Fechamento (dizer ao operador)
 
-> ✅ Instância provisionada em `https://<domínio>`.
+> ✅ Instância provisionada em `https://<domínio>` e aprovada na verificação.
 >
-> 1. Entre e **cadastre-se**: o primeiro cadastro cria a organização (depois
->    o cadastro público se fecha sozinho).
-> 2. Opcional: **"Carregar dados de demonstração"** para explorar com a
->    Ferretaria de exemplo.
-> 3. Para conectar o WhatsApp do cliente: **Configurações → Canais** — o
->    wizard mostra a URL exata do webhook para colar no painel da Meta (ou
->    no backend de Provedor de Tecnologia, se for modo agência).
+> 1. Envie ao proprietário o link de convite (uso único, vale 72 horas). Ele
+>    define nome e senha; o e-mail já vem preenchido e travado.
+> 2. Perdeu o link? `node bootstrap-owner.mjs --email ...` no container gera
+>    outro e invalida o anterior.
+> 3. Para conectar o WhatsApp do cliente: **Configurações → Canais**.
 
 ## Licenciamento — variável nova em CADA instância de cliente
 
@@ -151,6 +142,10 @@ mesmo build/imagem, mas com `docker-compose.admin.yml` (não o
 - App unhealthy ao subir → veja os logs do container: quase sempre é
   variável faltando (a validação de ambiente lista qual) ou banco
   inacessível.
+- `/register` diz "Aguardando o proprietário" → esperado: a conta dona só
+  nasce pelo link do convite (`node bootstrap-owner.mjs --email ...`).
+- Tudo de login dá 500 depois de atualizar → migração não aplicou; veja
+  `[migrate]` no log do container.
 - `ENCRYPTION_KEY` inválida → precisa ser EXATAMENTE 32 bytes em base64
   (44 caracteres): regenere com `openssl rand -base64 32`.
 - Webhook "não verificado" na Meta → domínio ainda não resolve, não é

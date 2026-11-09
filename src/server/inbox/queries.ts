@@ -401,7 +401,13 @@ export async function deleteConversation(
   await db
     .update(schema.campaignRecipient)
     .set({ conversationId: null })
-    .where(eq(schema.campaignRecipient.conversationId, conversationId));
+    .where(
+      scoped(
+        schema.campaignRecipient.organizationId,
+        organizationId,
+        eq(schema.campaignRecipient.conversationId, conversationId)
+      )
+    );
 
   const deleted = await db
     .delete(schema.conversation)

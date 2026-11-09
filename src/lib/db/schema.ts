@@ -150,6 +150,9 @@ export const invitation = pgTable("invitation", {
   inviterId: text("inviter_id")
     .notNull()
     .references(() => user.id, { onDelete: "cascade" }),
+  // Exigida pelo plugin organization do Better Auth ≥ 1.7: sem ela, toda
+  // rota de auth responde 500 (SCHEMA_MISMATCH) — achado pelo vocero-verify.
+  createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
 /**
@@ -1294,6 +1297,25 @@ export const inviteToken = pgTable(
   },
   (t) => [index("invite_token_org_idx").on(t.organizationId)]
 );
+
+/**
+ * Convite do PROPRIETÁRIO (spec 009): criado na instalação, antes de existir
+ * organização — por isso é da instância, sem `organization_id` (como a própria
+ * tabela `organization`). Só o e-mail gravado consegue criar a conta dona.
+ * O token em texto puro nunca é guardado, só o hash SHA-256.
+ */
+export const ownerInvite = pgTable("owner_invite", {
+  id: text("id").primaryKey(),
+  tokenHash: text("token_hash").notNull().unique(),
+  email: text("email").notNull(),
+  /** Nome do negócio já definido na instalação (opcional). */
+  organizationName: text("organization_name"),
+  expiresAt: timestamp("expires_at").notNull(),
+  usedAt: timestamp("used_at"),
+  /** Invalidado por um convite mais novo (só um vale por vez). */
+  revokedAt: timestamp("revoked_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
 
 /**
  * Configuração do provedor de IA por organização — opcional, sobrepõe as
