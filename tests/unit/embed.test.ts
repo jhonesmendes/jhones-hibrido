@@ -25,6 +25,17 @@ describe("parseEmbedOrigins", () => {
     expect(r.invalid).toHaveLength(5);
   });
 
+  it("duas bases do Sankhya: lista ou curinga de porta", () => {
+    expect(
+      parseEmbedOrigins("https://fibraforte.snk.ativy.com:40262,https://fibraforte.snk.ativy.com:50262").valid
+    ).toEqual(["https://fibraforte.snk.ativy.com:40262", "https://fibraforte.snk.ativy.com:50262"]);
+    expect(parseEmbedOrigins("https://fibraforte.snk.ativy.com:*").valid).toEqual([
+      "https://fibraforte.snk.ativy.com:*",
+    ]);
+    // Erro real visto em produção: "==" na stack deixa o valor com "=".
+    expect(parseEmbedOrigins("=https://fibraforte.snk.ativy.com:50262").valid).toEqual([]);
+  });
+
   it("vazio ou ausente → nenhuma origem", () => {
     expect(parseEmbedOrigins(undefined).valid).toEqual([]);
     expect(parseEmbedOrigins("  ").valid).toEqual([]);

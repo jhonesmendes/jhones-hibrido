@@ -17,6 +17,12 @@ EMBED_ALLOWED_ORIGINS=https://fibraforte.snk.ativy.com:40262
 
 - Origem = `https://host[:porta]`, sem caminho e sem barra no fim. Várias:
   separadas por vírgula. Curinga de subdomínio aceito (`https://*.exemplo.com`).
+- **Mais de uma base do Sankhya** (ex.: produção na porta 40262 e teste na
+  50262): liste as duas
+  (`https://fibraforte.snk.ativy.com:40262,https://fibraforte.snk.ativy.com:50262`)
+  ou use o curinga de porta: `https://fibraforte.snk.ativy.com:*`.
+- No Portainer, o nome e o valor são separados por **um** `=`. Com `==`, o
+  valor fica inválido, o app avisa no log e o Sankhya é bloqueado.
 - O Vocero precisa estar em **https**.
 - Sem a variável, nenhum site de fora consegue embutir o Vocero (proteção contra
   clickjacking, sempre ligada).
