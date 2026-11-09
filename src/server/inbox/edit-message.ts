@@ -7,6 +7,7 @@ import { normalizeRecipient } from "@/lib/meta/client";
 import { resolveDefaultUnofficialChannelId } from "@/server/settings/unofficial-channels";
 import { serializeMessage } from "@/server/inbox/message-format";
 import { getMemberName } from "@/server/inbox/queries";
+import { scoped } from "@/lib/db/tenant";
 
 /** Mesma janela que o WhatsApp aplica no próprio app — o Baileys não
  * valida isso, então quem não checar aqui deixaria o operador editar uma
@@ -41,7 +42,7 @@ export async function editMessage(input: {
     .from(schema.message)
     .innerJoin(schema.conversation, eq(schema.conversation.id, schema.message.conversationId))
     .innerJoin(schema.contact, eq(schema.contact.id, schema.conversation.contactId))
-    .where(eq(schema.message.id, input.messageId))
+    .where(scoped(schema.message.organizationId, input.organizationId, eq(schema.message.id, input.messageId)))
     .limit(1);
   const row = rows[0];
   if (!row || row.message.organizationId !== input.organizationId) {
@@ -91,7 +92,7 @@ export async function editMessage(input: {
   const updated = await db
     .update(schema.message)
     .set({ text: input.newText, editedAt: now })
-    .where(eq(schema.message.id, input.messageId))
+    .where(scoped(schema.message.organizationId, input.organizationId, eq(schema.message.id, input.messageId)))
     .returning();
   const updatedMessage = updated[0]!;
 

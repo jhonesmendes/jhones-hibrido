@@ -5,6 +5,7 @@ export type AuditAction =
   | "user.login"
   | "invite.created"
   | "invite.used"
+  | "owner_invite.used"
   | "invite.revoked"
   | "channel.connected"
   | "channel.disconnected"

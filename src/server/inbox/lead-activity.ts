@@ -1,6 +1,7 @@
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { newId } from "@/lib/db/ids";
+import { scoped } from "@/lib/db/tenant";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -82,7 +83,9 @@ export async function onLeadActivity(
     .from(schema.lead)
     .innerJoin(schema.pipelineStage, eq(schema.lead.stageId, schema.pipelineStage.id))
     .where(
-      and(
+      scoped(
+        schema.lead.organizationId,
+        organizationId,
         eq(schema.lead.contactId, contactId),
         departmentId ? eq(schema.lead.departmentId, departmentId) : isNull(schema.lead.departmentId)
       )

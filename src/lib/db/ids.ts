@@ -29,6 +29,7 @@ const prefixes = {
   memberPermission: "mp",
   memberChannel: "mc",
   inviteToken: "inv",
+  ownerInvite: "oinv",
   smtpConfig: "smtp",
   aiConfig: "aic",
   n8nConfig: "n8n",

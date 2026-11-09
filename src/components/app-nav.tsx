@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -25,17 +25,16 @@ import {
 import type { Branding } from "@/lib/branding";
 import { cn, initials } from "@/lib/utils";
 import { signOut } from "@/lib/auth/client";
-import { useEvents } from "@/components/use-events";
 import { ThemeToggle } from "@/components/theme-toggle";
 import {
   ensurePushSubscription,
   ensureServiceWorker,
   getNotificationPermission,
 } from "@/lib/notifications";
-import { fetchGroupsInInbox } from "@/lib/inbox-preferences";
 import { DepartmentSwitcher } from "@/components/department-switcher";
 import { StatusSelector } from "@/components/status-selector";
-import { QueueToast, type QueueAssignment } from "@/components/queue-toast";
+import { QueueToast } from "@/components/queue-toast";
+import { useNavSignals } from "@/components/use-nav-signals";
 
 const NAV = [
   { href: "/inbox", label: "Caixa de entrada", icon: Inbox, badge: true },
@@ -69,41 +68,21 @@ export function AppNav({
   const permissionSet = new Set(permissions);
   const pathname = usePathname();
   const router = useRouter();
-  const [unread, setUnread] = useState(0);
+  const { unread, queueAssignment, dismissQueue } = useNavSignals();
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [queueAssignment, setQueueAssignment] = useState<QueueAssignment | null>(null);
   // Sidebar recolhível (desktop): começa false pra bater com o SSR (sem
   // acesso a localStorage) — o script anti-flash no layout raiz já cuida da
   // largura/labels certas antes da hidratação via atributo em <html>; isso
   // aqui só sincroniza o estado do React depois de montar, mesmo padrão do
   // ThemeToggle.
   const [navCollapsed, setNavCollapsed] = useState(false);
-  // Preferência pessoal: se grupos estão fora da Caixa de Entrada, o badge
-  // do menu também não deve contar as não lidas deles.
-  const groupsInInboxRef = useRef(true);
 
   // Fecha o drawer ao trocar de rota (navegação por um link do menu).
   useEffect(() => {
     setDrawerOpen(false);
   }, [pathname]);
 
-  async function refetchUnread() {
-    const res = await fetch("/api/conversations").catch(() => null);
-    if (!res?.ok) return;
-    const data = (await res.json()) as {
-      conversations: { unreadCount: number; contact: { kind: string } }[];
-    };
-    const relevant = groupsInInboxRef.current
-      ? data.conversations
-      : data.conversations.filter((c) => c.contact.kind !== "group");
-    setUnread(relevant.reduce((a, c) => a + c.unreadCount, 0));
-  }
-
   useEffect(() => {
-    void fetchGroupsInInbox().then((v) => {
-      groupsInInboxRef.current = v;
-      void refetchUnread();
-    });
     // Registra o SW sempre (habilita "Instalar app" no Chrome mesmo sem
     // notificações ativadas). Reforça a inscrição de push em qualquer tela
     // (não só na Caixa de entrada) sempre que a permissão já foi concedida
@@ -130,19 +109,6 @@ export function AppNav({
       return next;
     });
   }
-
-  useEvents({
-    onMessageNew: () => void refetchUnread(),
-    onConversationUpdated: () => void refetchUnread(),
-    onQueueAssigned: (d) =>
-      setQueueAssignment({
-        queueId: d.queueId,
-        conversationId: d.conversationId,
-        contactId: d.contactId,
-        contactName: d.contactName,
-        timeoutAt: d.timeoutAt,
-      }),
-  });
 
   return (
     <>
@@ -423,7 +389,7 @@ export function AppNav({
       </aside>
 
       {queueAssignment && (
-        <QueueToast assignment={queueAssignment} onDismiss={() => setQueueAssignment(null)} />
+        <QueueToast assignment={queueAssignment} onDismiss={dismissQueue} />
       )}
     </>
   );

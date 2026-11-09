@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ChevronLeft, PanelRight, Trash2 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, normalizePhoneInput } from "@/lib/utils";
 import { ContactAvatar } from "@/components/avatar";
 import type { ConversationDto, MessageDto } from "@/lib/types";
 import { useEvents } from "@/components/use-events";
@@ -341,14 +341,22 @@ export function InboxClient({
     [refetchMessages, refetchConversations]
   );
 
+  // Por que o último "iniciar conversa" voltou false: a pergunta de assumir
+  // (não é erro) ou falha de verdade — usado pelo link direto por telefone.
+  const lastStartFailRef = useRef<"claim" | { error: string | null } | null>(null);
   const startConversation = useCallback(
     async (phone: string, name?: string, claim?: boolean): Promise<boolean> => {
+      lastStartFailRef.current = { error: null };
       const res = await fetch("/api/conversations", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ phone, name, claim }),
       }).catch(() => null);
-      if (!res?.ok) return false;
+      if (!res?.ok) {
+        const err = (await res?.json().catch(() => null)) as { error?: { message?: string } } | null;
+        lastStartFailRef.current = { error: err?.error?.message ?? null };
+        return false;
+      }
       const data = (await res.json()) as {
         conversation: ConversationDto;
         requiresClaim?: boolean;
@@ -361,6 +369,7 @@ export function InboxClient({
       // falha normal (ver comentário do chamador sobre manter a busca
       // preenchida).
       if (data.requiresClaim) {
+        lastStartFailRef.current = "claim";
         setClaimPrompt({
           phone,
           ownerName: data.currentOwner?.name ?? "outro agente",
@@ -368,12 +377,51 @@ export function InboxClient({
         });
         return false;
       }
+      lastStartFailRef.current = null;
       await refetchConversations();
       select(data.conversation.id);
       return true;
     },
     [refetchConversations, select]
   );
+
+  // Link direto por telefone (spec 010): /inbox?phone=64992835887&name=...
+  // — ex.: botão "WhatsApp motorista" no Sankhya. Abre a conversa existente
+  // ou cria contato + conversa (sem enviar nada), pelo mesmo caminho do
+  // "Iniciar conversa" da busca, inclusive a pergunta de assumir quando o
+  // contato está com outro atendente. Roda uma vez por link e limpa a URL
+  // para um recarregar não repetir.
+  const router = useRouter();
+  const pathname = usePathname();
+  const phoneParam = searchParams.get("phone");
+  const nameParam = searchParams.get("name");
+  const handledPhoneRef = useRef<string | null>(null);
+  const [deepLinkError, setDeepLinkError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!phoneParam || handledPhoneRef.current === phoneParam) return;
+    handledPhoneRef.current = phoneParam;
+    const phone = normalizePhoneInput(phoneParam);
+    const clean = new URLSearchParams(searchParams.toString());
+    clean.delete("phone");
+    clean.delete("name");
+    const cleanUrl = clean.size ? `${pathname}?${clean}` : pathname;
+    if (!phone) {
+      setDeepLinkError(`Telefone inválido no link: "${phoneParam}" (use DDD + número).`);
+      router.replace(cleanUrl);
+      return;
+    }
+    setDeepLinkError(null);
+    void startConversation(phone, nameParam?.trim() || undefined).then((ok) => {
+      const fail = lastStartFailRef.current;
+      if (!ok && fail && fail !== "claim") {
+        setDeepLinkError(
+          `Não foi possível abrir a conversa com ${phoneParam}` +
+            (fail.error ? `: ${fail.error}` : ".")
+        );
+      }
+      router.replace(cleanUrl);
+    });
+  }, [phoneParam, nameParam, pathname, router, searchParams, startConversation]);
 
   const patchConversation = useCallback(
     async (patch: {
@@ -400,6 +448,15 @@ export function InboxClient({
           selected ? "hidden w-[360px] md:block" : "w-full md:w-[360px]"
         )}
       >
+        {deepLinkError && (
+          <p
+            role="alert"
+            data-testid="deep-link-error"
+            className="border-b bg-destructive/10 px-4 py-2 text-xs text-destructive"
+          >
+            {deepLinkError}
+          </p>
+        )}
         <ConversationList
           conversations={conversations}
           selectedId={selectedId}

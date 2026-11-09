@@ -1,6 +1,7 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { getFollowupRow } from "@/server/pipeline/followup";
+import { scoped } from "@/lib/db/tenant";
 
 /**
  * Reativo (não espera pelo scheduler, SC-004): é chamado a partir da ingestão
@@ -25,7 +26,9 @@ export async function onInboundMedia(
     .select()
     .from(schema.lead)
     .where(
-      and(
+      scoped(
+        schema.lead.organizationId,
+        organizationId,
         eq(schema.lead.contactId, contactId),
         departmentId ? eq(schema.lead.departmentId, departmentId) : isNull(schema.lead.departmentId)
       )

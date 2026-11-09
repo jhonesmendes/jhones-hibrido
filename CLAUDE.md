@@ -40,6 +40,10 @@ externas: o trabalho em segundo plano (agente, Laboratório) é in-process.
 | A ingestão/envio de mensagens | `src/server/inbox/` (ingest idempotente, send com guard de sandbox, janela de 24h) |
 | Armazenamento de mídia (arquivo em `MEDIA_DIR`, retenção, migração do legado) | `src/server/media/` (`saveMessageMedia`/`readMessageMediaBytes` — nunca gravar/ler `message_media.data_base64` direto) |
 | UI | `src/components/` + `src/app/(app)/` |
+| Instalação/verificação de instância, dono por convite | `scripts/install/` (instalador, `vocero-verify.sh`, add-on MDF-e) · `scripts/bootstrap-owner.ts` · `src/server/auth/owner-invite.ts` + `registration.ts` |
+| Vocero embutido em iframe (Sankhya): origens permitidas, cookie particionado, barra compacta, link por telefone | `src/lib/embed.ts` + `src/middleware.ts` · `src/components/embed-nav.tsx` · `?phone=` em `src/components/inbox/inbox-client.tsx` · `docs/embed-sankhya.md` |
+| E2E executável e CI | `tests/e2e/*.spec.ts` + `playwright.config.ts` · `.github/workflows/ci.yml` (nada publica sem verify + e2e) |
+| Isolamento por organização | `scoped()` em `src/lib/db/tenant.ts`; exceções contadas e justificadas em `tests/unit/tenant-guard.test.ts` |
 
 Os mocks do ambiente de testes vivem em `src/app/api/dev/` (wa-mock +
 ai-mock) atrás de um gate único (`src/lib/dev-guard.ts`): 404 incondicional em

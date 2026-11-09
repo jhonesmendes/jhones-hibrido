@@ -89,6 +89,8 @@ export const DELETE = withAuth(async (session, _req: Request, ctx: Params) => {
     return apiError(409, "run_in_progress", "Aguarde a rodada terminar antes de excluir");
   }
 
-  await db.delete(schema.agentTestRun).where(eq(schema.agentTestRun.id, id));
+  await db
+    .delete(schema.agentTestRun)
+    .where(scoped(schema.agentTestRun.organizationId, session.organizationId, eq(schema.agentTestRun.id, id)));
   return Response.json({ deleted: true });
 });

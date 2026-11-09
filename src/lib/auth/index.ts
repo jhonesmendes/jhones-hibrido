@@ -13,7 +13,8 @@ import {
   resolveActiveOrganizationId,
   resolveMembership,
 } from "@/server/auth/on-signup";
-import { isPublicSignupAllowed } from "@/server/auth/registration";
+import { getRegistrationState } from "@/server/auth/registration";
+import { iframeCookiesEnabled, parseEmbedOrigins } from "@/lib/embed";
 
 /**
  * Contexto interno do processo: permite que a criação de contas de equipe
@@ -55,10 +56,31 @@ const DEV_TRUSTED_ORIGINS =
 
 function createAuth() {
   const env = getEnv();
+  // Spec 010: com o Vocero embutido num iframe de outro site (Sankhya), o
+  // cookie de sessão precisa ser `SameSite=None; Secure; Partitioned` — com
+  // o padrão (Lax) o navegador não o envia dentro do quadro e o login volta
+  // sempre para a tela de entrada. Particionado: o login feito no quadro só
+  // vale dentro daquele site.
+  const parsedEmbed = parseEmbedOrigins(env.EMBED_ALLOWED_ORIGINS);
+  if (parsedEmbed.invalid.length > 0) {
+    // Origem mal escrita (ex.: "=https://…", caminho, http público) é
+    // ignorada — e o iframe do ERP fica bloqueado. Avisa no log do boot.
+    console.warn(
+      `[embed] EMBED_ALLOWED_ORIGINS ignorou valores inválidos: ${parsedEmbed.invalid.join(", ")} ` +
+        "(use https://host[:porta], sem caminho, separados por vírgula)"
+    );
+  }
+  const embedOrigins = parsedEmbed.valid;
+  const iframeCookies = iframeCookiesEnabled(embedOrigins, env.APP_BASE_URL);
   return betterAuth({
     baseURL: env.APP_BASE_URL,
     secret: env.BETTER_AUTH_SECRET,
     trustedOrigins: DEV_TRUSTED_ORIGINS,
+    advanced: iframeCookies
+      ? {
+          defaultCookieAttributes: { sameSite: "none", secure: true, partitioned: true },
+        }
+      : undefined,
     database: drizzleAdapter(getDb(), {
       provider: "pg",
       schema: {
@@ -92,12 +114,20 @@ function createAuth() {
             });
           }
         }
-        // Registro público fechado após a primeira organização (FR-060).
-        if (ctx.path === "/sign-up/email") {
-          if (!isInternalSignup() && !(await isPublicSignupAllowed())) {
+        // Registro público fechado após a primeira organização (FR-060) e,
+        // em instância vazia de produção, até o convite do dono (spec 009).
+        if (ctx.path === "/sign-up/email" && !isInternalSignup()) {
+          const state = await getRegistrationState();
+          if (state === "closed") {
             throw new APIError("FORBIDDEN", {
               message:
                 "O cadastro está fechado: esta instância já tem a sua organização",
+            });
+          }
+          if (state === "awaiting_owner") {
+            throw new APIError("FORBIDDEN", {
+              message:
+                "Esta instância aguarda o convite do proprietário gerado na instalação",
             });
           }
         }

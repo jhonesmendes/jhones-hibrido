@@ -11,6 +11,7 @@ import { AgentAction, degradeAction, resolveStage, type AgentActionType } from "
 import { matchesHandoffIntent } from "@/server/ai/handoff";
 import { buildAgentSystemPrompt } from "@/server/ai/prompts";
 import { resolveAgentProfile } from "@/server/ai/agent-profile";
+import { scoped } from "@/lib/db/tenant";
 
 /**
  * Turno do agente (FR-021..FR-025).
@@ -259,7 +260,9 @@ async function persistTestOutbound(
   await db
     .update(schema.conversation)
     .set({ lastMessageAt: new Date(), updatedAt: new Date() })
-    .where(eq(schema.conversation.id, conversation.id));
+    .where(
+      scoped(schema.conversation.organizationId, conversation.organizationId, eq(schema.conversation.id, conversation.id))
+    );
 }
 
 export async function applyHandoff(
@@ -271,7 +274,7 @@ export async function applyHandoff(
   const updated = await db
     .update(schema.conversation)
     .set({ handoffAt: new Date(), handoffReason: reason, updatedAt: new Date() })
-    .where(eq(schema.conversation.id, conversationId))
+    .where(scoped(schema.conversation.organizationId, organizationId, eq(schema.conversation.id, conversationId)))
     .returning();
   if (!updated[0]) return;
   publish(organizationId, {
@@ -291,7 +294,7 @@ async function moveLeadToStage(
   await db
     .update(schema.lead)
     .set({ stageId, updatedAt: new Date(), lastActivityAt: new Date() })
-    .where(eq(schema.lead.contactId, contactId));
+    .where(scoped(schema.lead.organizationId, organizationId, eq(schema.lead.contactId, contactId)));
 }
 
 async function appendLeadNote(
@@ -303,7 +306,7 @@ async function appendLeadNote(
   const rows = await db
     .select({ id: schema.contact.id, notes: schema.contact.notes })
     .from(schema.contact)
-    .where(eq(schema.contact.id, contactId))
+    .where(scoped(schema.contact.organizationId, organizationId, eq(schema.contact.id, contactId)))
     .limit(1);
   const contact = rows[0];
   if (!contact) return;

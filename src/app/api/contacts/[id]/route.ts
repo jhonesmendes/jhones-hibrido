@@ -91,7 +91,11 @@ export const DELETE = withAuth(async (session, req: Request, ctx: Params) => {
   await db
     .update(schema.campaignRecipient)
     .set({ contactId: null })
-    .where(eq(schema.campaignRecipient.contactId, id));
+    // Escopo da organização: o id vem da URL, e esta escrita roda antes de
+    // saber se o contato é desta org — sem o filtro, mexia em outra org.
+    .where(
+      scoped(schema.campaignRecipient.organizationId, session.organizationId, eq(schema.campaignRecipient.contactId, id))
+    );
 
   const deleted = await db
     .delete(schema.contact)

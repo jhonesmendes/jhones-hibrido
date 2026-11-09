@@ -12,6 +12,9 @@ const config = [
       "scripts/**",
       "next-env.d.ts",
       ".tmp-seed-demo.mjs",
+      // Saída do Playwright (relatório HTML com JS minificado).
+      "playwright-report/**",
+      "test-results/**",
     ],
   },
   ...compat.extends("next/core-web-vitals", "next/typescript"),
