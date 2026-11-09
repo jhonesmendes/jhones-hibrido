@@ -36,7 +36,7 @@ export default defineConfig({
     { name: "owner", testMatch: /owner\.spec\.ts$/ },
     {
       name: "app",
-      testMatch: /(inbox|internal-api)\.spec\.ts$/,
+      testMatch: /(inbox|internal-api|embed)\.spec\.ts$/,
       dependencies: ["owner"],
       use: { storageState: AUTH_FILE },
     },

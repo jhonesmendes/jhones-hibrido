@@ -46,6 +46,9 @@ services:
       # Chave legada da API interna, SEM valor padrão: vazia = desligada.
       # Prefira as chaves nomeadas de Configurações → Integrações.
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-}
+      # Spec 010: quem pode abrir o Vocero num iframe (ex.: painel do
+      # Sankhya), separado por vírgula. Vazio = ninguém de fora embute.
+      EMBED_ALLOWED_ORIGINS: ${EMBED_ALLOWED_ORIGINS:-}
 
     volumes:
       # Backup do banco (pg_dump) — disco local da própria instância,

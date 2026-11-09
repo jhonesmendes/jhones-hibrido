@@ -1,4 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
+import {
+  EMBED_COOKIE,
+  EMBED_HEADER,
+  framingHeaders,
+  iframeCookiesEnabled,
+  parseEmbedOrigins,
+  resolveEmbedMode,
+} from "@/lib/embed";
 
 /**
  * Roteamento por domínio entre "instância de cliente" (comportamento normal,
@@ -8,11 +16,22 @@ import { NextResponse, type NextRequest } from "next/server";
  * não está configurada, então `/admin/*` fica bloqueado incondicionalmente
  * (defesa em profundidade: mesmo mal configurado, um cliente nunca expõe o
  * painel do operador).
+ *
+ * Spec 010: toda resposta leva os cabeçalhos anti-enquadramento
+ * (`frame-ancestors`), e `?embed=1` liga o layout compacto para iframe.
  */
 export function middleware(req: NextRequest) {
   const host = req.headers.get("host")?.split(":")[0] ?? "";
   const adminHost = process.env.ADMIN_PANEL_HOST;
   const isAdminHost = !!adminHost && host === adminHost;
+  const origins = parseEmbedOrigins(process.env.EMBED_ALLOWED_ORIGINS).valid;
+  const withFraming = (res: NextResponse) => {
+    for (const [k, v] of Object.entries(framingHeaders({ origins, adminHost: isAdminHost }))) {
+      res.headers.set(k, v);
+    }
+    return res;
+  };
+
   const isAdminPath =
     req.nextUrl.pathname.startsWith("/admin") ||
     req.nextUrl.pathname.startsWith("/api/admin") ||
@@ -25,21 +44,48 @@ export function middleware(req: NextRequest) {
     // src/app/api/internal/license/route.ts). Só bloqueia /admin e
     // /api/admin (rotas do painel em si) fora do host configurado.
     if (req.nextUrl.pathname.startsWith("/api/internal")) {
-      return NextResponse.next();
+      return withFraming(NextResponse.next());
     }
-    return NextResponse.redirect(new URL("/", req.url));
+    return withFraming(NextResponse.redirect(new URL("/", req.url)));
   }
 
   if (isAdminHost && !isAdminPath) {
     // No domínio do painel, tudo que não é /admin ou /api/admin vira /admin
     // — essa instância nunca serve onboarding/login de cliente.
     if (req.nextUrl.pathname.startsWith("/_next") || req.nextUrl.pathname.startsWith("/api")) {
-      return NextResponse.next();
+      return withFraming(NextResponse.next());
     }
-    return NextResponse.redirect(new URL("/admin", req.url));
+    return withFraming(NextResponse.redirect(new URL("/admin", req.url)));
   }
 
-  return NextResponse.next();
+  if (isAdminHost) return withFraming(NextResponse.next());
+
+  // Modo embutido: só existe com origens configuradas (sem elas ninguém
+  // de fora consegue enquadrar o Vocero). O cabeçalho que chega do
+  // cliente é sempre descartado — quem decide é o middleware.
+  const requestHeaders = new Headers(req.headers);
+  requestHeaders.delete(EMBED_HEADER);
+  const mode =
+    origins.length > 0
+      ? resolveEmbedMode(req.nextUrl.searchParams.get("embed"), req.cookies.get(EMBED_COOKIE)?.value)
+      : { embed: false, setCookie: null };
+  if (mode.embed) requestHeaders.set(EMBED_HEADER, "1");
+
+  const res = NextResponse.next({ request: { headers: requestHeaders } });
+  if (mode.setCookie) {
+    const crossSite = iframeCookiesEnabled(origins, process.env.APP_BASE_URL);
+    res.cookies.set({
+      name: EMBED_COOKIE,
+      value: mode.setCookie === "on" ? "1" : "",
+      path: "/",
+      httpOnly: true,
+      maxAge: mode.setCookie === "on" ? 60 * 60 * 24 * 365 : 0,
+      ...(crossSite
+        ? { sameSite: "none" as const, secure: true, partitioned: true }
+        : { sameSite: "lax" as const }),
+    });
+  }
+  return withFraming(res);
 }
 
 export const config = {

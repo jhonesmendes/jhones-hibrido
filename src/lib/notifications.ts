@@ -20,8 +20,20 @@ export async function ensureServiceWorker(): Promise<void> {
   await navigator.serviceWorker.register("/sw.js").catch(() => null);
 }
 
+/** true dentro de um iframe (ex.: Vocero embutido no Sankhya — spec 010). */
+export function isInIframe(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.self !== window.top;
+  } catch {
+    return true; // acesso a window.top bloqueado = quadro de outra origem
+  }
+}
+
 export function getNotificationPermission(): NotificationPermission | "unsupported" {
-  if (typeof window === "undefined" || !("Notification" in window)) {
+  // Em iframe de outra origem os navegadores bloqueiam o pedido de
+  // permissão e o push: esconde a oferta em vez de mostrar um botão morto.
+  if (typeof window === "undefined" || !("Notification" in window) || isInIframe()) {
     return "unsupported";
   }
   return Notification.permission;

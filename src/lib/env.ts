@@ -58,6 +58,9 @@ const envSchema = z.object({
   // fica travada (falha fechada), o resto do produto continua normal.
   INTERNAL_API_KEY: z.string().optional(),
   OPERATOR_WHATSAPP: z.string().optional(),
+  // Spec 010 — origens que podem embutir o Vocero num iframe (ex.: painel
+  // do Sankhya), separadas por vírgula. Vazia: ninguém de fora embute.
+  EMBED_ALLOWED_ORIGINS: z.string().optional(),
   OPERATOR_EMAIL: z.string().optional(),
 
   // Painel central (admin.<domínio>) — só usados na instância dedicada ao

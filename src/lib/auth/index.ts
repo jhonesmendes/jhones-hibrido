@@ -14,6 +14,7 @@ import {
   resolveMembership,
 } from "@/server/auth/on-signup";
 import { getRegistrationState } from "@/server/auth/registration";
+import { iframeCookiesEnabled, parseEmbedOrigins } from "@/lib/embed";
 
 /**
  * Contexto interno do processo: permite que a criação de contas de equipe
@@ -55,10 +56,22 @@ const DEV_TRUSTED_ORIGINS =
 
 function createAuth() {
   const env = getEnv();
+  // Spec 010: com o Vocero embutido num iframe de outro site (Sankhya), o
+  // cookie de sessão precisa ser `SameSite=None; Secure; Partitioned` — com
+  // o padrão (Lax) o navegador não o envia dentro do quadro e o login volta
+  // sempre para a tela de entrada. Particionado: o login feito no quadro só
+  // vale dentro daquele site.
+  const embedOrigins = parseEmbedOrigins(env.EMBED_ALLOWED_ORIGINS).valid;
+  const iframeCookies = iframeCookiesEnabled(embedOrigins, env.APP_BASE_URL);
   return betterAuth({
     baseURL: env.APP_BASE_URL,
     secret: env.BETTER_AUTH_SECRET,
     trustedOrigins: DEV_TRUSTED_ORIGINS,
+    advanced: iframeCookies
+      ? {
+          defaultCookieAttributes: { sameSite: "none", secure: true, partitioned: true },
+        }
+      : undefined,
     database: drizzleAdapter(getDb(), {
       provider: "pg",
       schema: {

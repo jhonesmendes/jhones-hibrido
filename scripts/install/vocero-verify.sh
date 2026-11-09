@@ -51,6 +51,10 @@ fi
 # 2. Telas públicas
 [[ "$(code "$URL/login")" == "200" ]] && ok "Tela de login carrega" || bad "Tela de login não carrega"
 
+# Anti-clickjacking (spec 010): toda página diz quem pode enquadrá-la.
+FA="$(curl -sI -m 15 "$URL/login" | tr -d '\r' | grep -i '^content-security-policy:' | grep -io "frame-ancestors[^;]*")"
+if [[ -n "$FA" ]]; then ok "Enquadramento restrito ($FA)"; else bad "Sem frame-ancestors: qualquer site pode embutir o Vocero (clickjacking)"; fi
+
 # 3. Estado do cadastro
 REG="$(body "$URL/api/auth/registration-status")"
 STATE="$(sed -n 's/.*"state":"\([^"]*\)".*/\1/p' <<<"$REG")"

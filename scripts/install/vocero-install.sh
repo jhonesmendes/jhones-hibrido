@@ -19,6 +19,7 @@
 #   --image IMG        usa outra imagem (ex.: build local vocero:dev)
 #   --dir DIR          onde guardar instances/ (padrão: ./instances)
 #   --openrouter-token, --meta-app-secret   opcionais
+#   --embed-origins "https://erp.cliente.com.br"   quem pode embutir (iframe)
 #   --addon-mdfe       instala também o n8n + bot MDF-e (ver docs/n8n)
 #   --yes              não pergunta nada (falha se faltar dado)
 #
@@ -31,7 +32,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 COMPOSE_FILE="$ROOT/docker-compose.yml"
 
 MODE=compose; NAME=""; BASE_URL=""; OWNER_EMAIL=""; ORG=""; PORT=""; VERSION=""
-IMAGE=""; DIR="$PWD/instances"; OPENROUTER=""; META_SECRET=""; ADDON_MDFE=0; YES=0
+IMAGE=""; DIR="$PWD/instances"; OPENROUTER=""; META_SECRET=""; ADDON_MDFE=0; YES=0; EMBED_ORIGINS=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -46,6 +47,7 @@ while [[ $# -gt 0 ]]; do
     --dir) DIR="$2"; shift 2 ;;
     --openrouter-token) OPENROUTER="$2"; shift 2 ;;
     --meta-app-secret) META_SECRET="$2"; shift 2 ;;
+    --embed-origins) EMBED_ORIGINS="$2"; shift 2 ;;
     --addon-mdfe) ADDON_MDFE=1; shift ;;
     --yes|-y) YES=1; shift ;;
     -h|--help) sed -n '2,30p' "$0"; exit 0 ;;
@@ -108,6 +110,8 @@ OPENROUTER_API_TOKEN=$OPENROUTER
 OPENROUTER_MODEL=${OPENROUTER:+anthropic/claude-sonnet-4.5}
 INTERNAL_API_KEY=
 LICENSE_CONTROL_SECRET=
+# Origens que podem abrir o Vocero num iframe (ex.: painel do Sankhya).
+EMBED_ALLOWED_ORIGINS=${EMBED_ORIGINS:-}
 EOF
   chmod 600 "$ENV_FILE"
 fi
