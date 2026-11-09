@@ -61,7 +61,16 @@ function createAuth() {
   // o padrão (Lax) o navegador não o envia dentro do quadro e o login volta
   // sempre para a tela de entrada. Particionado: o login feito no quadro só
   // vale dentro daquele site.
-  const embedOrigins = parseEmbedOrigins(env.EMBED_ALLOWED_ORIGINS).valid;
+  const parsedEmbed = parseEmbedOrigins(env.EMBED_ALLOWED_ORIGINS);
+  if (parsedEmbed.invalid.length > 0) {
+    // Origem mal escrita (ex.: "=https://…", caminho, http público) é
+    // ignorada — e o iframe do ERP fica bloqueado. Avisa no log do boot.
+    console.warn(
+      `[embed] EMBED_ALLOWED_ORIGINS ignorou valores inválidos: ${parsedEmbed.invalid.join(", ")} ` +
+        "(use https://host[:porta], sem caminho, separados por vírgula)"
+    );
+  }
+  const embedOrigins = parsedEmbed.valid;
   const iframeCookies = iframeCookiesEnabled(embedOrigins, env.APP_BASE_URL);
   return betterAuth({
     baseURL: env.APP_BASE_URL,
