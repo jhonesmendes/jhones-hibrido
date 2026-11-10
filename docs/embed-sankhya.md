@@ -12,15 +12,22 @@ identificado no Vocero (auditoria, fila, atribuição). Não há SSO com o Sankh
 Na stack da instância (Portainer → Environment variables):
 
 ```
-EMBED_ALLOWED_ORIGINS=https://fibraforte.snk.ativy.com:40262
+EMBED_ALLOWED_ORIGINS=http://fibraforte.snk.ativy.com:*
 ```
 
-- Origem = `https://host[:porta]`, sem caminho e sem barra no fim. Várias:
+**O esquema conta.** As bases da Fibra Forte (portas 40262 e 50262) rodam em
+**http**; nenhuma responde em https. Por isso a origem certa começa com
+`http://`. `https://…` libera outra origem e o quadro é recusado ("A conexão
+com … foi recusada"). Para conferir, rode
+`curl -sI http://<host>:<porta>/mge/` e `curl -sI https://<host>:<porta>/mge/`
+e veja qual dos dois responde.
+
+- Origem = `http(s)://host[:porta]`, sem caminho e sem barra no fim. Várias:
   separadas por vírgula. Curinga de subdomínio aceito (`https://*.exemplo.com`).
 - **Mais de uma base do Sankhya** (ex.: produção na porta 40262 e teste na
   50262): liste as duas
-  (`https://fibraforte.snk.ativy.com:40262,https://fibraforte.snk.ativy.com:50262`)
-  ou use o curinga de porta: `https://fibraforte.snk.ativy.com:*`.
+  (`http://fibraforte.snk.ativy.com:40262,http://fibraforte.snk.ativy.com:50262`)
+  ou use o curinga de porta: `http://fibraforte.snk.ativy.com:*`.
 - No Portainer, o nome e o valor são separados por **um** `=`. Com `==`, o
   valor fica inválido, o app avisa no log e o Sankhya é bloqueado.
 - O Vocero precisa estar em **https**.
@@ -55,6 +62,15 @@ EMBED_ALLOWED_ORIGINS=https://fibraforte.snk.ativy.com:40262
 - O modo embutido fica lembrado dentro do quadro. `?embed=0` desliga.
 
 ## 3. No componente HTML5 do Sankhya
+
+O componente real do painel Fechamento de Viagens / [CALL CENTER] está em
+[docs/index_1.jsp](index_1.jsp). O bloco "VOCERO EMBUTIDO" fica no fim do
+arquivo: é um painel lateral com `VoceroPainel.abrir(telefone, nome)`, e o
+endereço do Vocero vai na variável `VOCERO` do bloco de configuração. O botão
+"WhatsApp motorista" chama `abrirWhats()`, que abre a conversa no Vocero e
+copia a mensagem pronta. `USAR_VOCERO = false` volta ao wa.me antigo.
+
+Exemplo mínimo:
 
 ```html
 <iframe id="vocero" src="https://<vocero>/inbox?embed=1"

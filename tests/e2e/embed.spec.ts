@@ -37,7 +37,7 @@ test("toda página diz quem pode enquadrá-la", async ({ request }) => {
   const res = await request.get("/login");
   const csp = res.headers()["content-security-policy"] ?? "";
   expect(csp).toContain("frame-ancestors 'self'");
-  expect(csp).toContain(EMBED_ORIGIN);
+  expect(csp).toContain(new URL(EMBED_ORIGIN).hostname); // origem exata ou com curinga de porta
 });
 
 test("dentro do ERP: login no quadro, as três abas e o link pelo telefone", async ({
@@ -138,7 +138,7 @@ test("site fora da lista não consegue embutir", async ({ browser, baseURL }) =>
   await serveHost(page, intruder.origin, `${baseURL}/embed-check`);
   const check = page.frameLocator("#vocero");
   await expect(check.getByText("fora da lista")).toBeVisible({ timeout: 60_000 });
-  await expect(check.getByText(`EMBED_ALLOWED_ORIGINS=${EMBED_ORIGIN},${intruder.origin}`)).toBeVisible();
+  await expect(check.getByText(new RegExp(`^EMBED_ALLOWED_ORIGINS=.+,${intruder.origin.replace(/[.:/]/g, "\\$&")}$`))).toBeVisible();
   await context.close();
 });
 

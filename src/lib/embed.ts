@@ -12,12 +12,12 @@ export const EMBED_COOKIE = "vocero_embed";
 /** Cabeçalho interno (middleware → layout); o do cliente é descartado. */
 export const EMBED_HEADER = "x-vocero-embed";
 
-// Origem https (curinga de subdomínio e de porta aceitos, como no CSP) ou http só para
-// localhost/127.0.0.1 (testes). Sem caminho, sem barra no fim.
-// `:*` = qualquer porta do mesmo host (ex.: bases de produção e de teste do
-// Sankhya no mesmo servidor, cada uma numa porta).
-const ORIGIN_RE = /^https:\/\/(\*\.)?[a-z0-9-]+(\.[a-z0-9-]+)*(:(\d{1,5}|\*))?$/;
-const LOCAL_HTTP_RE = /^http:\/\/(localhost|127\.0\.0\.1|[a-z0-9-]+\.localhost|[a-z0-9-]+\.test)(:\d{1,5})?$/;
+// Origem http ou https (o Sankhya da Fibra Forte, por exemplo, roda em
+// http), com curinga de subdomínio e de porta como no CSP. Sem caminho, sem
+// barra no fim. `:*` = qualquer porta do mesmo host (ex.: bases de produção e
+// de teste do Sankhya no mesmo servidor, cada uma numa porta). O esquema
+// conta: `https://erp` não libera `http://erp`.
+const ORIGIN_RE = /^https?:\/\/(\*\.)?[a-z0-9-]+(\.[a-z0-9-]+)*(:(\d{1,5}|\*))?$/;
 
 export type EmbedOrigins = { valid: string[]; invalid: string[] };
 
@@ -27,7 +27,7 @@ export function parseEmbedOrigins(raw: string | undefined | null): EmbedOrigins 
   for (const part of (raw ?? "").split(/[\s,]+/)) {
     const value = part.trim().replace(/\/+$/, "").toLowerCase();
     if (!value) continue;
-    if (ORIGIN_RE.test(value) || LOCAL_HTTP_RE.test(value)) {
+    if (ORIGIN_RE.test(value)) {
       if (!valid.includes(value)) valid.push(value);
     } else {
       invalid.push(part.trim());

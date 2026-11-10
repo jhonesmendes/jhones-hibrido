@@ -29,6 +29,11 @@ export default defineConfig({
   use: {
     baseURL: process.env.E2E_BASE_URL ?? "http://localhost:3000",
     channel: process.env.E2E_BROWSER_CHANNEL || undefined,
+    // Ex.: simular um ERP público em http apontando um nome para 127.0.0.1:
+    // E2E_CHROME_ARGS='--host-resolver-rules=MAP erp.exemplo.com.br 127.0.0.1 --disable-features=LocalNetworkAccessChecks'
+    launchOptions: process.env.E2E_CHROME_ARGS
+      ? { args: process.env.E2E_CHROME_ARGS.match(/--[^-][^]*?(?=\s--|$)/g) ?? [] }
+      : undefined,
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
   },

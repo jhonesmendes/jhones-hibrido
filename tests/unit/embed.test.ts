@@ -19,8 +19,14 @@ describe("parseEmbedOrigins", () => {
     expect(r.invalid).toEqual([]);
   });
 
-  it("recusa http público, caminho, curinga solto e lixo", () => {
-    const r = parseEmbedOrigins("http://erp.cliente.com.br https://a.com/painel * 'self' javascript:alert(1)");
+  it("aceita http (Sankhya da Fibra Forte roda em http) com curinga de porta", () => {
+    expect(parseEmbedOrigins("http://fibraforte.snk.ativy.com:*").valid).toEqual([
+      "http://fibraforte.snk.ativy.com:*",
+    ]);
+  });
+
+  it("recusa caminho, curinga solto, outro esquema e lixo", () => {
+    const r = parseEmbedOrigins("https://a.com/painel * 'self' javascript:alert(1) ftp://a.com");
     expect(r.valid).toEqual([]);
     expect(r.invalid).toHaveLength(5);
   });
