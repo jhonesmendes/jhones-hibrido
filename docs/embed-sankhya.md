@@ -28,8 +28,12 @@ EMBED_ALLOWED_ORIGINS=https://fibraforte.snk.ativy.com:40262
   clickjacking, sempre ligada).
 - `frame-ancestors` vale para **todos** os quadros acima do Vocero. Se o
   componente HTML5 do Sankhya roda num iframe de outra origem, ela também
-  tem de entrar na lista. Para conferir, use o F12 do navegador: o console
-  mostra "Refused to frame … frame-ancestors" com a origem recusada.
+  tem de entrar na lista.
+- **Diagnóstico ("a conexão foi recusada")**: troque temporariamente o `src`
+  do iframe por `https://<vocero>/embed-check`. Essa é a única página que
+  qualquer quadro consegue abrir: não tem login nem dados. Ela lista cada
+  quadro acima dela (✔ liberado / ✘ fora da lista) e já mostra o valor
+  completo de `EMBED_ALLOWED_ORIGINS` para colar na stack.
 - Depois de mudar, faça o redeploy da stack e rode
   `scripts/install/vocero-verify.sh https://<vocero>`. A linha "Enquadramento
   restrito" mostra a lista em vigor.

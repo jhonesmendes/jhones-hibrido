@@ -133,6 +133,12 @@ test("site fora da lista não consegue embutir", async ({ browser, baseURL }) =>
   await page.waitForLoadState("load");
   await page.waitForTimeout(2_000);
   await expect(page.frameLocator("#vocero").getByLabel("E-mail")).toHaveCount(0);
+
+  // /embed-check abre em qualquer quadro e aponta a origem que falta.
+  await serveHost(page, intruder.origin, `${baseURL}/embed-check`);
+  const check = page.frameLocator("#vocero");
+  await expect(check.getByText("fora da lista")).toBeVisible({ timeout: 60_000 });
+  await expect(check.getByText(`EMBED_ALLOWED_ORIGINS=${EMBED_ORIGIN},${intruder.origin}`)).toBeVisible();
   await context.close();
 });
 

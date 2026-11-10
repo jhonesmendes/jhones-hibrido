@@ -26,6 +26,12 @@ export function middleware(req: NextRequest) {
   const isAdminHost = !!adminHost && host === adminHost;
   const origins = parseEmbedOrigins(process.env.EMBED_ALLOWED_ORIGINS).valid;
   const withFraming = (res: NextResponse) => {
+    // /embed-check (diagnóstico, sem login nem dados) é a única página que
+    // qualquer quadro pode abrir — é ela que mostra quem está fora da lista.
+    if (!isAdminHost && req.nextUrl.pathname === "/embed-check") {
+      res.headers.set("Content-Security-Policy", "frame-ancestors *");
+      return res;
+    }
     for (const [k, v] of Object.entries(framingHeaders({ origins, adminHost: isAdminHost }))) {
       res.headers.set(k, v);
     }
