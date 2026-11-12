@@ -1,5 +1,6 @@
 import nodemailer from "nodemailer";
 import { getEnv } from "@/lib/env";
+import { resolveSmtpSecure } from "@/lib/mail/tls";
 
 /** SMTP do painel central — por env var, não por org (não existe org aqui).
  * Mesma ideia de `src/lib/mail/smtp.ts`, só que sem lookup no banco. */
@@ -9,10 +10,11 @@ export async function sendAdminMail(message: { to: string; subject: string; text
     throw new Error("SMTP do painel central não configurado (ADMIN_SMTP_*)");
   }
 
+  const port = env.ADMIN_SMTP_PORT ?? 587;
   const transport = nodemailer.createTransport({
     host: env.ADMIN_SMTP_HOST,
-    port: env.ADMIN_SMTP_PORT ?? 587,
-    secure: env.ADMIN_SMTP_SECURE === "true",
+    port,
+    secure: resolveSmtpSecure(port, env.ADMIN_SMTP_SECURE === "true"),
     auth: { user: env.ADMIN_SMTP_USER, pass: env.ADMIN_SMTP_PASSWORD },
   });
 

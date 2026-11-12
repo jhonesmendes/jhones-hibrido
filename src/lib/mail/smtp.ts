@@ -2,6 +2,7 @@ import nodemailer from "nodemailer";
 import { and, eq } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { decryptSecret } from "@/lib/crypto";
+import { explainSmtpError, resolveSmtpSecure } from "@/lib/mail/tls";
 
 export class SmtpNotConfiguredError extends Error {
   constructor() {
@@ -53,8 +54,10 @@ export async function sendMail(
   const transport = nodemailer.createTransport({
     host: config.host,
     port: config.port,
-    secure: config.secure,
+    secure: resolveSmtpSecure(config.port, config.secure),
     auth: { user: config.user, pass: password },
+    connectionTimeout: 15_000,
+    greetingTimeout: 15_000,
   });
 
   try {
@@ -67,6 +70,6 @@ export async function sendMail(
     });
   } catch (err) {
     const detail = err instanceof Error ? err.message : "Erro desconhecido";
-    throw new SmtpSendError(`Falha ao enviar e-mail: ${detail}`);
+    throw new SmtpSendError(`Falha ao enviar e-mail: ${explainSmtpError(detail, config.port)}`);
   }
 }

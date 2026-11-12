@@ -156,7 +156,13 @@ export function SmtpClient() {
                 id="smtp-port"
                 type="number"
                 value={port}
-                onChange={(e) => setPort(Number(e.target.value))}
+                onChange={(e) => {
+                  const next = Number(e.target.value);
+                  setPort(next);
+                  // 465 = TLS implícito; 587/25 = STARTTLS (o servidor força isso também).
+                  if (next === 465) setSecure(true);
+                  else if (next === 587 || next === 25 || next === 2525) setSecure(false);
+                }}
               />
             </div>
           </div>
@@ -170,6 +176,10 @@ export function SmtpClient() {
             />
             <Label htmlFor="smtp-secure">Conexão segura (TLS)</Label>
           </div>
+          <p className="text-xs text-muted-foreground">
+            Porta 465 usa TLS direto; 587 usa STARTTLS (deixe desmarcado). Nessas
+            portas o Vocero ajusta isso sozinho.
+          </p>
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="smtp-user">Usuário</Label>

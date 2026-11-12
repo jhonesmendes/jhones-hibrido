@@ -42,6 +42,7 @@ beforeEach(() => {
 
 import { sendMail, SmtpNotConfiguredError, SmtpSendError } from "@/lib/mail/smtp";
 import { encryptSecret } from "@/lib/crypto";
+import { resolveSmtpSecure } from "@/lib/mail/tls";
 
 function activeConfig(): Record<string, unknown> {
   const enc = encryptSecret("senha-secreta");
@@ -96,5 +97,37 @@ describe("sendMail", () => {
     await expect(
       sendMail("org_1", { to: "a@b.com", subject: "Teste", text: "oi" })
     ).rejects.toThrow(SmtpSendError);
+  });
+
+  it("porta 465 com TLS desmarcado → força TLS implícito (Hostinger 'Greeting never received')", async () => {
+    configRow = { ...activeConfig(), port: 465, secure: false };
+    sendMailTransportMock.mockResolvedValue({ messageId: "1" });
+    await sendMail("org_1", { to: "a@b.com", subject: "Teste", text: "oi" });
+    expect(createTransportMock).toHaveBeenCalledWith(expect.objectContaining({ port: 465, secure: true }));
+  });
+
+  it("porta 587 com TLS marcado → usa STARTTLS (secure=false)", async () => {
+    configRow = { ...activeConfig(), port: 587, secure: true };
+    sendMailTransportMock.mockResolvedValue({ messageId: "1" });
+    await sendMail("org_1", { to: "a@b.com", subject: "Teste", text: "oi" });
+    expect(createTransportMock).toHaveBeenCalledWith(expect.objectContaining({ port: 587, secure: false }));
+  });
+
+  it("erro de greeting ganha dica acionável", async () => {
+    configRow = activeConfig();
+    sendMailTransportMock.mockRejectedValue(new Error("Greeting never received"));
+    await expect(
+      sendMail("org_1", { to: "a@b.com", subject: "Teste", text: "oi" })
+    ).rejects.toThrow(/465 = TLS implícito/);
+  });
+});
+
+describe("resolveSmtpSecure", () => {
+  it("porta-padrão manda; porta fora do padrão respeita o checkbox", () => {
+    expect(resolveSmtpSecure(465, false)).toBe(true);
+    expect(resolveSmtpSecure(587, true)).toBe(false);
+    expect(resolveSmtpSecure(25, true)).toBe(false);
+    expect(resolveSmtpSecure(2465, true)).toBe(true);
+    expect(resolveSmtpSecure(2465, false)).toBe(false);
   });
 });
